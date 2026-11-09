@@ -4,37 +4,34 @@ from collections import Counter
 MEDALHAS = ("Ouro", "Prata", "Bronze")
 MEDAL_RANK = {"Bronze": 1, "Prata": 2, "Ouro": 3}
 
-# (nome, pontos mínimos, cor de destaque). Calibrado na escala do IMPA Tech (ouro 18, prata 6, bronze 2).
-# Nomes de nível evitam "ouro/prata/bronze" para não confundir com as medalhas.
-TIERS_ALUNO = [
-    ("Estreante", 0, "#8b93a7"),
-    ("Promessa", 6, "#4bbf7f"),     # ex.: 1 prata ou 3 bronzes
-    ("Talento", 18, "#5ea8ff"),     # ex.: 1 ouro
-    ("Destaque", 36, "#b57bff"),    # ex.: 2 ouros
-    ("Elite", 72, "#5ee0d0"),       # ~ top 300 do Brasil
-    ("Mestre", 120, "#f5c542"),     # ~ top 40
-    ("Lenda", 170, "#ff6bd6"),      # ~ top 5
-]
-TIERS_ESCOLA = [
-    ("Estreante", 0, "#8b93a7"),
-    ("Promessa", 20, "#4bbf7f"),
-    ("Talento", 60, "#5ea8ff"),
-    ("Destaque", 150, "#b57bff"),
-    ("Elite", 400, "#5ee0d0"),
-    ("Mestre", 1200, "#f5c542"),
-    ("Lenda", 3000, "#ff6bd6"),
-]
-
 import olimpiadas as olp
 
 FONTE_PONTOS = olp.FONTE_PONTOS
 
+# Níveis (tiers). Os nomes evitam "ouro/prata/bronze" para não confundir com as medalhas.
+TIER_NOMES = ["Estreante", "Promessa", "Talento", "Destaque", "Elite", "Mestre", "Lenda"]
+TIER_CORES = ["#8b93a7", "#4bbf7f", "#5ea8ff", "#b57bff", "#5ee0d0", "#f5c542", "#ff6bd6"]
 
-def tier(xp: int, escola: bool = False) -> dict:
-    tiers = TIERS_ESCOLA if escola else TIERS_ALUNO
-    idx = max(i for i, (_, minimo, _) in enumerate(tiers) if xp >= minimo)
-    nome, minimo, cor = tiers[idx]
-    nxt = tiers[idx + 1] if idx + 1 < len(tiers) else None
+# Pontos mínimos de cada nível, por método de pontuação. Calibrados na distribuição real
+# (Mestre ≈ top 40 do Brasil, Lenda ≈ top 5–10).
+LIMITES = {
+    "impa": {"aluno": [0, 6, 18, 36, 72, 120, 170], "escola": [0, 20, 60, 150, 400, 1200, 3000]},
+    "impa3": {"aluno": [0, 2, 6, 18, 36, 54, 80], "escola": [0, 6, 20, 60, 150, 600, 1300]},
+    "site": {"aluno": [0, 60, 150, 300, 600, 1300, 1900], "escola": [0, 150, 500, 1500, 5000, 15000, 40000]},
+}
+
+
+def tiers(metodo: str, escola: bool = False) -> list[tuple]:
+    limites = LIMITES.get(metodo, LIMITES[olp.METODO_PADRAO])["escola" if escola else "aluno"]
+    return list(zip(TIER_NOMES, limites, TIER_CORES))
+
+
+def tier(xp: int, escola: bool = False, metodo: str = olp.METODO_PADRAO) -> dict:
+    tiers_ = tiers(metodo, escola)
+    xp = xp or 0
+    idx = max(i for i, (_, minimo, _) in enumerate(tiers_) if xp >= minimo)
+    nome, minimo, cor = tiers_[idx]
+    nxt = tiers_[idx + 1] if idx + 1 < len(tiers_) else None
     progresso = 1.0 if not nxt else (xp - minimo) / (nxt[1] - minimo)
     return {
         "nome": nome, "cor": cor, "nivel": idx + 1, "min": minimo, "xp": xp,
