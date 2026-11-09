@@ -1,7 +1,10 @@
 /* Medalhas — SPA (Alpine.js + ECharts). Sem build: tudo via CDN. */
 
+// método de pontuação escolhido no topo (impa | impa3 | site); vai em toda chamada à API
+let METODO = localStorage.getItem("metodo") || "";
 const API = (path, params = {}) => {
-  const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== "" && v != null));
+  const all = { ...params, metodo: METODO };
+  const qs = new URLSearchParams(Object.entries(all).filter(([, v]) => v !== "" && v != null));
   return fetch(`/api/${path}?${qs}`).then(r => r.json());
 };
 
@@ -32,7 +35,20 @@ function prettySchool(name) {
   }).join("");
 }
 const initials = n => (n || "?").split(/\s+/).filter(w => w.length > 2 || w === w.toUpperCase()).slice(0, 2).map(w => w[0]).join("").toUpperCase();
-const nivelCurto = n => /^\d$/.test(n) ? `N${n}` : n === "Universitário" ? "Univ." : n;
+// rótulo curto do nível para os chips: "3" -> "N3", "Programação Nível 2" -> "Prog. 2", "Iniciação Nível Júnior" -> "Inic. Jr"
+const nivelCurto = n => {
+  if (/^\d$/.test(n)) return `N${n}`;
+  if (n === "Universitário") return "Univ.";
+  const m = n.match(/^(Programação|Iniciação)(?: Nível)?\s*(.*)$/);
+  if (!m) return n;
+  const resto = { "Júnior": "Jr", "Sênior": "Sr", "Universitário": "Univ" }[m[2]] ?? m[2];
+  return `${m[1] === "Programação" ? "Prog." : "Inic."}${resto ? " " + resto : ""}`;
+};
+// descrição dos níveis aceitos no IMPA Tech: "3,Programação Nível 1,…" -> "Nível 3, Programação Nível 1 e Programação Nível 2"
+const descreveImpa = v => {
+  const ls = (v || "3").split(",").map(n => /^\d$/.test(n) ? `Nível ${n}` : n);
+  return ls.length > 1 ? ls.slice(0, -1).join(", ") + " e " + ls.at(-1) : ls[0];
+};
 const nivelLabel = n => !n ? "" : /^\d$/.test(n) ? `Nível ${n}` : n;
 const medalClass = m => ({ Ouro: "", Prata: "prata", Bronze: "bronze", "Menção Honrosa": "mencao" }[m] ?? "bronze");
 
@@ -150,8 +166,10 @@ document.addEventListener("alpine:init", () => {
 // ---------------------------------------------------------------- app
 function app() {
   return {
-    UF_NOMES, fmt, prettySchool, initials, nivelLabel, medalClass, nivelCurto,
+    UF_NOMES, fmt, prettySchool, initials, nivelLabel, medalClass, nivelCurto, descreveImpa,
     route: { name: "home", param: "", query: {} },
+    metodo: METODO,
+    aviso: null, _avisoT: null,
     ov: null,
     yearComp: "",
     mapMetric: "xp",
@@ -169,9 +187,39 @@ function app() {
         if (e.key === "/" && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); this.$refs.q?.focus(); }
       });
       this.onRoute();  // a rota não espera a visão geral: perfis e rankings carregam sozinhos
+      await this.loadOverview();
+    },
+    async loadOverview() {
       this.ov = await API("overview");
+      if (!this.metodo) { this.metodo = METODO = this.ov.metodo; }
       if (this.is("home")) this.$nextTick(() => this.drawHome());
       if (this.is("estados")) this.$nextTick(() => this.drawMap());
+    },
+    get impa3() { return this.metodo === "impa3"; },
+    // no IMPA N3 o filtro de nível é travado nos níveis aceitos pelo edital (o servidor também força)
+    get niveisAceitos() { return (this.ov?.niveis_impa || "3").split(","); },
+    // no IMPA N3 vale a escolha do usuário dentro dos níveis aceitos; sem escolha válida, todos os aceitos
+    nivelEfetivo(v) {
+      if (!this.impa3) return v;
+      const sel = (v || "").split(",").filter(n => this.niveisAceitos.includes(n));
+      return (sel.length ? sel : this.niveisAceitos).join(",");
+    },
+    avisar(texto, acao = null) {
+      this.aviso = { texto, acao };
+      clearTimeout(this._avisoT);
+      this._avisoT = setTimeout(() => (this.aviso = null), 7000);
+    },
+    get metodoAtual() { return (this.ov?.metodos || []).find(m => m.id === this.metodo); },
+    // troca o método de pontuação: recarrega a visão geral e os dados da página atual
+    async setMetodo(m) {
+      if (m === this.metodo) return;
+      this.metodo = METODO = m;
+      localStorage.setItem("metodo", m);
+      if (m === "impa3") this.avisar(`Pontuação IMPA N3 ativada: o filtro de níveis foi aplicado automaticamente (${descreveImpa(this.ov?.niveis_impa)}), como no edital do IMPA Tech.`);
+      const y = window.scrollY;
+      this.onRoute();
+      await this.loadOverview();
+      window.scrollTo({ top: y, behavior: "instant" });
     },
 
     // ------------------------------------------------ roteamento
@@ -181,6 +229,12 @@ function app() {
       const parts = (path || "/").split("/").filter(Boolean);
       const query = Object.fromEntries(new URLSearchParams(qs || ""));
       this.route = { name: parts[0] || "home", param: decodeURIComponent(parts.slice(1).join("/")), query };
+      // links podem fixar o método: #/ranking/alunos?metodo=impa3
+      if (["impa", "impa3", "site"].includes(query.metodo) && query.metodo !== this.metodo) {
+        this.metodo = METODO = query.metodo;
+        localStorage.setItem("metodo", query.metodo);
+        if (this.ov) this.loadOverview();
+      }
       window.scrollTo({ top: 0, behavior: "instant" });
       const r = this.route;
       if (r.name === "home") this.$nextTick(() => this.drawHome());
@@ -189,7 +243,7 @@ function app() {
         for (const k of Object.keys(this.bf)) this.bf[k] = query[k] || "";
         this.runSearch();
       }
-      if (r.name === "ranking") { this.rk.tipo = r.param || "alunos"; Object.assign(this.rk.f, { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", ordem: "xp" }, query); this.loadRanking(); }
+      if (r.name === "ranking") { this.rk.tipo = r.param || "alunos"; Object.assign(this.rk.f, { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", ordem: "xp" }, Object.fromEntries(Object.entries(query).filter(([k]) => k !== "metodo"))); this.loadRanking(); }
       if (r.name === "estados") this.$nextTick(() => this.drawMap());
       if (r.name === "aluno") this.loadAluno(r.param);
       if (r.name === "escola") this.loadEscola(r.param);
@@ -295,6 +349,11 @@ function app() {
     // ------------------------------------------------ filtros de múltipla escolha ("OBMEP,OBM", "1,3")
     temValor(valor, v) { return (valor || "").split(",").includes(v); },
     toggleMulti(escopo, campo, v) {
+      if (campo === "nivel" && this.impa3 && !this.niveisAceitos.includes(v)) {
+        this.avisar(`Está filtrado pela pontuação IMPA N3, que só considera os níveis aceitos pelo edital (${descreveImpa(this.ov?.niveis_impa)}). Para ver outros níveis, troque o método de pontuação.`,
+          { label: "Usar IMPA · todos os níveis", fn: () => this.setMetodo("impa") });
+        return;
+      }
       const f = escopo === "rk" ? this.rk.f : this.bf;
       const sel = new Set((f[campo] || "").split(",").filter(Boolean));
       sel.has(v) ? sel.delete(v) : sel.add(v);
@@ -312,8 +371,7 @@ function app() {
       const ls = (valor || "").split(",").filter(Boolean).map(n => /^\d$/.test(n) ? `nível ${n}` : n.toLowerCase());
       return ls.length > 1 ? ls.slice(0, -1).join(", ") + " e " + ls.at(-1) : ls[0] || "";
     },
-    pts(it) { return this.rk.f.ordem === "impa" ? it.impa : it.xp; },
-    get rkLeader() { return this.rk.itens.length ? Math.max(1, this.pts(this.rk.itens[0])) : 1; },
+    get rkLeader() { return this.rk.itens.length ? Math.max(1, this.rk.itens[0].xp) : 1; },
     get rkPodio() { return this.rk.tipo !== "estados" ? this.rk.itens.slice(0, 3) : []; },
     get filtrosAtivos() { return Object.entries(this.rk.f).filter(([k, v]) => v && k !== "ordem").length; },
     limparFiltros() { Object.assign(this.rk.f, { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "" }); this.pushRanking(); },

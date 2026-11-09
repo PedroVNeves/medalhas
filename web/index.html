@@ -37,7 +37,7 @@
       <span class="coin lg !text-base">★</span>
       <span class="leading-tight">
         <span class="font-display block text-lg font-bold text-shine">Medalhas</span>
-        <span class="block text-[10px] font-semibold uppercase tracking-[.2em] text-slate-500">OBMEP · OBM</span>
+        <span class="block text-[10px] font-semibold uppercase tracking-[.2em] text-slate-500">Olimpíadas · Brasil</span>
       </span>
     </a>
     <nav class="ml-2 hidden items-center gap-1 md:flex">
@@ -46,7 +46,15 @@
       <a href="#/estados" class="nav-link" :class="is('estados') && 'active'">Estados</a>
       <a href="#/sobre" class="nav-link" :class="is('sobre') && 'active'">Como funciona</a>
     </nav>
-    <div class="ml-auto hidden w-full max-w-sm sm:block" x-show="!is('home')" x-cloak>
+    <div class="ml-auto hidden md:block"><div class="seg" title="Como os pontos são calculados em todo o site">
+      <span class="hidden self-center px-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 lg:inline">Pontuação</span>
+      <template x-for="m in ov?.metodos || []" :key="m.id">
+        <button @click="setMetodo(m.id)" :class="metodo===m.id && 'on'" :title="`${m.nome}: ${m.descricao}`">
+          <span x-text="m.curto"></span><i x-show="m.id==='impa3'" x-icon="'badge-check'" class="ml-1 h-3.5 w-3.5 text-emerald-300"></i>
+        </button>
+      </template>
+    </div></div>
+    <div class="hidden w-full max-w-xs xl:block" x-show="!is('home')" x-cloak>
       <label class="relative block">
         <i x-icon="'search'" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"></i>
         <input x-model="q" @input="typed()" type="search" placeholder="Buscar aluno ou escola…"
@@ -61,6 +69,14 @@
     <a href="#/estados" class="nav-link" :class="is('estados') && 'active'">Estados</a>
     <a href="#/sobre" class="nav-link" :class="is('sobre') && 'active'">Como funciona</a>
   </nav>
+  <div class="overflow-x-auto px-4 pb-2 md:hidden"><div class="seg" title="Como os pontos são calculados em todo o site">
+      <span class="hidden self-center px-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 lg:inline">Pontuação</span>
+      <template x-for="m in ov?.metodos || []" :key="m.id">
+        <button @click="setMetodo(m.id)" :class="metodo===m.id && 'on'" :title="`${m.nome}: ${m.descricao}`">
+          <span x-text="m.curto"></span><i x-show="m.id==='impa3'" x-icon="'badge-check'" class="ml-1 h-3.5 w-3.5 text-emerald-300"></i>
+        </button>
+      </template>
+    </div></div>
 </header>
 
 <main class="mx-auto max-w-7xl px-4 pb-24 sm:px-6">
@@ -256,7 +272,7 @@
     <div class="seg flex-wrap" title="Escolha um ou mais níveis. Nenhum marcado = todos.">
       <span class="self-center px-2 text-xs text-slate-500">Níveis</span>
       <template x-for="n in niveisVisiveis(bf.competicao)" :key="n.id">
-        <button @click="toggleMulti('busca', 'nivel', n.id)" :class="temValor(bf.nivel, n.id) && 'on'" x-text="nivelCurto(n.id)" :title="`${fmt(n.n)} premiações · ${n.competicoes.join(', ')}`"></button>
+        <button @click="toggleMulti('busca', 'nivel', n.id)" :class="[temValor(nivelEfetivo(bf.nivel), n.id) && 'on', impa3 && !niveisAceitos.includes(n.id) && 'opacity-40']" :title="impa3 && !niveisAceitos.includes(n.id) ? 'Fora do edital: travado pela pontuação IMPA N3' : `${fmt(n.n)} premiações · ${n.competicoes.join(', ')}`"><span x-text="nivelCurto(n.id)"></span><i x-show="impa3 && !niveisAceitos.includes(n.id)" x-icon="'lock'" class="ml-1 h-3 w-3"></i></button>
       </template>
     </div>
     <select class="select" @change="setBuscaFilter('rede', $event.target.value)">
@@ -265,6 +281,12 @@
     <button x-show="buscaFiltrosAtivos" @click="limparBuscaFiltros()" class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-400 hover:text-white"><i x-icon="'x'" class="h-3.5 w-3.5"></i>limpar filtros</button>
     <span x-show="route.query.escola_chave" class="inline-flex items-center gap-1 rounded-full border border-indigo-400/30 bg-indigo-400/10 px-2 py-0.5 text-xs text-indigo-200">só esta escola
       <button @click="go(`#/busca?${new URLSearchParams({q, campo})}`)" class="hover:text-white" title="Remover"><i x-icon="'x'" class="h-3 w-3"></i></button></span>
+
+    <div x-show="impa3" class="flex w-full items-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-200">
+      <i x-icon="'lock'" class="h-3.5 w-3.5 flex-none"></i>
+      <span class="flex-1">Filtrado pela pontuação <b>IMPA N3</b>: só contam os níveis aceitos pelo edital do IMPA Tech (<span x-text="descreveImpa(ov?.niveis_impa)"></span>).</span>
+      <button @click="setMetodo('impa')" class="rounded-lg border border-emerald-400/30 px-2 py-0.5 hover:bg-emerald-400/10">usar IMPA · todos os níveis</button>
+    </div>
   </div>
 
   <div class="mt-6 space-y-3" x-show="busca.loading"><div class="skeleton h-24"></div><div class="skeleton h-24"></div><div class="skeleton h-24"></div></div>
@@ -354,7 +376,7 @@
     <div class="seg flex-wrap" title="Escolha um ou mais níveis. Nenhum marcado = todos.">
       <span class="self-center px-2 text-xs text-slate-500">Níveis</span>
       <template x-for="n in niveisVisiveis(rk.f.competicao)" :key="n.id">
-        <button @click="toggleMulti('rk', 'nivel', n.id)" :class="temValor(rk.f.nivel, n.id) && 'on'" x-text="nivelCurto(n.id)" :title="`${fmt(n.n)} premiações · ${n.competicoes.join(', ')}`"></button>
+        <button @click="toggleMulti('rk', 'nivel', n.id)" :class="[temValor(nivelEfetivo(rk.f.nivel), n.id) && 'on', impa3 && !niveisAceitos.includes(n.id) && 'opacity-40']" :title="impa3 && !niveisAceitos.includes(n.id) ? 'Fora do edital: travado pela pontuação IMPA N3' : `${fmt(n.n)} premiações · ${n.competicoes.join(', ')}`"><span x-text="nivelCurto(n.id)"></span><i x-show="impa3 && !niveisAceitos.includes(n.id)" x-icon="'lock'" class="ml-1 h-3 w-3"></i></button>
       </template>
     </div>
     <select class="select" x-show="rk.tipo!=='estados'" @change="setFilter('rede', $event.target.value)">
@@ -365,14 +387,20 @@
       <button @click="setFilter('ordem','xp')" :class="rk.f.ordem==='xp' && 'on'" title="Soma de pontos (XP)">Pontos</button>
       <button @click="setFilter('ordem','medalhas')" :class="rk.f.ordem==='medalhas' && 'on'" title="Ouro, depois prata, depois bronze">Quadro de medalhas</button>
       <button @click="setFilter('ordem','total')" :class="rk.f.ordem==='total' && 'on'" title="Total de medalhas">Total</button>
-      <button @click="setFilter('ordem','impa')" :class="rk.f.ordem==='impa' && 'on'" title="Só medalhas aceitas no processo seletivo do IMPA Tech (nível 3)">IMPA Tech</button>
+    </div>
+
+    <div x-show="impa3" class="flex w-full items-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-200">
+      <i x-icon="'lock'" class="h-3.5 w-3.5 flex-none"></i>
+      <span class="flex-1">Filtrado pela pontuação <b>IMPA N3</b>: só contam os níveis aceitos pelo edital do IMPA Tech (<span x-text="descreveImpa(ov?.niveis_impa)"></span>).</span>
+      <button @click="setMetodo('impa')" class="rounded-lg border border-emerald-400/30 px-2 py-0.5 hover:bg-emerald-400/10">usar IMPA · todos os níveis</button>
     </div>
   </div>
   <p class="mt-2 min-h-[1rem] text-xs text-slate-500" x-show="!rk.loading || rk.itens.length">
     <span x-text="fmt(rk.total)"></span> <span x-text="{alunos:'alunos', escolas:'escolas', estados:'estados'}[rk.tipo]"></span> no ranking
     <span x-show="rk.f.uf" x-text="' · ' + UF_NOMES[rk.f.uf]"></span>
     <span x-show="rk.f.competicao" x-text="' · ' + rk.f.competicao.split(',').join(' + ')"></span>
-    <span x-show="rk.f.nivel" x-text="' · contando só ' + descreveNiveis(rk.f.nivel)"></span>
+    <span x-show="nivelEfetivo(rk.f.nivel)" x-text="' · contando só ' + descreveNiveis(nivelEfetivo(rk.f.nivel))"></span>
+    <span x-text="' · pontuação: ' + (metodoAtual?.nome || '')"></span>
     <span x-show="rk.tipo==='escolas'"> · escolas vêm da OBMEP (a OBM não publica a escola)</span>
   </p>
 
@@ -390,19 +418,18 @@
             <div class="mt-2 flex gap-1"><span class="coin" x-text="p.ouro"></span><span class="coin prata" x-text="p.prata"></span><span class="coin bronze" x-text="p.bronze"></span></div>
             <div class="podium-step mt-4 flex w-full flex-col items-center pt-4" :class="['podium-2','podium-1','podium-3'][i] + ' ' + ['h-28','h-40','h-24'][i]">
               <span class="font-display text-4xl font-bold" :class="['rank-2','rank-1','rank-3'][i]" x-text="p.pos"></span>
-              <span class="tabular text-xs font-semibold text-slate-300" x-text="fmt(pts(p)) + ' pts'"></span>
+              <span class="tabular text-xs font-semibold text-slate-300" x-text="fmt(p.xp) + ' pts'"></span>
             </div>
           </div>
         </template>
       </a>
     </template>
   </div>
-  <p x-show="rk.f.ordem==='impa'" class="mt-4 text-xs text-slate-500"><i x-icon="'info'" class="mr-1 h-3.5 w-3.5"></i>Pontuação IMPA Tech: soma só as medalhas do <b>Nível 3</b> da OBMEP (premiação nacional) e da OBM, como no <a class="link" :href="ov?.fonte_pontos.url" target="_blank" rel="noopener" x-text="ov?.fonte_pontos.nome"></a>.</p>
 
   <!-- lista -->
   <div class="glass card mt-6 overflow-hidden">
     <div class="hidden grid-cols-[3rem_minmax(0,1fr)_9rem_10rem] items-center gap-4 border-b hairline px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 md:grid">
-      <span class="text-center">#</span><span x-text="{alunos:'Aluno', escolas:'Escola', estados:'Estado'}[rk.tipo]"></span><span class="text-center">Medalhas</span><span class="text-right" x-text="rk.f.ordem==='impa' ? 'Pontos IMPA Tech' : 'Pontos'"></span>
+      <span class="text-center">#</span><span x-text="{alunos:'Aluno', escolas:'Escola', estados:'Estado'}[rk.tipo]"></span><span class="text-center">Medalhas</span><span class="text-right" x-text="`Pontos · ${metodoAtual?.curto || ''}`"></span>
     </div>
     <div x-show="rk.loading && !rk.itens.length" class="space-y-2 p-4"><template x-for="i in 8"><div class="skeleton h-12"></div></template></div>
     <ol class="divide-y divide-white/5">
@@ -433,15 +460,26 @@
             </div>
             <div class="col-span-3 md:col-span-1">
               <div class="flex items-center justify-end gap-3">
-                <div class="bar hidden flex-1 md:block"><span :style="`width:${Math.max(3, pts(it) / rkLeader * 100)}%`"></span></div>
-                <span class="tabular w-20 text-right text-sm font-bold text-gold-300" x-text="fmt(pts(it))"></span>
+                <div class="bar hidden flex-1 md:block"><span :style="`width:${Math.max(3, it.xp / rkLeader * 100)}%`"></span></div>
+                <span class="tabular w-20 text-right text-sm font-bold text-gold-300" x-text="fmt(it.xp)"></span>
               </div>
             </div>
           </a>
         </li>
       </template>
     </ol>
-    <div x-show="!rk.loading && !rk.itens.length" class="p-12 text-center text-slate-400">Nada encontrado com esses filtros.</div>
+    <div x-show="!rk.loading && !rk.itens.length" class="p-12 text-center text-slate-400">
+      <template x-if="rk.f.ordem === 'xp' && metodo !== 'site'">
+        <div>Nenhum premiado <b>pontua</b> com esses filtros no método <b x-text="metodoAtual?.nome"></b>.
+          <div class="mt-1 text-xs text-slate-500">A tabela do IMPA Tech só cobre OBMEP, OBM e OBI (além de OBFEP e OBQ). Competições internacionais como IMO e Ibero não pontuam nela.</div>
+          <div class="mt-3 flex justify-center gap-2">
+            <button @click="setMetodo('site')" class="rounded-lg border border-gold-400/40 px-3 py-1 text-xs text-gold-300 hover:bg-gold-400/10">usar a Nossa versão</button>
+            <button @click="setFilter('ordem', 'medalhas')" class="rounded-lg border hairline px-3 py-1 text-xs hover:text-white">ordenar por quadro de medalhas</button>
+          </div>
+        </div>
+      </template>
+      <template x-if="!(rk.f.ordem === 'xp' && metodo !== 'site')"><div>Nada encontrado com esses filtros.</div></template>
+    </div>
   </div>
   <div class="mt-5 text-center" x-show="rk.itens.length < rk.total">
     <button @click="loadRanking(true)" :disabled="rk.loading" class="inline-flex items-center gap-2 rounded-xl border hairline bg-white/5 px-5 py-2.5 text-sm font-medium hover:border-gold-400/40 hover:text-gold-300 disabled:opacity-50">
@@ -520,12 +558,12 @@
           <div class="grid grid-cols-3 gap-3 md:w-80 md:grid-cols-1">
             <div class="rounded-2xl border hairline bg-white/5 p-3 text-center md:text-left">
               <div class="text-[11px] uppercase tracking-wider text-slate-500">Brasil</div>
-              <div class="font-display tabular text-2xl font-bold">#<span x-text="fmt(aluno.rank)"></span></div>
-              <div class="text-xs text-emerald-300" x-text="percentil(aluno.rank, aluno.rank_total)"></div>
+              <div class="font-display tabular text-2xl font-bold" x-text="aluno.rank ? '#' + fmt(aluno.rank) : '—'"></div>
+              <div class="text-xs text-emerald-300" x-text="aluno.rank ? percentil(aluno.rank, aluno.rank_total) : 'sem pontos neste método'"></div>
             </div>
             <div class="rounded-2xl border hairline bg-white/5 p-3 text-center md:text-left" x-show="aluno.uf">
               <div class="text-[11px] uppercase tracking-wider text-slate-500" x-text="aluno.uf"></div>
-              <div class="font-display tabular text-2xl font-bold">#<span x-text="fmt(aluno.rank_uf)"></span></div>
+              <div class="font-display tabular text-2xl font-bold" x-text="aluno.rank_uf ? '#' + fmt(aluno.rank_uf) : '—'"></div>
               <div class="text-xs text-slate-500">de <span x-text="fmt(aluno.rank_uf_total)"></span></div>
             </div>
             <div class="rounded-2xl border hairline bg-white/5 p-3 text-center md:text-left">
@@ -541,15 +579,24 @@
         </a>
       </div>
 
-      <!-- IMPA Tech -->
-      <div class="glass card mt-6 flex flex-wrap items-center gap-4 p-5" :class="aluno.impa ? '!border-emerald-400/30' : ''">
-        <div class="grid h-12 w-12 flex-none place-items-center rounded-2xl" :class="aluno.impa ? 'bg-emerald-400/10 text-emerald-300' : 'bg-white/5 text-slate-500'"><i x-icon="'graduation-cap'" class="h-6 w-6"></i></div>
-        <div class="min-w-0 flex-1">
-          <div class="font-display text-lg font-semibold">Pontuação IMPA Tech: <span class="tabular" :class="aluno.impa ? 'text-emerald-300' : 'text-slate-400'" x-text="`${aluno.impa} pts`"></span>
-            <span x-show="aluno.rank_impa" class="ml-1 text-sm font-normal text-slate-400" x-text="`· #${fmt(aluno.rank_impa)} do Brasil`"></span></div>
-          <div class="text-xs text-slate-500">Soma das medalhas aceitas no processo seletivo do IMPA Tech: só Nível 3 da OBMEP (premiação nacional) e da OBM. Ouro 18 · Prata 6 · Bronze 2.</div>
+<!-- pontuação nos três métodos -->
+      <div class="glass card mt-6 p-5">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 class="font-display flex items-center gap-2 text-lg font-semibold"><i x-icon="'scale'" class="h-5 w-5 text-indigo-300"></i>Pontuação nos 3 métodos</h3>
+          <a :href="ov?.fonte_pontos.url" target="_blank" rel="noopener" class="text-xs text-slate-400 hover:text-gold-300">edital do IMPA Tech ↗</a>
         </div>
-        <a :href="ov?.fonte_pontos.url" target="_blank" rel="noopener" class="text-xs text-slate-400 hover:text-gold-300">ver edital ↗</a>
+        <div class="grid gap-3 sm:grid-cols-3">
+          <template x-for="m in ov?.metodos || []" :key="m.id">
+            <button @click="setMetodo(m.id)" class="rounded-2xl border p-4 text-left transition hover:border-gold-400/40"
+                    :class="metodo===m.id ? 'border-gold-400/50 bg-gold-400/5' : 'hairline bg-white/[.03]'">
+              <div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider" :class="m.id==='impa3' ? 'text-emerald-300' : 'text-slate-400'">
+                <span x-text="m.nome"></span><i x-show="m.id==='impa3'" x-icon="'badge-check'" class="h-3.5 w-3.5"></i></div>
+              <div class="font-display tabular mt-1 text-2xl font-bold" x-text="`${fmt(aluno.pontuacoes[m.id].pts)} pts`"></div>
+              <div class="text-xs text-slate-500" x-text="aluno.pontuacoes[m.id].pos ? `#${fmt(aluno.pontuacoes[m.id].pos)} do Brasil` : 'sem pontos neste método'"></div>
+            </button>
+          </template>
+        </div>
+        <p class="mt-3 text-xs text-slate-500" x-text="metodoAtual?.descricao"></p>
       </div>
 
       <!-- medalhas -->
@@ -638,7 +685,7 @@
             <div x-show="escola.variantes.length" class="mt-1 text-xs text-slate-500">também escrita como: <span x-text="escola.variantes.map(prettySchool).join('; ')"></span></div>
             <div class="mt-5 max-w-xl">
               <div class="mb-1.5 flex justify-between text-xs">
-                <span class="font-semibold text-gold-300"><span class="tabular" x-text="fmt(escola.xp)"></span> pontos <span class="font-normal text-emerald-300" x-text="`· ${fmt(escola.impa)} IMPA Tech`"></span></span>
+                <span class="font-semibold text-gold-300"><span class="tabular" x-text="fmt(escola.xp)"></span> pontos <span class="font-normal text-slate-500" x-text="`· ${metodoAtual?.nome || ''}`"></span></span>
                 <span class="text-slate-500" x-text="escola.tier.proximo ? `faltam ${fmt(escola.tier.falta)} para ${escola.tier.proximo}` : 'nível máximo alcançado 🔥'"></span>
               </div>
               <div class="bar !h-2.5"><span :style="`width:${escola.tier.progresso*100}%; background:linear-gradient(90deg, ${escola.tier.cor}, #fff8)`"></span></div>
@@ -647,12 +694,12 @@
           <div class="grid grid-cols-3 gap-3 md:w-80 md:grid-cols-1">
             <div class="rounded-2xl border hairline bg-white/5 p-3 text-center md:text-left">
               <div class="text-[11px] uppercase tracking-wider text-slate-500">Brasil</div>
-              <div class="font-display tabular text-2xl font-bold">#<span x-text="fmt(escola.rank)"></span></div>
-              <div class="text-xs text-emerald-300" x-text="percentil(escola.rank, escola.rank_total)"></div>
+              <div class="font-display tabular text-2xl font-bold" x-text="escola.rank ? '#' + fmt(escola.rank) : '—'"></div>
+              <div class="text-xs text-emerald-300" x-text="escola.rank ? percentil(escola.rank, escola.rank_total) : 'sem pontos neste método'"></div>
             </div>
             <div class="rounded-2xl border hairline bg-white/5 p-3 text-center md:text-left">
               <div class="text-[11px] uppercase tracking-wider text-slate-500" x-text="escola.uf"></div>
-              <div class="font-display tabular text-2xl font-bold">#<span x-text="fmt(escola.rank_uf)"></span></div>
+              <div class="font-display tabular text-2xl font-bold" x-text="escola.rank_uf ? '#' + fmt(escola.rank_uf) : '—'"></div>
               <div class="text-xs text-slate-500">de <span x-text="fmt(escola.rank_uf_total)"></span></div>
             </div>
             <div class="rounded-2xl border hairline bg-white/5 p-3 text-center md:text-left">
@@ -671,6 +718,26 @@
             <div class="hidden sm:block"><div class="font-display text-lg font-semibold" x-text="m[1]"></div><div class="text-xs text-slate-500">medalhas</div></div>
           </div>
         </template>
+      </div>
+
+<!-- pontuação nos três métodos -->
+      <div class="glass card mt-6 p-5">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 class="font-display flex items-center gap-2 text-lg font-semibold"><i x-icon="'scale'" class="h-5 w-5 text-indigo-300"></i>Pontuação nos 3 métodos</h3>
+          <a :href="ov?.fonte_pontos.url" target="_blank" rel="noopener" class="text-xs text-slate-400 hover:text-gold-300">edital do IMPA Tech ↗</a>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-3">
+          <template x-for="m in ov?.metodos || []" :key="m.id">
+            <button @click="setMetodo(m.id)" class="rounded-2xl border p-4 text-left transition hover:border-gold-400/40"
+                    :class="metodo===m.id ? 'border-gold-400/50 bg-gold-400/5' : 'hairline bg-white/[.03]'">
+              <div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider" :class="m.id==='impa3' ? 'text-emerald-300' : 'text-slate-400'">
+                <span x-text="m.nome"></span><i x-show="m.id==='impa3'" x-icon="'badge-check'" class="h-3.5 w-3.5"></i></div>
+              <div class="font-display tabular mt-1 text-2xl font-bold" x-text="`${fmt(escola.pontuacoes[m.id].pts)} pts`"></div>
+              <div class="text-xs text-slate-500" x-text="escola.pontuacoes[m.id].pos ? `#${fmt(escola.pontuacoes[m.id].pos)} do Brasil` : 'sem pontos neste método'"></div>
+            </button>
+          </template>
+        </div>
+        <p class="mt-3 text-xs text-slate-500" x-text="metodoAtual?.descricao"></p>
       </div>
 
       <div class="glass card mt-6 p-5">
@@ -724,27 +791,51 @@
   <h1 class="font-display text-4xl font-bold">Como funciona</h1>
   <div class="mt-8 grid gap-6 lg:grid-cols-2">
     <div class="glass card p-6">
-      <h3 class="font-display mb-4 text-lg font-semibold">Pontos por medalha</h3>
-      <p class="mb-4 text-sm text-slate-400">Tabela oficial do IMPA para as olimpíadas de matemática (<a class="link" :href="ov?.fonte_pontos.url" target="_blank" rel="noopener" x-text="ov?.fonte_pontos.nome"></a>); menção honrosa não pontua. Cada olimpíada nova entra com a sua tabela.
-        A <b class="text-emerald-300">Pontuação IMPA Tech</b> soma só o que o edital aceita (medalhas do Nível 3 da OBMEP, premiação nacional, e da OBM). Os <b class="text-gold-300">pontos</b> do site aplicam a mesma tabela a todos os níveis, para valorizar a trajetória inteira.</p>
+      <h3 class="font-display mb-2 text-lg font-semibold">Métodos de pontuação</h3>
+      <p class="mb-4 text-sm text-slate-400">Escolha no topo do site. A escolha vale para rankings, mapa, perfis e níveis. Fonte da tabela do IMPA:
+        <a class="link" :href="ov?.fonte_pontos.url" target="_blank" rel="noopener" x-text="ov?.fonte_pontos.nome"></a>.</p>
+      <div class="mb-5 space-y-2">
+        <template x-for="m in ov?.metodos || []" :key="m.id">
+          <button @click="setMetodo(m.id)" class="block w-full rounded-xl border px-3 py-2 text-left text-sm transition hover:border-gold-400/40" :class="metodo===m.id ? 'border-gold-400/50 bg-gold-400/5' : 'hairline'">
+            <b :class="m.id==='impa3' ? 'text-emerald-300' : 'text-white'" x-text="m.nome"></b> <span class="text-slate-400" x-text="'— ' + m.descricao"></span>
+          </button>
+        </template>
+      </div>
       <table class="w-full text-sm">
-        <thead><tr class="text-left text-xs uppercase tracking-wider text-slate-500"><th class="pb-2">Olimpíada</th><th class="pb-2">Área</th>
-          <th class="pb-2 text-right">Ouro</th><th class="pb-2 text-right">Prata</th><th class="pb-2 text-right">Bronze</th><th class="pb-2 text-right">IMPA Tech</th></tr></thead>
-        <tbody class="divide-y divide-white/5">
-          <template x-for="o in ov?.olimpiadas || []" :key="o.sigla">
-            <tr><td class="py-2.5 font-semibold" :title="o.nome" x-text="o.sigla"></td><td class="text-slate-400" x-text="o.area"></td>
-              <td class="tabular text-right font-semibold text-gold-300" x-text="o.pontos.Ouro ?? 0"></td>
-              <td class="tabular text-right font-semibold text-gold-300" x-text="o.pontos.Prata ?? 0"></td>
-              <td class="tabular text-right font-semibold text-gold-300" x-text="o.pontos.Bronze ?? 0"></td>
-              <td class="text-right text-xs text-emerald-300" x-text="o.impa_niveis.length ? o.impa_niveis.map(nivelLabel).join(', ') : '—'"></td></tr>
-          </template>
-        </tbody>
+        <thead><tr class="text-left text-xs uppercase tracking-wider text-slate-500"><th class="pb-2">Olimpíada</th><th class="pb-2">Prêmio</th>
+          <th class="pb-2 text-right">IMPA</th><th class="pb-2 text-right">IMPA N3</th><th class="pb-2 text-right">Nossa</th></tr></thead>
+        <template x-for="o in ov?.olimpiadas || []" :key="o.sigla">
+          <tbody class="divide-y divide-white/5 border-t hairline">
+            <template x-for="(premio, i) in ['Ouro','Prata','Bronze','Menção Honrosa'].concat(o.pontos_site_outros ? ['Outros prêmios'] : [])" :key="premio">
+              <tr>
+                <td class="py-1.5 font-semibold" :title="o.nome" x-text="i === 0 ? o.sigla : ''"></td>
+                <td class="text-slate-400" x-text="premio"></td>
+                <td class="tabular text-right text-gold-300" x-text="o.pontos[premio] ?? 0"></td>
+                <td class="tabular text-right text-emerald-300" x-text="o.impa_niveis.length ? `${o.pontos[premio] ?? 0} (${o.impa_niveis.map(nivelCurto).join(',')})` : 0"></td>
+                <td class="tabular text-right text-gold-300" x-text="premio === 'Outros prêmios' ? o.pontos_site_outros : (o.pontos_site[premio] ?? 0)"></td>
+              </tr>
+            </template>
+          </tbody>
+        </template>
       </table>
     </div>
     <div class="glass card p-6">
-      <h3 class="font-display mb-4 text-lg font-semibold">Níveis</h3>
+      <h3 class="font-display mb-1 text-lg font-semibold">Escala da nossa versão</h3>
+      <p class="mb-3 text-xs text-slate-500">Por dificuldade: ouro OBM = 2× ouro OBMEP; bronze OBM &gt; ouro OBMEP; bronze Ibero &gt; prata OBM; bronze IMO &gt; prata Ibero. Ibero, IMO e as olimpíadas de entrada (Canguru e similares) entram com a coleta delas.</p>
+      <table class="mb-6 w-full text-sm">
+        <thead><tr class="text-left text-xs uppercase tracking-wider text-slate-500"><th class="pb-2">Olimpíada</th><th class="pb-2 text-right">Ouro</th><th class="pb-2 text-right">Prata</th><th class="pb-2 text-right">Bronze</th><th class="pb-2 text-right">Menção</th></tr></thead>
+        <tbody class="divide-y divide-white/5">
+          <template x-for="e in ov?.escala_site || []" :key="e.grupo">
+            <tr><td class="py-1.5 font-semibold" x-text="{ENTRADA: 'Entrada (Canguru…)', IBERO: 'Ibero', IMO: 'IMO'}[e.grupo] || e.grupo"></td>
+              <td class="tabular text-right text-gold-300" x-text="fmt(e.Ouro)"></td><td class="tabular text-right text-gold-300" x-text="fmt(e.Prata)"></td>
+              <td class="tabular text-right text-gold-300" x-text="fmt(e.Bronze)"></td><td class="tabular text-right text-slate-400" x-text="e['Menção Honrosa'] ? fmt(e['Menção Honrosa']) : '—'"></td></tr>
+          </template>
+        </tbody>
+      </table>
+      <h3 class="font-display mb-1 text-lg font-semibold">Níveis</h3>
+      <p class="mb-4 text-xs text-slate-500">Limites do método <b class="text-slate-300" x-text="metodoAtual?.nome"></b>.</p>
       <div class="grid grid-cols-2 gap-6">
-        <template x-for="grp in [['Alunos', ov?.tiers_aluno], ['Escolas', ov?.tiers_escola]]" :key="grp[0]">
+        <template x-for="grp in [['Alunos', ov?.tiers[metodo]?.aluno], ['Escolas', ov?.tiers[metodo]?.escola]]" :key="grp[0]">
           <div>
             <div class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500" x-text="grp[0]"></div>
             <ol class="space-y-2">
@@ -788,5 +879,15 @@
 <footer class="border-t hairline py-8 text-center text-xs text-slate-500">
   Dados públicos da OBMEP e da OBM · cada premiação aponta para a fonte oficial
 </footer>
+
+<!-- aviso flutuante -->
+<div x-show="aviso" x-cloak x-transition.opacity.duration.200ms class="fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
+  <div class="glass card flex max-w-xl items-start gap-3 !rounded-2xl border-emerald-400/30 bg-ink-800/95 px-4 py-3 text-sm shadow-2xl shadow-black/60">
+    <i x-icon="'info'" class="mt-0.5 h-4 w-4 flex-none text-emerald-300"></i>
+    <span class="flex-1 text-slate-200" x-text="aviso?.texto"></span>
+    <button x-show="aviso?.acao" @click="aviso.acao.fn(); aviso = null" class="whitespace-nowrap rounded-lg border border-emerald-400/30 px-2 py-0.5 text-xs text-emerald-200 hover:bg-emerald-400/10" x-text="aviso?.acao?.label"></button>
+    <button @click="aviso = null" class="text-slate-500 hover:text-white" title="Fechar"><i x-icon="'x'" class="h-4 w-4"></i></button>
+  </div>
+</div>
 </body>
 </html>
