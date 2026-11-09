@@ -3,18 +3,21 @@
 Uso:
     python server.py                 # abre em http://localhost:8000
     python server.py --port 9000 --no-browser
+    python server.py --host 0.0.0.0     # aceita conexões de outras máquinas (API pública)
+    python server.py --rate-limit 30 --daily-limit 500   # limites da API pública por IP
 """
 import json
 import mimetypes
 import sqlite3
 import sys
 import threading
+import time
 import traceback
 import webbrowser
 from contextlib import closing
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 import gamificacao as gm
 import olimpiadas as olp
@@ -422,6 +425,280 @@ def overview(con, params: dict) -> dict:
     data["estados"] = cached(("estados", metodo), lambda: ranking(con, {**p, "tipo": "estados", "limite": 30})["itens"])
     return data
 
+# ---------------------------------------------------------------- API pública (v1)
+#
+# Rotas estáveis para outros sistemas consultarem um aluno ou uma escola pelo nome e confirmarem
+# premiações. Respostas em JSON, com CORS liberado. A interface web usa as rotas internas acima,
+# que podem mudar; estas só mudam numa nova versão (/api/v2).
+
+V1_LIMITE_PADRAO, V1_LIMITE_MAX, V1_LIMITE_MEDALHISTAS = 20, 100, 10
+V1_FILTROS = ("uf", "municipio", "competicao", "area", "medalha", "nivel", "ano", "ano_de", "ano_ate", "rede")
+PREMIACAO_COLS = "competicao, ano, nivel, medalha, premio, nome, escola, municipio, uf, rede, fonte, aluno_id, escola_chave"
+
+
+class ParametroInvalido(ValueError):
+    pass
+
+
+def _bool(params: dict, key: str, padrao: bool) -> bool:
+    v = (params.get(key) or "").strip().lower()
+    return padrao if not v else v in ("1", "true", "sim", "s", "yes")
+
+
+def _paginacao(params: dict) -> tuple[int, int]:
+    try:
+        limite = int(params.get("limite") or V1_LIMITE_PADRAO)
+        offset = int(params.get("offset") or 0)
+    except ValueError:
+        raise ParametroInvalido("limite e offset devem ser números inteiros") from None
+    return min(max(limite, 1), V1_LIMITE_MAX), max(offset, 0)
+
+
+def _tokens_obrigatorios(params: dict, key: str = "nome") -> list:
+    tokens = query_tokens(params.get(key) or "")
+    if not tokens:
+        raise ParametroInvalido(f"informe o parâmetro '{key}' (ex.: ?{key}=...)")
+    return tokens
+
+
+def _where_v1(params: dict, campo: str, tokens: list) -> tuple[str, list]:
+    where, args = build_filters({k: params[k] for k in V1_FILTROS if params.get(k)})
+    for tok, expansion in tokens:
+        cond, cond_args = token_condition(campo, tok, expansion)
+        where.append(cond)
+        args += cond_args
+    return " AND ".join(where) or "1", args
+
+
+def _pontos_e_posicoes(resumo) -> tuple[dict, dict]:
+    pontos, posicao = {}, {}
+    for m, info in olp.METODOS.items():
+        c = info["coluna"]
+        pontos[m] = resumo[c] or 0
+        posicao[m] = ({"nacional": resumo[f"{c}_pos"], "estadual": resumo[f"{c}_pos_uf"]}
+                      if resumo[c] else None)
+    return pontos, posicao
+
+
+def _premiacao(r: dict, nomes: dict) -> dict:
+    return {"olimpiada": r["competicao"], "olimpiada_nome": nomes.get(r["competicao"], r["competicao"]),
+            "ano": r["ano"], "nivel": r["nivel"], "medalha": r["medalha"], "premio": r["premio"],
+            "nome_na_lista": r["nome"], "escola": r["escola"], "municipio": r["municipio"], "uf": r["uf"],
+            "fonte": r["fonte"]}
+
+
+def _sem_repetir(valores) -> list[str]:
+    """Une grafias do mesmo valor ("SAO PAULO", "São Paulo"), ficando com a mais legível (acentos e minúsculas)."""
+    grupos: dict = {}
+    for v in valores:
+        if v:
+            grupos.setdefault(normalize(v), []).append(v)
+    legivel = lambda v: (sum(c.islower() for c in v), sum(not c.isascii() for c in v))  # noqa: E731
+    return [max(vs, key=legivel) for vs in grupos.values()]
+
+
+def _link(params: dict, rota: str, ident: str) -> str:
+    return f"{params.get('_base', '')}/#/{rota}/{quote(ident, safe='')}"
+
+
+def v1_alunos(con, params: dict) -> dict:
+    """Alunos cujo nome casa com `nome` (todas as palavras, em qualquer ordem, ignorando acentos)."""
+    tokens = _tokens_obrigatorios(params)
+    limite, offset = _paginacao(params)
+    metodo, col = metodo_de(params)
+    sql_where, args = _where_v1(params, "nome", tokens)
+    if params.get("escola"):  # "o aluno X da escola Y": restringe às premiações por aquela escola
+        for tok, expansion in query_tokens(params["escola"]):
+            cond, cond_args = token_condition("escola", tok, expansion)
+            sql_where += f" AND {cond}"
+            args += cond_args
+
+    alvo = normalize(params["nome"])
+    grupos = con.execute(
+        f"""SELECT aluno_id, MAX(nome_busca = ?) AS exato, SUM({col}) AS pts, COUNT(*) AS n
+            FROM medalhas WHERE {sql_where} GROUP BY aluno_id || ''  -- sem o índice: varre a tabela uma vez (bem mais rápido)
+            ORDER BY exato DESC, pts DESC, aluno_id""", [alvo, *args]).fetchall()
+    ids = [g["aluno_id"] for g in grupos[offset:offset + limite]]
+
+    nomes = {o["sigla"]: o["nome"] for o in olp.catalogo()}
+    premiacoes: dict = {i: [] for i in ids}
+    resumos: dict = {}
+    if ids:
+        marks = ",".join("?" * len(ids))
+        for r in con.execute(f"SELECT {PREMIACAO_COLS} FROM medalhas WHERE {sql_where} AND aluno_id IN ({marks}) "
+                             "ORDER BY ano DESC, competicao", [*args, *ids]):
+            premiacoes[r["aluno_id"]].append(dict(r))
+        resumos = {r["id"]: r for r in con.execute(f"SELECT * FROM alunos WHERE id IN ({marks})", ids)}
+
+    incluir = _bool(params, "premiacoes", True)
+    alunos = []
+    for i in ids:
+        resumo, rows = resumos[i], premiacoes[i]
+        pontos, posicao = _pontos_e_posicoes(resumo)
+        escolas: dict = {}
+        for r in rows:  # mais recente primeiro; grafias da mesma escola (mesma chave) viram um item só
+            if r["escola_chave"]:
+                escolas.setdefault(r["escola_chave"], []).append(r["escola"])
+        item = {
+            "id": i, "nome": resumo["nome"], "uf": resumo["uf"],
+            "escolas": [{"id": k, "nome": _sem_repetir(v)[0], "perfil": _link(params, "escola", k)}
+                        for k, v in escolas.items()],
+            "municipios": sorted(_sem_repetir(r["municipio"] for r in rows), key=normalize),
+            "olimpiadas": sorted({r["competicao"] for r in rows}),
+            "anos": {"de": resumo["de"], "ate": resumo["ate"]},
+            "medalhas": {"ouro": resumo["ouro"], "prata": resumo["prata"], "bronze": resumo["bronze"],
+                         "mencao_honrosa": resumo["mencao"], "total": resumo["total"]},
+            "pontos": pontos, "posicao": posicao,
+            "premiacoes_encontradas": len(rows),
+            "perfil": _link(params, "aluno", i),
+        }
+        if incluir:
+            item["premiacoes"] = [_premiacao(r, nomes) for r in rows]
+        alunos.append(item)
+    return {"consulta": {k: v for k, v in params.items() if not k.startswith("_")}, "metodo": metodo,
+            "total": len(grupos), "offset": offset, "limite": limite, "alunos": alunos}
+
+
+def v1_escolas(con, params: dict) -> dict:
+    """Escolas cujo nome casa com `nome` (siglas como IFAL, ETEC e EEEFM são expandidas)."""
+    tokens = _tokens_obrigatorios(params)
+    limite, offset = _paginacao(params)
+    if _bool(params, "medalhistas", False):  # cada escola pode trazer centenas de alunos: páginas menores
+        limite = min(limite, V1_LIMITE_MEDALHISTAS)
+    metodo, col = metodo_de(params)
+    sql_where, args = _where_v1(params, "escola", tokens)
+    grupos = con.execute(
+        f"""SELECT escola_chave, SUM({col}) AS pts, COUNT(*) AS n FROM medalhas
+            WHERE {sql_where} AND escola_chave IS NOT NULL GROUP BY escola_chave || ''
+            ORDER BY pts DESC, n DESC, escola_chave""", args).fetchall()
+    ids = [g["escola_chave"] for g in grupos[offset:offset + limite]]
+
+    resumos, premiacoes = {}, {i: [] for i in ids}
+    incluir = _bool(params, "medalhistas", False)
+    if ids:
+        marks = ",".join("?" * len(ids))
+        resumos = {r["id"]: r for r in con.execute(f"SELECT * FROM escolas WHERE id IN ({marks})", ids)}
+        if incluir:
+            for r in con.execute(f"SELECT {PREMIACAO_COLS} FROM medalhas WHERE {sql_where} AND escola_chave IN ({marks}) "
+                                 "ORDER BY ano DESC, nome_busca", [*args, *ids]):
+                premiacoes[r["escola_chave"]].append(dict(r))
+
+    nomes = {o["sigla"]: o["nome"] for o in olp.catalogo()}
+    escolas = []
+    for i in ids:
+        resumo = resumos[i]
+        pontos, posicao = _pontos_e_posicoes(resumo)
+        item = {
+            "id": i, "nome": resumo["nome"], "municipio": resumo["municipio"], "uf": resumo["uf"],
+            "rede": resumo["rede"], "esfera": resumo["esfera"], "alunos_premiados": resumo["alunos"],
+            "anos": {"de": resumo["de"], "ate": resumo["ate"]},
+            "medalhas": {"ouro": resumo["ouro"], "prata": resumo["prata"], "bronze": resumo["bronze"],
+                         "mencao_honrosa": resumo["mencao"], "total": resumo["total"]},
+            "pontos": pontos, "posicao": posicao,
+            "perfil": _link(params, "escola", i),
+        }
+        if incluir:
+            por_aluno: dict = {}
+            for r in premiacoes[i]:
+                a = por_aluno.setdefault(r["aluno_id"], {"id": r["aluno_id"], "nome": r["nome"], "premiacoes": []})
+                a["premiacoes"].append(_premiacao(r, nomes))
+            item["medalhistas"] = list(por_aluno.values())
+        escolas.append(item)
+    return {"consulta": {k: v for k, v in params.items() if not k.startswith("_")}, "metodo": metodo,
+            "total": len(grupos), "offset": offset, "limite": limite, "escolas": escolas}
+
+
+def v1_indice(con, params: dict) -> dict:
+    base = params.get("_base", "")
+    filtros = "uf, municipio, competicao, area, medalha, nivel, ano, ano_de, ano_ate, rede"
+    return {
+        "nome": "Medalhas API", "versao": "1",
+        "atualizado_em": dict(con.execute("SELECT chave, valor FROM meta").fetchall()).get("atualizado_em"),
+        "rotas": {
+            "/api/v1/alunos": {
+                "descricao": "Busca alunos pelo nome e lista as premiações de cada um.",
+                "obrigatorio": {"nome": "nome ou parte do nome (palavras em qualquer ordem, sem acento)"},
+                "opcional": {"escola": "só premiações por esta escola", "filtros": filtros,
+                             "metodo": "impa | impa3 | site (ordem dos resultados)",
+                             "premiacoes": "1 (padrão) ou 0 para só o resumo", "limite": f"1–{V1_LIMITE_MAX} (padrão {V1_LIMITE_PADRAO})",
+                             "offset": "paginação"},
+                "exemplo": f"{base}/api/v1/alunos?nome=erick akira koga",
+            },
+            "/api/v1/escolas": {
+                "descricao": "Busca escolas pelo nome (aceita siglas como IFAL e ETEC).",
+                "obrigatorio": {"nome": "nome ou sigla da escola"},
+                "opcional": {"filtros": filtros, "metodo": "impa | impa3 | site (ordem dos resultados)",
+                             "medalhistas": "1 para incluir os alunos premiados e suas premiações "
+                                            f"(padrão 0; no máximo {V1_LIMITE_MEDALHISTAS} escolas por página)",
+                             "limite": f"1–{V1_LIMITE_MAX} (padrão {V1_LIMITE_PADRAO})", "offset": "paginação"},
+                "exemplo": f"{base}/api/v1/escolas?nome=ifal&medalhistas=1",
+            },
+        },
+        "limites": {"consultas_por_minuto": LIMITES["v1"][0], "consultas_por_dia": LIMITES["v1"][1],
+                    "por": "IP", "ao_exceder": "HTTP 429 com cabeçalho Retry-After (segundos)"},
+        "metodos": olp.metodos(),
+        "olimpiadas": [{"sigla": o["sigla"], "nome": o["nome"], "area": o["area"]} for o in olp.catalogo()],
+    }
+
+# ---------------------------------------------------------------- limite de consultas
+#
+# Protege o servidor quando ele fica aberto a outras máquinas:
+#  - por IP: balde de fichas por minuto (permite rajadas curtas) + teto diário;
+#  - global: no máximo N consultas à base ao mesmo tempo; as demais esperam um pouco ou recebem 503.
+# A API pública tem limites menores que a API usada pelo próprio site (que faz várias chamadas por página).
+
+LIMITES = {  # grupo -> [por minuto, por dia (None = sem teto)]; ajustáveis por linha de comando
+    "v1": [60, 2000],
+    "site": [600, None],
+}
+MAX_SIMULTANEAS = 8
+ESPERA_FILA = 10  # segundos aguardando vaga antes de responder 503
+CONFIAR_PROXY = False  # usa X-Forwarded-For (só ligue atrás de um proxy reverso seu, como nginx)
+
+
+class LimiteConsultas:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._baldes: dict = {}  # (grupo, ip) -> [fichas, último acesso]
+        self._dia: dict = {}     # (grupo, ip) -> [data, consultas no dia]
+        self._chamadas = 0
+
+    def consumir(self, grupo: str, ip: str) -> tuple[bool, dict]:
+        """(permitido, cabeçalhos X-RateLimit-* / Retry-After)."""
+        por_min, por_dia = LIMITES[grupo]
+        agora, hoje, chave = time.monotonic(), time.strftime("%Y-%m-%d"), (grupo, ip)
+        with self._lock:
+            self._chamadas += 1
+            if self._chamadas % 1000 == 0:  # esquece IPs parados há mais de 10 minutos
+                self._baldes = {k: v for k, v in self._baldes.items() if agora - v[1] < 600}
+                self._dia = {k: v for k, v in self._dia.items() if v[0] == hoje}
+            fichas, antes = self._baldes.get(chave, [por_min, agora])
+            fichas = min(por_min, fichas + (agora - antes) * por_min / 60)
+            dia = self._dia.get(chave)
+            usadas = dia[1] if dia and dia[0] == hoje else 0
+            cab = {"X-RateLimit-Limit": f"{por_min}/min" + (f", {por_dia}/dia" if por_dia else "")}
+            if por_dia and usadas >= por_dia:
+                amanha = time.mktime(time.strptime(hoje, "%Y-%m-%d")) + 86400
+                cab["Retry-After"] = str(max(1, int(amanha - time.time())))
+                cab["X-RateLimit-Remaining"] = "0"
+                return False, cab
+            if fichas < 1:
+                self._baldes[chave] = [fichas, agora]
+                cab["Retry-After"] = str(max(1, round((1 - fichas) * 60 / por_min)))
+                cab["X-RateLimit-Remaining"] = "0"
+                return False, cab
+            self._baldes[chave] = [fichas - 1, agora]
+            self._dia[chave] = [hoje, usadas + 1]
+            restantes = int(fichas - 1)
+            if por_dia:
+                restantes = min(restantes, por_dia - usadas - 1)
+            cab["X-RateLimit-Remaining"] = str(restantes)
+            return True, cab
+
+
+limitador = LimiteConsultas()
+vagas = threading.BoundedSemaphore(MAX_SIMULTANEAS)
+
 # ---------------------------------------------------------------- HTTP
 
 
@@ -431,28 +708,69 @@ ROUTES = {
     "/api/aluno": lambda con, p: perfil_aluno(con, p.get("id", ""), p),
     "/api/escola": lambda con, p: perfil_escola(con, p.get("id", ""), p),
     "/api/overview": lambda con, p: overview(con, p),
+    "/api/v1": v1_indice,
+    "/api/v1/alunos": v1_alunos,
+    "/api/v1/escolas": v1_escolas,
 }
 
 
 class Handler(BaseHTTPRequestHandler):
-    def _send(self, body: bytes, ctype: str, status: int = 200) -> None:
+    def _send(self, body: bytes, ctype: str, status: int = 200, headers: dict | None = None) -> None:
         self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-cache")
+        self.send_header("Access-Control-Allow-Origin", "*")  # API pública: pode ser chamada de outros sites
+        self.send_header("Access-Control-Expose-Headers", "X-RateLimit-Limit, X-RateLimit-Remaining, Retry-After")
+        for k, v in (headers or {}).items():
+            self.send_header(k, v)
         self.end_headers()
         self.wfile.write(body)
 
-    def _json(self, data, status=200) -> None:
-        self._send(json.dumps(data, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8", status)
+    def _json(self, data, status=200, headers: dict | None = None) -> None:
+        self._send(json.dumps(data, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8",
+                   status, headers)
+
+    def _ip(self) -> str:
+        if CONFIAR_PROXY and self.headers.get("X-Forwarded-For"):
+            return self.headers["X-Forwarded-For"].split(",")[0].strip()
+        return self.client_address[0]
+
+    def _api(self, path: str, params: dict) -> None:
+        grupo = "v1" if path == "/api/v1" or path.startswith("/api/v1/") else "site"
+        ok, cab = limitador.consumir(grupo, self._ip())
+        if not ok:
+            espera = int(cab["Retry-After"])
+            msg = (f"limite de consultas por minuto atingido; tente de novo em {espera} segundo(s)" if espera <= 60
+                   else "limite diário de consultas atingido; volta a liberar à meia-noite")
+            self._json({"erro": msg}, 429, cab)
+            return
+        if not vagas.acquire(timeout=ESPERA_FILA):
+            self._json({"erro": "servidor ocupado; tente de novo em instantes"}, 503, {"Retry-After": "5"})
+            return
+        try:
+            with closing(connect()) as con:
+                data = ROUTES[path](con, params)
+        finally:
+            vagas.release()
+        self._json(data, headers=cab)
+
+    def do_OPTIONS(self) -> None:  # preflight CORS
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Max-Age", "86400")
+        self.end_headers()
 
     def do_GET(self) -> None:
         url = urlparse(self.path)
         params = {k: v[0] for k, v in parse_qs(url.query).items()}
+        params["_base"] = f"http://{self.headers.get('Host') or 'localhost'}"
+        path = url.path.rstrip("/") or "/"
         try:
-            if url.path in ROUTES:
-                with closing(connect()) as con:
-                    self._json(ROUTES[url.path](con, params))
+            if path in ROUTES:
+                self._api(path, params)
                 return
             rel = "index.html" if url.path in ("/", "") else unquote(url.path.lstrip("/"))
             target = (WEB_DIR / rel).resolve()
@@ -489,10 +807,22 @@ def main() -> None:
     mimetypes.add_type("text/javascript", ".js")
     mimetypes.add_type("text/css", ".css")
     port = int(sys.argv[sys.argv.index("--port") + 1]) if "--port" in sys.argv else 8000
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    # --host 0.0.0.0 deixa a API acessível para outras máquinas da rede
+    host = sys.argv[sys.argv.index("--host") + 1] if "--host" in sys.argv else "127.0.0.1"
+    global CONFIAR_PROXY, vagas
+    CONFIAR_PROXY = "--trust-proxy" in sys.argv
+    for flag, grupo, i in (("--rate-limit", "v1", 0), ("--daily-limit", "v1", 1), ("--site-rate-limit", "site", 0)):
+        if flag in sys.argv:
+            valor = int(sys.argv[sys.argv.index(flag) + 1])
+            LIMITES[grupo][i] = valor if valor > 0 else (None if i else 10**9)  # 0 = sem limite
+    if "--max-concurrent" in sys.argv:
+        vagas = threading.BoundedSemaphore(int(sys.argv[sys.argv.index("--max-concurrent") + 1]))
+    server = ThreadingHTTPServer((host, port), Handler)
     threading.Thread(target=warm_up, daemon=True).start()
     url = f"http://localhost:{port}"
     print(f"Medalhas rodando em {url}  (Ctrl+C para sair)")
+    por_min, por_dia = LIMITES["v1"]
+    print(f"API pública: {por_min} consultas/min e {por_dia or 'sem limite de'} consultas/dia por IP")
     if "--no-browser" not in sys.argv:
         webbrowser.open(url)
     try:
