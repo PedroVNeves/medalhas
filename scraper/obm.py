@@ -57,7 +57,8 @@ def medal_category(premio: str) -> str:
 
 def split_city(value: str) -> tuple[str | None, str | None]:
     value = (value or "").strip(" –—-")
-    m = re.match(r"^(.*?)\s*[–—\-/]\s*([A-Za-z]{2})\.?$", value) or re.match(r"^(.*\S)\s+([A-Z]{2})$", value)
+    m = (re.match(r"^(.*?)\s*[–—\-/]\s*([A-Za-z]{2})\.?$", value) or re.match(r"^(.*?)\s*\(([A-Za-z]{2})\)$", value)
+         or re.match(r"^(.*\S)\s+([A-Z]{2})$", value))
     if m:
         return m.group(1).strip() or None, m.group(2).upper()
     return value or None, None

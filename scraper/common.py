@@ -13,8 +13,10 @@ CACHE_DIR = ROOT / "cache"
 USER_AGENT = "Mozilla/5.0 (medalhas-scraper)"
 
 
-def fetch(url: str, retries: int = 3, delay: float = 0.5) -> str | None:
-    """Baixa uma URL (com cache em disco). Retorna None se 404."""
+def fetch(url: str, retries: int = 5, delay: float = 0.5) -> str | None:
+    """Baixa uma URL (com cache em disco). Retorna None se 404.
+
+    Falhas de rede (DNS, timeout, 5xx) são tentadas de novo com espera crescente (2, 4, 8, 16 s)."""
     CACHE_DIR.mkdir(exist_ok=True)
     key = hashlib.sha1(url.encode()).hexdigest()[:16]
     path = CACHE_DIR / f"{key}.html"
@@ -25,7 +27,10 @@ def fetch(url: str, retries: int = 3, delay: float = 0.5) -> str | None:
             req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
             with urllib.request.urlopen(req, timeout=60) as resp:
                 raw = resp.read()
-            text = raw.decode("utf-8", errors="replace")
+            try:
+                text = raw.decode("utf-8")
+            except UnicodeDecodeError:  # páginas antigas em Latin-1/Windows-1252
+                text = raw.decode("cp1252", errors="replace")
             path.write_text(text, encoding="utf-8")
             time.sleep(delay)  # gentileza com o servidor
             return text
@@ -34,10 +39,10 @@ def fetch(url: str, retries: int = 3, delay: float = 0.5) -> str | None:
                 return None
             if attempt == retries - 1:
                 raise
-        except (urllib.error.URLError, TimeoutError):
+        except (urllib.error.URLError, TimeoutError, ConnectionError):
             if attempt == retries - 1:
                 raise
-        time.sleep(2 * (attempt + 1))
+        time.sleep(2 ** (attempt + 1))
     return None
 
 
