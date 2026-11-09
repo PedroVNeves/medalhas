@@ -59,6 +59,33 @@ def cached(key, fn):
     return value
 
 
+def metodo_de(params: dict) -> tuple[str, str]:
+    """(id do método, coluna de pontos). Métodos em olimpiadas.METODOS: impa, impa3, site."""
+    m = params.get("metodo") if params.get("metodo") in olp.METODOS else olp.METODO_PADRAO
+    return m, olp.METODOS[m]["coluna"]
+
+
+PONTOS = [m["coluna"] for m in olp.METODOS.values()]
+
+
+def aplicar_metodo(params: dict) -> dict:
+    """No método IMPA N3 só valem os níveis aceitos pelo edital: o filtro de nível fica restrito a eles
+    (se o usuário escolheu níveis aceitos, como só 'Programação Nível 2', a escolha é respeitada)."""
+    metodo, _ = metodo_de(params)
+    if metodo != "impa3":
+        return params
+    aceitos = olp.niveis_impa().split(",")
+    escolhidos = [n for n in (params.get("nivel") or "").split(",") if n in aceitos]
+    return {**params, "nivel": ",".join(escolhidos or aceitos)}
+
+
+def com_pontos(item: dict, col: str) -> dict:
+    """xp = pontos no método escolhido; impa = pontuação oficial do IMPA Tech (sempre)."""
+    item["xp"] = item.get(col) or 0
+    item["impa"] = item.get("p_impa3") or 0
+    return item
+
+
 def build_filters(params: dict) -> tuple[list[str], list]:
     where, args = [], []
     # filtros de múltipla escolha: valores separados por vírgula ("OBMEP,OBM", "1,2,3,Universitário")
@@ -89,7 +116,8 @@ def build_filters(params: dict) -> tuple[list[str], list]:
 
 
 AGG = """SUM(medalha='Ouro') AS ouro, SUM(medalha='Prata') AS prata, SUM(medalha='Bronze') AS bronze,
-         SUM(medalha='Menção Honrosa') AS mencao, COUNT(*) AS total, SUM(xp) AS xp, SUM(impa) AS impa,
+         SUM(medalha='Menção Honrosa') AS mencao, COUNT(*) AS total,
+         SUM(p_impa) AS p_impa, SUM(p_impa3) AS p_impa3, SUM(p_site) AS p_site,
          MIN(ano) AS de, MAX(ano) AS ate"""
 
 # ---------------------------------------------------------------- busca
@@ -111,6 +139,7 @@ def token_condition(campo: str, tok: str, expansion: list[str]) -> tuple[str, li
 
 
 def search(con, params: dict) -> dict:
+    params = aplicar_metodo(params)
     campo = params.get("campo", "nome")
     if campo not in ("nome", "escola", "tudo"):
         campo = "nome"
@@ -128,25 +157,29 @@ def search(con, params: dict) -> dict:
     total = con.execute(f"SELECT COUNT(*) FROM medalhas WHERE {sql_where}", args).fetchone()[0]
     rows = rows_as_dicts(con.execute(
         f"""SELECT competicao, ano, nivel, nome, escola, rede, esfera, municipio, uf, premio, medalha,
-                   pontos, fonte, nome_busca, escola_chave, aluno_id, xp
+                   pontos, fonte, nome_busca, escola_chave, aluno_id, p_impa, p_impa3, p_site
             FROM medalhas WHERE {sql_where} ORDER BY {order} LIMIT {MAX_RESULTS}""", args))
-    return {"total": total, "limite": MAX_RESULTS, "resultados": rows}
+    _, col = metodo_de(params)
+    return {"total": total, "limite": MAX_RESULTS, "resultados": [com_pontos(r, col) for r in rows]}
 
 # ---------------------------------------------------------------- tabelas-resumo (pré-calculadas no build)
 
 FILTER_KEYS = ("competicao", "area", "medalha", "uf", "rede", "nivel", "escola_chave", "esfera", "ano", "ano_de",
                "ano_ate", "municipio", "sem_mencao")
 SUMMARY_COLS = {
-    "alunos": "id, nome, uf, competicoes, escola, escola_chave, municipio, ouro, prata, bronze, mencao, total, xp, impa, de, ate",
-    "escolas": "id, nome, municipio, uf, rede, esfera, alunos, ouro, prata, bronze, mencao, total, xp, impa, de, ate",
+    "alunos": "id, nome, uf, competicoes, escola, escola_chave, municipio, ouro, prata, bronze, mencao, total, de, ate, "
+              + ", ".join(PONTOS),
+    "escolas": "id, nome, municipio, uf, rede, esfera, alunos, ouro, prata, bronze, mencao, total, de, ate, "
+               + ", ".join(PONTOS),
 }
 
 
-def summary_xp(con, table: str, ids: list[str]) -> dict:
+def summary_xp(con, table: str, ids: list[str], col: str) -> dict:
+    """Pontos totais (sem filtros) de cada aluno/escola: definem o nível, que é sempre o da carreira toda."""
     if not ids:
         return {}
     marks = ",".join("?" * len(ids))
-    return dict(con.execute(f"SELECT id, xp FROM {table} WHERE id IN ({marks})", ids).fetchall())
+    return dict(con.execute(f"SELECT id, {col} FROM {table} WHERE id IN ({marks})", ids).fetchall())
 
 
 def latest_school(con, aluno_ids: list[str]) -> dict:
@@ -157,11 +190,11 @@ def latest_school(con, aluno_ids: list[str]) -> dict:
             for r in con.execute(f"SELECT id, escola, escola_chave, municipio FROM alunos WHERE id IN ({marks})", aluno_ids)}
 
 
+# Chaves de ordenação; "c" é a coluna de pontos do método escolhido
 SORT_KEYS = {
-    "xp": lambda r: (-r["xp"], -r["ouro"], -r["prata"], -r["bronze"]),
-    "medalhas": lambda r: (-r["ouro"], -r["prata"], -r["bronze"], -r["xp"]),
-    "total": lambda r: (-(r["ouro"] + r["prata"] + r["bronze"]), -r["xp"]),
-    "impa": lambda r: (-r["impa"], -r["xp"], -r["ouro"]),
+    "xp": lambda r, c: (-(r[c] or 0), -r["ouro"], -r["prata"], -r["bronze"]),
+    "medalhas": lambda r, c: (-r["ouro"], -r["prata"], -r["bronze"], -(r[c] or 0)),
+    "total": lambda r, c: (-(r["ouro"] + r["prata"] + r["bronze"]), -(r[c] or 0)),
 }
 
 
@@ -201,16 +234,25 @@ def aggregate(con, tipo: str, params: dict) -> list[dict]:
 
 
 def ranking(con, params: dict) -> dict:
+    params = aplicar_metodo(params)
     tipo = params.get("tipo", "alunos")
     if tipo not in ("alunos", "escolas", "estados"):
         tipo = "alunos"
     ordem = params.get("ordem", "xp") if params.get("ordem") in SORT_KEYS else "xp"
+    metodo, col = metodo_de(params)
     limite = min(int(params.get("limite", 50)), 200)
     offset = max(int(params.get("offset", 0)), 0)
 
-    key = SORT_KEYS[ordem]
-    ordered = cached(("sorted", tipo, ordem, tuple(sorted((k, params[k]) for k in FILTER_KEYS if params.get(k)))),
-                     lambda: sorted(aggregate(con, tipo, params), key=lambda r: (key(r), r["nome"] or "")))
+    sort_key = SORT_KEYS[ordem]
+    key = lambda r: sort_key(r, col)  # noqa: E731
+    filtros = tuple(sorted((k, params[k]) for k in FILTER_KEYS if params.get(k)))
+    def ordenar():
+        itens = aggregate(con, tipo, params)
+        if ordem == "xp":  # ranking por pontos: quem não pontua no método fica de fora
+            itens = [r for r in itens if r[col]]
+        return sorted(itens, key=lambda r: (key(r), r["nome"] or ""))
+
+    ordered = cached(("sorted", tipo, ordem, metodo, filtros), ordenar)
 
     # RANK(): empates (mesma chave de ordenação) dividem a posição
     page = []
@@ -220,39 +262,48 @@ def ranking(con, params: dict) -> dict:
         if k != prev:
             pos, prev = i, k
         if i > offset:
-            page.append(dict(r, pos=pos))
+            page.append(com_pontos(dict(r, pos=pos), col))
 
     if tipo == "alunos":
         info = latest_school(con, [it["id"] for it in page])
-        xp = summary_xp(con, "alunos", [it["id"] for it in page])
+        xp = summary_xp(con, "alunos", [it["id"] for it in page], col)
         for it in page:
             it.update({k: v for k, v in info.get(it["id"], {}).items() if not it.get(k)})
-            it["tier"] = gm.tier(xp.get(it["id"], it["xp"]))
+            it["tier"] = gm.tier(xp.get(it["id"], it["xp"]), metodo=metodo)
     elif tipo == "escolas":
-        xp = summary_xp(con, "escolas", [it["id"] for it in page])
+        xp = summary_xp(con, "escolas", [it["id"] for it in page], col)
         for it in page:
-            it["tier"] = gm.tier(xp.get(it["id"], it["xp"]), escola=True)
-    return {"tipo": tipo, "total": len(ordered), "offset": offset, "limite": limite, "itens": page}
+            it["tier"] = gm.tier(xp.get(it["id"], it["xp"]), escola=True, metodo=metodo)
+    return {"tipo": tipo, "metodo": metodo, "nivel_forcado": params.get("nivel") if metodo == "impa3" else None,
+            "total": len(ordered), "offset": offset, "limite": limite, "itens": page}
 
 # ---------------------------------------------------------------- perfis
 
 
-def perfil_aluno(con, aluno_id: str) -> dict:
+def pontuacoes(resumo) -> dict:
+    """Pontos e posição nacional nos três métodos (para o quadro comparativo do perfil)."""
+    return {m: {"pts": resumo[i["coluna"]], "pos": resumo[f"{i['coluna']}_pos"] if resumo[i["coluna"]] else None}
+            for m, i in olp.METODOS.items()}
+
+
+def perfil_aluno(con, aluno_id: str, params: dict) -> dict:
+    metodo, col = metodo_de(params)
     rows = rows_as_dicts(con.execute(
         """SELECT competicao, ano, nivel, nome, escola, escola_chave, rede, esfera, municipio, uf,
-                  premio, medalha, pontos, fonte, xp, impa, aluno_id
+                  premio, medalha, pontos, fonte, p_impa, p_impa3, p_site, aluno_id
            FROM medalhas WHERE aluno_id = ? ORDER BY ano DESC, competicao""", (aluno_id,)))
     if not rows:
         return {"erro": "Aluno não encontrado"}
+    rows = [com_pontos(r, col) for r in rows]
     resumo = con.execute("SELECT * FROM alunos WHERE id = ?", (aluno_id,)).fetchone()
-    xp, pos, pos_uf, nome, uf = resumo["xp"], resumo["pos"], resumo["pos_uf"], resumo["nome"], resumo["uf"]
-    total = con.execute("SELECT COUNT(*) FROM alunos").fetchone()[0]
-    total_uf = con.execute("SELECT COUNT(*) FROM alunos WHERE uf IS ?", (uf,)).fetchone()[0]
-    rank_impa = (con.execute("SELECT COUNT(*) FROM alunos WHERE impa > ?", (resumo["impa"],)).fetchone()[0] + 1
-                 if resumo["impa"] else None)
+    xp, nome, uf = resumo[col], resumo["nome"], resumo["uf"]
+    pos, pos_uf = resumo[f"{col}_pos"], resumo[f"{col}_pos_uf"]
+    total = con.execute(f"SELECT COUNT(*) FROM alunos WHERE {col} > 0").fetchone()[0]
+    total_uf = con.execute(f"SELECT COUNT(*) FROM alunos WHERE uf IS ? AND {col} > 0", (uf,)).fetchone()[0]
 
     # quem está logo acima no ranking nacional ("próximo alvo")
-    alvo = con.execute("SELECT id, nome, xp FROM alunos WHERE xp > ? ORDER BY xp, nome LIMIT 1", (xp,)).fetchone()
+    alvo = con.execute(f"SELECT id, nome, {col} AS xp FROM alunos WHERE {col} > ? ORDER BY {col}, nome LIMIT 1",
+                       (xp,)).fetchone()
     acima = {"id": alvo["id"], "nome": alvo["nome"], "xp": alvo["xp"], "diferenca": alvo["xp"] - xp} if alvo else None
 
     escolas = []
@@ -263,25 +314,30 @@ def perfil_aluno(con, aluno_id: str) -> dict:
     return {
         "id": aluno_id, "nome": nome, "uf": uf,
         "municipios": sorted({r["municipio"] for r in rows if r["municipio"]}),
-        "escolas": escolas, "xp": xp, "tier": gm.tier(xp),
-        "rank": pos, "rank_total": total, "rank_uf": pos_uf, "rank_uf_total": total_uf,
-        "impa": resumo["impa"], "rank_impa": rank_impa,
+        "escolas": escolas, "xp": xp, "tier": gm.tier(xp, metodo=metodo), "metodo": metodo,
+        # sem pontos no método, não há posição (todos os zerados empatariam no fim da lista)
+        "rank": pos if xp else None, "rank_total": total, "rank_uf": pos_uf if xp else None, "rank_uf_total": total_uf,
+        "impa": resumo["p_impa3"], "rank_impa": resumo["p_impa3_pos"] if resumo["p_impa3"] else None,
+        "pontuacoes": pontuacoes(resumo),
         "medalhas": gm.medal_counts(rows), "anos": sorted({r["ano"] for r in rows if r["ano"]}),
         "conquistas": gm.conquistas_aluno(rows), "acima": acima, "premiacoes": rows,
     }
 
 
-def perfil_escola(con, chave: str) -> dict:
+def perfil_escola(con, chave: str, params: dict) -> dict:
+    metodo, col = metodo_de(params)
     rows = rows_as_dicts(con.execute(
         """SELECT competicao, ano, nivel, nome, escola, rede, esfera, municipio, uf, premio, medalha,
-                  fonte, xp, impa, aluno_id
+                  fonte, p_impa, p_impa3, p_site, aluno_id
            FROM medalhas WHERE escola_chave = ? ORDER BY ano DESC, nome""", (chave,)))
     if not rows:
         return {"erro": "Escola não encontrada"}
+    rows = [com_pontos(r, col) for r in rows]
     resumo = con.execute("SELECT * FROM escolas WHERE id = ?", (chave,)).fetchone()
-    xp, pos, pos_uf, uf = resumo["xp"], resumo["pos"], resumo["pos_uf"], resumo["uf"]
-    total = con.execute("SELECT COUNT(*) FROM escolas").fetchone()[0]
-    total_uf = con.execute("SELECT COUNT(*) FROM escolas WHERE uf IS ?", (uf,)).fetchone()[0]
+    xp, uf = resumo[col], resumo["uf"]
+    pos, pos_uf = resumo[f"{col}_pos"], resumo[f"{col}_pos_uf"]
+    total = con.execute(f"SELECT COUNT(*) FROM escolas WHERE {col} > 0").fetchone()[0]
+    total_uf = con.execute(f"SELECT COUNT(*) FROM escolas WHERE uf IS ? AND {col} > 0", (uf,)).fetchone()[0]
 
     variantes: dict = {}
     for r in rows:
@@ -309,18 +365,22 @@ def perfil_escola(con, chave: str) -> dict:
 
     return {
         "id": chave, "nome": nomes[0], "variantes": nomes[1:], "municipio": rows[0]["municipio"], "uf": uf,
-        "rede": rows[0]["rede"], "esfera": rows[0]["esfera"], "xp": xp, "tier": gm.tier(xp, escola=True),
-        "rank": pos, "rank_total": total, "rank_uf": pos_uf, "rank_uf_total": total_uf,
-        "impa": resumo["impa"], "medalhas": gm.medal_counts(rows), "alunos": len(alunos),
+        "rede": rows[0]["rede"], "esfera": rows[0]["esfera"], "xp": xp, "metodo": metodo,
+        "tier": gm.tier(xp, escola=True, metodo=metodo),
+        "rank": pos if xp else None, "rank_total": total, "rank_uf": pos_uf if xp else None, "rank_uf_total": total_uf,
+        "impa": resumo["p_impa3"], "pontuacoes": pontuacoes(resumo),
+        "medalhas": gm.medal_counts(rows), "alunos": len(alunos),
         "anos": sorted({r["ano"] for r in rows}), "serie": [serie[a] for a in sorted(serie)],
-        "top_alunos": top, "conquistas": gm.conquistas_escola(rows, pos, pos_uf),
+        "top_alunos": top, "conquistas": gm.conquistas_escola(rows, pos if xp else None, pos_uf if xp else None),
         "recentes": rows[:60],
     }
 
 # ---------------------------------------------------------------- visão geral
 
 
-def overview(con) -> dict:
+def overview(con, params: dict) -> dict:
+    metodo, col = metodo_de(params)
+
     def build():
         tot = dict(con.execute(f"SELECT {AGG} FROM medalhas").fetchone())
         tot["alunos"] = con.execute("SELECT COUNT(*) FROM alunos").fetchone()[0]
@@ -345,14 +405,21 @@ def overview(con) -> dict:
         anos = [r[0] for r in con.execute("SELECT DISTINCT ano FROM medalhas ORDER BY ano DESC")]
         return {"totais": tot, "serie": serie, "competicoes": comps, "ufs": ufs, "anos": anos,
                 "olimpiadas": olimpiadas, "areas": areas, "niveis": niveis, "fonte_pontos": gm.FONTE_PONTOS,
-                "tiers_aluno": [{"nome": n, "min": m, "cor": c} for n, m, c in gm.TIERS_ALUNO],
-                "tiers_escola": [{"nome": n, "min": m, "cor": c} for n, m, c in gm.TIERS_ESCOLA],
+                "metodos": olp.metodos(), "metodo_padrao": olp.METODO_PADRAO, "niveis_impa": olp.niveis_impa(),
+                "escala_site": [{"grupo": g, **{k: v for k, v in tab.items() if not k.startswith("_")}}
+                                for g, tab in olp.ESCALA_SITE.items()],
+                "tiers": {m: {"aluno": [{"nome": n, "min": mi, "cor": c} for n, mi, c in gm.tiers(m)],
+                              "escola": [{"nome": n, "min": mi, "cor": c} for n, mi, c in gm.tiers(m, True)]}
+                          for m in olp.METODOS},
                 "conquistas_aluno": gm.conquistas_aluno([]),
                 "conquistas_escola": gm.conquistas_escola([], None, None), **meta}
     data = dict(cached("overview", build))
-    data["top_alunos"] = cached("top_alunos", lambda: ranking(con, {"tipo": "alunos", "limite": 10})["itens"])
-    data["top_escolas"] = cached("top_escolas", lambda: ranking(con, {"tipo": "escolas", "limite": 10})["itens"])
-    data["estados"] = cached("estados", lambda: ranking(con, {"tipo": "estados", "limite": 30})["itens"])
+    data["totais"] = com_pontos(dict(data["totais"]), col)
+    data["metodo"] = metodo
+    p = {"metodo": metodo}
+    data["top_alunos"] = cached(("top_alunos", metodo), lambda: ranking(con, {**p, "tipo": "alunos", "limite": 10})["itens"])
+    data["top_escolas"] = cached(("top_escolas", metodo), lambda: ranking(con, {**p, "tipo": "escolas", "limite": 10})["itens"])
+    data["estados"] = cached(("estados", metodo), lambda: ranking(con, {**p, "tipo": "estados", "limite": 30})["itens"])
     return data
 
 # ---------------------------------------------------------------- HTTP
@@ -361,9 +428,9 @@ def overview(con) -> dict:
 ROUTES = {
     "/api/busca": lambda con, p: search(con, p),
     "/api/ranking": lambda con, p: ranking(con, p),
-    "/api/aluno": lambda con, p: perfil_aluno(con, p.get("id", "")),
-    "/api/escola": lambda con, p: perfil_escola(con, p.get("id", "")),
-    "/api/overview": lambda con, p: overview(con),
+    "/api/aluno": lambda con, p: perfil_aluno(con, p.get("id", ""), p),
+    "/api/escola": lambda con, p: perfil_escola(con, p.get("id", ""), p),
+    "/api/overview": lambda con, p: overview(con, p),
 }
 
 
@@ -409,10 +476,11 @@ class Handler(BaseHTTPRequestHandler):
 def warm_up() -> None:
     """Pré-calcula as consultas pesadas para a primeira visita ser instantânea."""
     with closing(connect()) as con:
-        overview(con)
-        for tipo in ("alunos", "escolas", "estados"):
-            for ordem in SORT_KEYS:
-                ranking(con, {"tipo": tipo, "ordem": ordem})
+        for metodo in olp.METODOS:
+            overview(con, {"metodo": metodo})
+            for tipo in ("alunos", "escolas", "estados"):
+                for ordem in SORT_KEYS:
+                    ranking(con, {"tipo": tipo, "ordem": ordem, "metodo": metodo})
 
 
 def main() -> None:
