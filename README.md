@@ -14,6 +14,8 @@ python server.py     # abre a busca em http://localhost:8000
 
 - `python build_db.py --refresh` apaga o cache e baixa tudo de novo (use quando sair um ano novo).
 - `python server.py --port 9000 --no-browser` para mudar a porta / não abrir o navegador.
+- `python server.py --host 0.0.0.0` para aceitar conexões de outras máquinas (API pública); veja os
+  [limites de consulta](#limite-de-consultas).
 
 ## Fontes
 
@@ -96,7 +98,84 @@ como *Hat-trick Dourado*, *Dupla Coroa*, *Imparável* e *Grand Slam*.
 Os filtros de olimpíada, área e nível da busca e dos rankings são montados a partir dos dados, então
 não é preciso mexer no front-end. O filtro de área só aparece quando houver mais de uma área.
 
-### API
+### API pública (v1)
+
+Rotas estáveis para outros sistemas consultarem um aluno ou uma escola pelo nome e confirmarem as
+premiações. Respondem JSON (UTF-8), com CORS liberado (`Access-Control-Allow-Origin: *`), então podem ser
+chamadas de outro site, de um script ou de uma planilha. `GET /api/v1` devolve esta documentação em JSON.
+
+```bash
+curl "http://localhost:8000/api/v1/alunos?nome=erick+akira+koga"
+curl "http://localhost:8000/api/v1/alunos?nome=leandro+mello&escola=ifal"
+curl "http://localhost:8000/api/v1/escolas?nome=instituto+federal+de+alagoas&medalhistas=1"
+```
+
+| Rota | Parâmetros |
+|---|---|
+| `/api/v1/alunos` | **`nome`** (obrigatório; palavras em qualquer ordem, acentos ignorados), `escola` (só premiações por essa escola), filtros, `metodo`, `premiacoes=0` (só o resumo), `limite` (1–100, padrão 20), `offset` |
+| `/api/v1/escolas` | **`nome`** (obrigatório; aceita siglas como IFAL, ETEC, EEEFM), filtros, `metodo`, `medalhistas=1` (inclui os alunos premiados; no máximo 10 escolas por página), `limite`, `offset` |
+
+Filtros: `uf`, `municipio`, `competicao`, `area`, `medalha`, `nivel`, `ano`, `ano_de`, `ano_ate`, `rede`
+(`competicao` e `nivel` aceitam vários valores separados por vírgula). `metodo` (`impa`, `impa3`, `site`)
+só muda a ordem dos resultados; os pontos dos três métodos vêm sempre.
+
+Resposta de `/api/v1/alunos` (resumida):
+
+```json
+{
+  "total": 1, "offset": 0, "limite": 20, "metodo": "impa",
+  "alunos": [{
+    "id": "ERICK AKIRA KOGA|SP", "nome": "Erick Akira Koga", "uf": "SP",
+    "escolas": [{"id": "COLEGIO ETAPA|SAO PAULO|SP", "nome": "Colégio Etapa", "perfil": "http://…/#/escola/…"}],
+    "municipios": ["FORTALEZA", "Guarulhos", "São Paulo"],
+    "olimpiadas": ["APMO", "IMO", "OBM", "OBMEP", "OIM", "…"],
+    "anos": {"de": 2019, "ate": 2026},
+    "medalhas": {"ouro": 8, "prata": 9, "bronze": 5, "mencao_honrosa": 3, "total": 25},
+    "pontos": {"impa": 118, "impa3": 44, "site": 3450},
+    "posicao": {"impa": {"nacional": 63, "estadual": 17}, "impa3": {…}, "site": {…}},
+    "premiacoes_encontradas": 25,
+    "perfil": "http://…/#/aluno/ERICK%20AKIRA%20KOGA%7CSP",
+    "premiacoes": [{"olimpiada": "APMO", "olimpiada_nome": "Asian Pacific Mathematics Olympiad",
+                    "ano": 2026, "nivel": null, "medalha": "Prata", "premio": "Prata",
+                    "nome_na_lista": "Erick Akira Koga", "escola": null, "municipio": "Guarulhos",
+                    "uf": "SP", "fonte": "https://www.obm.org.br/resultados-apmo/"}]
+  }]
+}
+```
+
+- `medalhas`, `pontos` e `posicao` são da carreira inteira; `premiacoes` traz só as que passam nos
+  filtros. `posicao` de um método é `null` quando o aluno não pontua nele.
+- Quem tem exatamente o nome pesquisado vem primeiro, depois a ordem é por pontos.
+- `fonte` é a página oficial onde a premiação foi publicada, para conferência.
+- Erros voltam com status 400 e `{"erro": "…"}` (ex.: sem `nome`).
+
+Por padrão o servidor só aceita conexões da própria máquina. Para outras máquinas da rede chamarem a
+API, rode `python server.py --host 0.0.0.0` (e libere a porta no firewall).
+
+#### Limite de consultas
+
+Para o servidor não ser sobrecarregado, cada IP tem uma cota:
+
+| | Padrão | Opção para mudar |
+|---|---|---|
+| API pública (`/api/v1/*`) | 60 consultas/min e 2000/dia | `--rate-limit 30 --daily-limit 500` |
+| API do site (`/api/*`) | 600 consultas/min | `--site-rate-limit 300` |
+| Consultas à base ao mesmo tempo (todos os IPs) | 8 | `--max-concurrent 4` |
+
+- O limite por minuto aceita rajadas curtas e vai recarregando aos poucos (1 consulta por segundo no
+  padrão). Use `0` para tirar um limite.
+- Quem passa do limite recebe **HTTP 429** com o cabeçalho `Retry-After` (segundos até poder tentar de
+  novo). O teto diário volta a liberar à meia-noite.
+- Toda resposta traz `X-RateLimit-Limit` e `X-RateLimit-Remaining` (consultas que ainda restam).
+- Se o servidor está no limite de consultas simultâneas, a requisição espera até 10 s por uma vaga e
+  depois recebe **HTTP 503** com `Retry-After: 5`.
+- Atrás de um proxy reverso (nginx, Caddy, Cloudflare), todos os acessos chegariam com o IP do proxy:
+  rode com `--trust-proxy` para usar o IP real do cabeçalho `X-Forwarded-For`. Sem proxy, não use essa
+  opção, porque qualquer um poderia forjar o cabeçalho e fugir do limite.
+
+### API interna (usada pelo site)
+
+Pode mudar sem aviso; para integrações use a v1.
 
 | Rota | O que retorna |
 |---|---|
@@ -131,6 +210,6 @@ scraper/obm.py      coleta OBM
 olimpiadas.py       cadastro das olimpíadas (área, pontos, regra IMPA Tech, coletor)
 build_db.py         gera o SQLite (data/medalhas.db) com tabelas-resumo de alunos e escolas
 gamificacao.py      pontos, níveis e conquistas
-server.py           servidor local + API
+server.py           servidor local, API pública (v1) e API do site
 web/                interface (index.html, app.js, styles.css)
 ```
