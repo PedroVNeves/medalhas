@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Medalhas · OBMEP e OBM</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #1d2330; --muted: #6b7280; --line: #e5e7eb;
+    --accent: #1f4fd1; --ouro: #c99a06; --prata: #8a94a3; --bronze: #b0652e; --mencao: #4b7a52;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  header { background: var(--card); border-bottom: 1px solid var(--line); padding: 18px 20px 14px; position: sticky; top: 0; z-index: 2; }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 2px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  .search { display: flex; gap: 8px; flex-wrap: wrap; }
+  .search input[type=search] { flex: 1 1 320px; font-size: 17px; padding: 10px 12px; border: 1px solid #cfd4dc; border-radius: 8px; outline: none; }
+  .search input[type=search]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px #1f4fd122; }
+  .seg { display: inline-flex; border: 1px solid #cfd4dc; border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; background: #fff; padding: 0 14px; font: inherit; cursor: pointer; color: var(--muted); }
+  .seg button.on { background: var(--accent); color: #fff; }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; font-size: 13px; }
+  .filters select { font: inherit; padding: 5px 6px; border: 1px solid #cfd4dc; border-radius: 6px; background: #fff; }
+  .filters label { color: var(--muted); display: inline-flex; gap: 4px; align-items: center; }
+  main { padding: 16px 20px 60px; }
+  .status { color: var(--muted); margin: 4px 0 12px; font-size: 14px; }
+  .group { background: var(--card); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+  .ghead { padding: 10px 14px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+  .gname { font-weight: 600; font-size: 16px; }
+  .gmeta { color: var(--muted); font-size: 13px; }
+  .tally { display: flex; gap: 6px; align-items: center; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td { padding: 6px 14px; border-top: 1px solid #f0f1f4; vertical-align: top; }
+  tr:first-child td { border-top: 0; }
+  td.ano { width: 64px; font-variant-numeric: tabular-nums; font-weight: 600; }
+  td.comp { width: 70px; }
+  td.med { width: 150px; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #fff; background: #666; white-space: nowrap; }
+  .b-Ouro { background: var(--ouro); } .b-Prata { background: var(--prata); } .b-Bronze { background: var(--bronze); }
+  .b-Menção { background: var(--mencao); }
+  .pill { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); }
+  a.link { color: inherit; text-decoration: none; border-bottom: 1px dotted #9aa3b2; cursor: pointer; }
+  a.link:hover { color: var(--accent); border-color: var(--accent); }
+  a.src { color: var(--muted); font-size: 12px; }
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+  @media (max-width: 640px) { td.comp, td.src { display: none; } td { padding: 6px 8px; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>🏅 Medalhistas OBMEP &amp; OBM</h1>
+    <div class="sub" id="stats">carregando base…</div>
+    <div class="search">
+      <input id="q" type="search" placeholder="Digite o nome do aluno…" autofocus autocomplete="off">
+      <div class="seg" id="campo">
+        <button data-v="nome" class="on">Pessoa</button>
+        <button data-v="escola">Escola</button>
+        <button data-v="tudo">Tudo</button>
+      </div>
+    </div>
+    <div class="filters">
+      <label>Olimpíada <select id="competicao"><option value="">todas</option><option>OBMEP</option><option>OBM</option></select></label>
+      <label>Prêmio <select id="medalha"><option value="">todos</option><option>Ouro</option><option>Prata</option><option>Bronze</option><option>Menção Honrosa</option></select></label>
+      <label>UF <select id="uf"><option value="">todas</option></select></label>
+      <label>Ano <select id="ano"><option value="">todos</option></select></label>
+      <label>Rede <select id="rede"><option value="">todas</option><option>Pública</option><option>Privada</option></select></label>
+    </div>
+  </div>
+</header>
+<main>
+  <div class="wrap">
+    <div class="status" id="status"></div>
+    <div id="results"></div>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let campo = "nome", timer = null, seq = 0, escolaChave = "";
+const filterIds = ["competicao", "medalha", "uf", "ano", "rede"];
+
+fetch("/api/stats").then(r => r.json()).then(s => {
+  const parts = s.competicoes.map(c => `${c.competicao}: ${c.n.toLocaleString("pt-BR")} registros (${c.de}–${c.ate})`);
+  $("stats").textContent = parts.join(" · ") + (s.atualizado_em ? ` · atualizado em ${s.atualizado_em}` : "");
+  s.ufs.forEach(u => $("uf").add(new Option(u, u)));
+  s.anos.forEach(a => $("ano").add(new Option(a, a)));
+  readHash();
+});
+
+document.querySelectorAll("#campo button").forEach(b => b.onclick = () => { escolaChave = ""; setCampo(b.dataset.v, true); });
+function setCampo(v, run) {
+  campo = v;
+  document.querySelectorAll("#campo button").forEach(b => b.classList.toggle("on", b.dataset.v === v));
+  $("q").placeholder = v === "escola" ? "Digite o nome da escola…" : v === "tudo" ? "Nome, escola ou cidade…" : "Digite o nome do aluno…";
+  if (run) go();
+}
+$("q").addEventListener("input", () => { escolaChave = ""; clearTimeout(timer); timer = setTimeout(go, 250); });
+$("q").addEventListener("keydown", e => { if (e.key === "Enter") { clearTimeout(timer); go(); } });
+filterIds.forEach(id => $(id).onchange = go);
+window.addEventListener("hashchange", readHash);
+
+function readHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  if (!p.has("q") && !p.has("ano") && !p.has("uf") && !p.has("escola_chave")) return;
+  $("q").value = p.get("q") || "";
+  escolaChave = p.get("escola_chave") || "";
+  setCampo(p.get("campo") || "nome", false);
+  filterIds.forEach(id => $(id).value = p.get(id) || "");
+  search(p);
+}
+
+function go() {
+  const p = escolaChave
+    ? new URLSearchParams({ q: $("q").value.trim(), campo, escola_chave: escolaChave })
+    : new URLSearchParams({ q: $("q").value.trim(), campo });
+  filterIds.forEach(id => { if ($(id).value) p.set(id, $(id).value); });
+  history.replaceState(null, "", "#" + p.toString());
+  search(p);
+}
+
+async function search(p) {
+  const my = ++seq;
+  if ((p.get("q") || "").length < 2 && !p.get("ano") && !p.get("uf") && !p.get("escola_chave")) {
+    $("status").textContent = ""; $("results").innerHTML = ""; return;
+  }
+  $("status").textContent = "buscando…";
+  const data = await (await fetch("/api/busca?" + p)).json();
+  if (my !== seq) return;
+  if (data.erro) { $("status").textContent = "Erro: " + data.erro; return; }
+  render(data, p.get("campo") || "nome");
+}
+
+function medalBadge(r) {
+  const cls = r.medalha === "Menção Honrosa" ? "Menção" : r.medalha;
+  return `<span class="badge b-${esc(cls)}">${esc(r.premio || r.medalha)}</span>`;
+}
+
+// variantes de escrita, da mais frequente para a menos frequente
+function variants(list) {
+  const c = new Map();
+  list.filter(Boolean).forEach(v => c.set(v, (c.get(v) || 0) + 1));
+  return [...c.entries()].sort((a, b) => b[1] - a[1]).map(([v]) => v);
+}
+
+function nivelLabel(n) { return n ? (/^\d$/.test(n) ? `Nível ${n}` : n) : ""; }
+
+function render(data, campo) {
+  const rows = data.resultados;
+  if (!rows.length) { $("status").textContent = ""; $("results").innerHTML = `<div class="empty">Nenhum resultado encontrado.</div>`; return; }
+
+  const byEscola = campo === "escola";
+  const groups = new Map();
+  for (const r of rows) {
+    const key = byEscola ? r.escola_chave : r.nome_busca;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(r);
+  }
+
+  const more = data.total > rows.length ? ` (mostrando ${rows.length}; refine a busca)` : "";
+  $("status").textContent = `${data.total.toLocaleString("pt-BR")} premiações · ${groups.size} ${byEscola ? "escola(s)" : "pessoa(s)"}${more}`;
+
+  let html = "";
+  for (const [, items] of groups) {
+    const f = items[0];
+    const tally = ["Ouro", "Prata", "Bronze"].map(m => {
+      const n = items.filter(i => i.medalha === m).length;
+      return n ? `<span class="badge b-${m}">${n}× ${m}</span>` : "";
+    }).join("");
+    let title, meta;
+    if (byEscola) {
+      const nomes = variants(items.map(i => i.escola));
+      title = esc(nomes[0] || "(escola não informada)");
+      meta = [variants(items.map(i => i.municipio))[0], f.uf].filter(Boolean).join(" – ")
+           + (f.rede ? ` · ${f.rede}` : "") + (f.esfera ? ` · ${f.esfera}` : "")
+           + (nomes.length > 1 ? ` · também escrita como: ${nomes.slice(1).join("; ")}` : "");
+    } else {
+      title = `<a class="link" data-nome="${esc(f.nome)}">${esc(f.nome)}</a>`;
+      const places = [...new Set(items.map(i => [i.municipio, i.uf].filter(Boolean).join(" – ")).filter(Boolean))];
+      meta = places.join(" · ");
+    }
+    html += `<div class="group"><div class="ghead"><div><div class="gname">${title}</div><div class="gmeta">${esc(meta)}</div></div><div class="tally">${tally}</div></div><table>`;
+    const sorted = byEscola ? items.slice().sort((a, b) => b.ano - a.ano || a.nome.localeCompare(b.nome)) : items;
+    for (const r of sorted) {
+      const who = byEscola
+        ? `<a class="link" data-nome="${esc(r.nome)}">${esc(r.nome)}</a>`
+        : (r.escola ? `<a class="link" data-escola="${esc(r.escola)}" data-chave="${esc(r.escola_chave)}">${esc(r.escola)}</a>` : `<span class="gmeta">${esc([r.municipio, r.uf].filter(Boolean).join(" – "))}</span>`);
+      const extra = [nivelLabel(r.nivel), r.rede, r.pontos ? `${r.pontos} pts` : ""].filter(Boolean).map(x => `<span class="pill">${esc(x)}</span>`).join(" ");
+      html += `<tr><td class="ano">${r.ano ?? ""}</td><td class="comp">${esc(r.competicao)}</td><td class="med">${medalBadge(r)}</td>
+               <td>${who} ${extra}${!byEscola && r.escola ? `<div class="gmeta">${esc([r.municipio, r.uf].filter(Boolean).join(" – "))}</div>` : ""}</td>
+               <td class="src"><a class="src" href="${esc(r.fonte)}" target="_blank" rel="noopener">fonte ↗</a></td></tr>`;
+    }
+    html += `</table></div>`;
+  }
+  $("results").innerHTML = html;
+}
+
+$("results").addEventListener("click", e => {
+  const a = e.target.closest("a.link");
+  if (!a) return;
+  if (a.dataset.nome) { $("q").value = a.dataset.nome; escolaChave = ""; setCampo("nome", false); }
+  if (a.dataset.escola) { $("q").value = a.dataset.escola; escolaChave = a.dataset.chave; setCampo("escola", false); }
+  window.scrollTo(0, 0);
+  go();
+});
+</script>
+</body>
+</html>
