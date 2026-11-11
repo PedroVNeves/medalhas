@@ -1,731 +1,58 @@
-"""Servidor local: API de busca, rankings, perfis e a interface web.
+"""Servidor: interface web, API do site e API pública (v1).
 
 Uso:
     python server.py                 # abre em http://localhost:8000
     python server.py --port 9000 --no-browser
-    python server.py --host 0.0.0.0     # aceita conexões de outras máquinas (API pública)
-    python server.py --rate-limit 30 --daily-limit 500   # limites da API pública por IP
+    python server.py --host 0.0.0.0  # aceita conexões de outras máquinas (API pública)
+    python server.py --rate-limit 30 --daily-limit 500 --export-limit 10   # limites por IP (limites.py)
 """
 import json
 import mimetypes
-import sqlite3
 import sys
 import threading
-import time
 import traceback
 import webbrowser
 from contextlib import closing
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
-from urllib.parse import parse_qs, quote, unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
-import gamificacao as gm
+import api_v1
+import limites
 import olimpiadas as olp
-from scraper.common import normalize
-from scraper.escolas import query_tokens
+from consultas import DB_PATH, ROOT, SORT_KEYS, connect, overview, perfil_aluno, perfil_escola, ranking, search
 
-ROOT = Path(__file__).resolve().parent
-DB_PATH = ROOT / "data" / "medalhas.db"
 WEB_DIR = ROOT / "web"
-MAX_RESULTS = 2000
-
-# ---------------------------------------------------------------- helpers
-
-
-def connect() -> sqlite3.Connection:
-    con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
-    con.row_factory = sqlite3.Row
-    return con
-
-
-def rows_as_dicts(cur) -> list[dict]:
-    return [dict(r) for r in cur.fetchall()]
-
-
-_cache: dict = {}
-_cache_lock = threading.Lock()
-
-
-def cached(key, fn):
-    """Cache em memória invalidado quando a base é regerada."""
-    stamp = DB_PATH.stat().st_mtime
-    with _cache_lock:
-        hit = _cache.get(key)
-        if hit and hit[0] == stamp:
-            return hit[1]
-    value = fn()
-    with _cache_lock:
-        _cache.pop(key, None)
-        _cache[key] = (stamp, value)
-        while len(_cache) > 60:  # cada agregado pode ter ~76 mil itens: mantém só os 60 mais recentes
-            _cache.pop(next(iter(_cache)))
-    return value
-
-
-def metodo_de(params: dict) -> tuple[str, str]:
-    """(id do método, coluna de pontos). Métodos em olimpiadas.METODOS: impa, impa3, site."""
-    m = params.get("metodo") if params.get("metodo") in olp.METODOS else olp.METODO_PADRAO
-    return m, olp.METODOS[m]["coluna"]
-
-
-PONTOS = [m["coluna"] for m in olp.METODOS.values()]
-
-
-def aplicar_metodo(params: dict) -> dict:
-    """No método IMPA N3 só valem os níveis aceitos pelo edital: o filtro de nível fica restrito a eles
-    (se o usuário escolheu níveis aceitos, como só 'Programação Nível 2', a escolha é respeitada)."""
-    metodo, _ = metodo_de(params)
-    if metodo != "impa3":
-        return params
-    aceitos = olp.niveis_impa().split(",")
-    escolhidos = [n for n in (params.get("nivel") or "").split(",") if n in aceitos]
-    return {**params, "nivel": ",".join(escolhidos or aceitos)}
-
-
-def com_pontos(item: dict, col: str) -> dict:
-    """xp = pontos no método escolhido; impa = pontuação oficial do IMPA Tech (sempre)."""
-    item["xp"] = item.get(col) or 0
-    item["impa"] = item.get("p_impa3") or 0
-    return item
-
-
-def build_filters(params: dict) -> tuple[list[str], list]:
-    where, args = [], []
-    # filtros de múltipla escolha: valores separados por vírgula ("OBMEP,OBM", "1,2,3,Universitário")
-    for key in ("competicao", "nivel", "area"):
-        valores = [v.strip() for v in (params.get(key) or "").split(",") if v.strip()]
-        if valores:
-            where.append(f"{key} IN ({','.join('?' * len(valores))})")
-            args += valores
-    for key in ("medalha", "uf", "rede", "escola_chave", "esfera"):
-        if params.get(key):
-            where.append(f"{key} = ?")
-            args.append(params[key])
-    if params.get("ano"):
-        where.append("ano = ?")
-        args.append(int(params["ano"]))
-    if params.get("ano_de"):
-        where.append("ano >= ?")
-        args.append(int(params["ano_de"]))
-    if params.get("ano_ate"):
-        where.append("ano <= ?")
-        args.append(int(params["ano_ate"]))
-    if params.get("municipio"):
-        where.append("municipio_busca = ?")
-        args.append(normalize(params["municipio"]))
-    if params.get("sem_mencao") == "1":
-        where.append("medalha != 'Menção Honrosa'")
-    return where, args
-
-
-AGG = """SUM(medalha='Ouro') AS ouro, SUM(medalha='Prata') AS prata, SUM(medalha='Bronze') AS bronze,
-         SUM(medalha='Menção Honrosa') AS mencao, COUNT(*) AS total,
-         SUM(p_impa) AS p_impa, SUM(p_impa3) AS p_impa3, SUM(p_site) AS p_site,
-         MIN(ano) AS de, MAX(ano) AS ate"""
-
-# ---------------------------------------------------------------- busca
-
-NOME = "(' ' || nome_busca)"
-MUNICIPIO = "(' ' || municipio_busca)"
-ESCOLA = "escola_termos"
-
-
-def token_condition(campo: str, tok: str, expansion: list[str]) -> tuple[str, list[str]]:
-    """Casa no início de palavra; para escolas, também casa pela expansão da sigla (IFAL -> ...)."""
-    fields = {"nome": [NOME], "escola": [ESCOLA], "tudo": [NOME, ESCOLA, MUNICIPIO]}[campo]
-    parts = [f"{f} LIKE ?" for f in fields]
-    args = [f"% {tok}%"] * len(fields)
-    if campo in ("escola", "tudo") and expansion != [tok]:
-        parts.append("(" + " AND ".join(f"{ESCOLA} LIKE ?" for _ in expansion) + ")")
-        args += [f"% {e}%" for e in expansion]
-    return "(" + " OR ".join(parts) + ")", args
-
-
-def search(con, params: dict) -> dict:
-    params = aplicar_metodo(params)
-    campo = params.get("campo", "nome")
-    if campo not in ("nome", "escola", "tudo"):
-        campo = "nome"
-    tokens = query_tokens(params.get("q", ""))
-    where, args = build_filters(params)
-    for tok, expansion in tokens:
-        cond, cond_args = token_condition(campo, tok, expansion)
-        where.append(cond)
-        args += cond_args
-    if not tokens and not any(params.get(k) for k in ("ano", "uf", "municipio", "escola_chave")):
-        return {"total": 0, "resultados": []}
-
-    sql_where = " AND ".join(where) or "1"
-    order = "escola_chave, ano DESC, nome_busca" if campo == "escola" else "nome_busca, ano, competicao"
-    total = con.execute(f"SELECT COUNT(*) FROM medalhas WHERE {sql_where}", args).fetchone()[0]
-    rows = rows_as_dicts(con.execute(
-        f"""SELECT competicao, ano, nivel, nome, escola, rede, esfera, municipio, uf, premio, medalha,
-                   pontos, fonte, nome_busca, escola_chave, aluno_id, p_impa, p_impa3, p_site
-            FROM medalhas WHERE {sql_where} ORDER BY {order} LIMIT {MAX_RESULTS}""", args))
-    _, col = metodo_de(params)
-    return {"total": total, "limite": MAX_RESULTS, "resultados": [com_pontos(r, col) for r in rows]}
-
-# ---------------------------------------------------------------- tabelas-resumo (pré-calculadas no build)
-
-FILTER_KEYS = ("competicao", "area", "medalha", "uf", "rede", "nivel", "escola_chave", "esfera", "ano", "ano_de",
-               "ano_ate", "municipio", "sem_mencao")
-SUMMARY_COLS = {
-    "alunos": "id, nome, uf, competicoes, escola, escola_chave, municipio, ouro, prata, bronze, mencao, total, de, ate, "
-              + ", ".join(PONTOS),
-    "escolas": "id, nome, municipio, uf, rede, esfera, alunos, ouro, prata, bronze, mencao, total, de, ate, "
-               + ", ".join(PONTOS),
-}
-
-
-def summary_xp(con, table: str, ids: list[str], col: str) -> dict:
-    """Pontos totais (sem filtros) de cada aluno/escola: definem o nível, que é sempre o da carreira toda."""
-    if not ids:
-        return {}
-    marks = ",".join("?" * len(ids))
-    return dict(con.execute(f"SELECT id, {col} FROM {table} WHERE id IN ({marks})", ids).fetchall())
-
-
-def latest_school(con, aluno_ids: list[str]) -> dict:
-    if not aluno_ids:
-        return {}
-    marks = ",".join("?" * len(aluno_ids))
-    return {r["id"]: {"escola": r["escola"], "escola_chave": r["escola_chave"], "municipio": r["municipio"]}
-            for r in con.execute(f"SELECT id, escola, escola_chave, municipio FROM alunos WHERE id IN ({marks})", aluno_ids)}
-
-
-# Chaves de ordenação; "c" é a coluna de pontos do método escolhido
-SORT_KEYS = {
-    "xp": lambda r, c: (-(r[c] or 0), -r["ouro"], -r["prata"], -r["bronze"]),
-    "medalhas": lambda r, c: (-r["ouro"], -r["prata"], -r["bronze"], -(r[c] or 0)),
-    "total": lambda r, c: (-(r["ouro"] + r["prata"] + r["bronze"]), -(r[c] or 0)),
-}
-
-
-def aggregate(con, tipo: str, params: dict) -> list[dict]:
-    """Linhas agregadas (um item por aluno/escola/estado) para os filtros dados. Cacheado."""
-    filtros = {k: params[k] for k in FILTER_KEYS if params.get(k)}
-
-    def build():
-        if tipo in SUMMARY_COLS and not filtros:
-            return rows_as_dicts(con.execute(f"SELECT {SUMMARY_COLS[tipo]} FROM {tipo}"))
-        where, args = build_filters(filtros)
-        if tipo == "estados":
-            where.append("uf IS NOT NULL")
-            if not filtros:  # contagens de alunos/escolas vêm das tabelas-resumo
-                rows = rows_as_dicts(con.execute(f"SELECT uf AS id, uf AS nome, {AGG} FROM medalhas WHERE uf IS NOT NULL GROUP BY uf || ''"))
-                al = dict(con.execute("SELECT uf, COUNT(*) FROM alunos GROUP BY uf").fetchall())
-                es = dict(con.execute("SELECT uf, COUNT(*) FROM escolas GROUP BY uf").fetchall())
-                for r in rows:
-                    r["alunos"], r["escolas"] = al.get(r["id"], 0), es.get(r["id"], 0)
-                return rows
-            return rows_as_dicts(con.execute(
-                f"""SELECT uf AS id, uf AS nome, COUNT(DISTINCT aluno_id) AS alunos,
-                           COUNT(DISTINCT NULLIF(escola_chave, '')) AS escolas, {AGG}
-                    FROM medalhas WHERE {' AND '.join(where)} GROUP BY uf || ''""", args))
-        if tipo == "escolas":
-            where.append("escola_chave != ''")
-            return rows_as_dicts(con.execute(
-                f"""SELECT escola_chave AS id, MAX(escola) AS nome, MAX(municipio) AS municipio, MAX(uf) AS uf,
-                           MAX(rede) AS rede, MAX(esfera) AS esfera, COUNT(DISTINCT aluno_id) AS alunos, {AGG}
-                    FROM medalhas WHERE {' AND '.join(where)} GROUP BY escola_chave || ''""", args))
-        return rows_as_dicts(con.execute(
-            f"""SELECT aluno_id AS id, COALESCE(MAX(CASE WHEN competicao = 'OBM' THEN nome END), MAX(nome)) AS nome,
-                       MAX(uf) AS uf, GROUP_CONCAT(DISTINCT competicao) AS competicoes, {AGG}
-                FROM medalhas WHERE {' AND '.join(where) or '1'} GROUP BY aluno_id || ''""", args))
-
-    return cached(("agg", tipo, tuple(sorted(filtros.items()))), build)
-
-
-def ranking(con, params: dict) -> dict:
-    params = aplicar_metodo(params)
-    tipo = params.get("tipo", "alunos")
-    if tipo not in ("alunos", "escolas", "estados"):
-        tipo = "alunos"
-    ordem = params.get("ordem", "xp") if params.get("ordem") in SORT_KEYS else "xp"
-    metodo, col = metodo_de(params)
-    limite = min(int(params.get("limite", 50)), 200)
-    offset = max(int(params.get("offset", 0)), 0)
-
-    sort_key = SORT_KEYS[ordem]
-    key = lambda r: sort_key(r, col)  # noqa: E731
-    filtros = tuple(sorted((k, params[k]) for k in FILTER_KEYS if params.get(k)))
-    def ordenar():
-        itens = aggregate(con, tipo, params)
-        if ordem == "xp":  # ranking por pontos: quem não pontua no método fica de fora
-            itens = [r for r in itens if r[col]]
-        return sorted(itens, key=lambda r: (key(r), r["nome"] or ""))
-
-    ordered = cached(("sorted", tipo, ordem, metodo, filtros), ordenar)
-
-    # RANK(): empates (mesma chave de ordenação) dividem a posição
-    page = []
-    pos, prev = 0, None
-    for i, r in enumerate(ordered[: offset + limite], 1):
-        k = key(r)
-        if k != prev:
-            pos, prev = i, k
-        if i > offset:
-            page.append(com_pontos(dict(r, pos=pos), col))
-
-    if tipo == "alunos":
-        info = latest_school(con, [it["id"] for it in page])
-        xp = summary_xp(con, "alunos", [it["id"] for it in page], col)
-        for it in page:
-            it.update({k: v for k, v in info.get(it["id"], {}).items() if not it.get(k)})
-            it["tier"] = gm.tier(xp.get(it["id"], it["xp"]), metodo=metodo)
-    elif tipo == "escolas":
-        xp = summary_xp(con, "escolas", [it["id"] for it in page], col)
-        for it in page:
-            it["tier"] = gm.tier(xp.get(it["id"], it["xp"]), escola=True, metodo=metodo)
-    return {"tipo": tipo, "metodo": metodo, "nivel_forcado": params.get("nivel") if metodo == "impa3" else None,
-            "total": len(ordered), "offset": offset, "limite": limite, "itens": page}
-
-# ---------------------------------------------------------------- perfis
-
-
-def pontuacoes(resumo) -> dict:
-    """Pontos e posição nacional nos três métodos (para o quadro comparativo do perfil)."""
-    return {m: {"pts": resumo[i["coluna"]], "pos": resumo[f"{i['coluna']}_pos"] if resumo[i["coluna"]] else None}
-            for m, i in olp.METODOS.items()}
-
-
-def perfil_aluno(con, aluno_id: str, params: dict) -> dict:
-    metodo, col = metodo_de(params)
-    rows = rows_as_dicts(con.execute(
-        """SELECT competicao, ano, nivel, nome, escola, escola_chave, rede, esfera, municipio, uf,
-                  premio, medalha, pontos, fonte, p_impa, p_impa3, p_site, aluno_id
-           FROM medalhas WHERE aluno_id = ? ORDER BY ano DESC, competicao""", (aluno_id,)))
-    if not rows:
-        return {"erro": "Aluno não encontrado"}
-    rows = [com_pontos(r, col) for r in rows]
-    resumo = con.execute("SELECT * FROM alunos WHERE id = ?", (aluno_id,)).fetchone()
-    xp, nome, uf = resumo[col], resumo["nome"], resumo["uf"]
-    pos, pos_uf = resumo[f"{col}_pos"], resumo[f"{col}_pos_uf"]
-    total = con.execute(f"SELECT COUNT(*) FROM alunos WHERE {col} > 0").fetchone()[0]
-    total_uf = con.execute(f"SELECT COUNT(*) FROM alunos WHERE uf IS ? AND {col} > 0", (uf,)).fetchone()[0]
-
-    # quem está logo acima no ranking nacional ("próximo alvo")
-    alvo = con.execute(f"SELECT id, nome, {col} AS xp FROM alunos WHERE {col} > ? ORDER BY {col}, nome LIMIT 1",
-                       (xp,)).fetchone()
-    acima = {"id": alvo["id"], "nome": alvo["nome"], "xp": alvo["xp"], "diferenca": alvo["xp"] - xp} if alvo else None
-
-    escolas = []
-    for r in rows:
-        if r["escola_chave"] and r["escola_chave"] not in {e["escola_chave"] for e in escolas}:
-            escolas.append({"escola": r["escola"], "escola_chave": r["escola_chave"], "municipio": r["municipio"]})
-
-    return {
-        "id": aluno_id, "nome": nome, "uf": uf,
-        "municipios": sorted({r["municipio"] for r in rows if r["municipio"]}),
-        "escolas": escolas, "xp": xp, "tier": gm.tier(xp, metodo=metodo), "metodo": metodo,
-        # sem pontos no método, não há posição (todos os zerados empatariam no fim da lista)
-        "rank": pos if xp else None, "rank_total": total, "rank_uf": pos_uf if xp else None, "rank_uf_total": total_uf,
-        "impa": resumo["p_impa3"], "rank_impa": resumo["p_impa3_pos"] if resumo["p_impa3"] else None,
-        "pontuacoes": pontuacoes(resumo),
-        "medalhas": gm.medal_counts(rows), "anos": sorted({r["ano"] for r in rows if r["ano"]}),
-        "conquistas": gm.conquistas_aluno(rows), "acima": acima, "premiacoes": rows,
-    }
-
-
-def perfil_escola(con, chave: str, params: dict) -> dict:
-    metodo, col = metodo_de(params)
-    rows = rows_as_dicts(con.execute(
-        """SELECT competicao, ano, nivel, nome, escola, rede, esfera, municipio, uf, premio, medalha,
-                  fonte, p_impa, p_impa3, p_site, aluno_id
-           FROM medalhas WHERE escola_chave = ? ORDER BY ano DESC, nome""", (chave,)))
-    if not rows:
-        return {"erro": "Escola não encontrada"}
-    rows = [com_pontos(r, col) for r in rows]
-    resumo = con.execute("SELECT * FROM escolas WHERE id = ?", (chave,)).fetchone()
-    xp, uf = resumo[col], resumo["uf"]
-    pos, pos_uf = resumo[f"{col}_pos"], resumo[f"{col}_pos_uf"]
-    total = con.execute(f"SELECT COUNT(*) FROM escolas WHERE {col} > 0").fetchone()[0]
-    total_uf = con.execute(f"SELECT COUNT(*) FROM escolas WHERE uf IS ? AND {col} > 0", (uf,)).fetchone()[0]
-
-    variantes: dict = {}
-    for r in rows:
-        variantes[r["escola"]] = variantes.get(r["escola"], 0) + 1
-    nomes = sorted(variantes, key=lambda k: -variantes[k])
-
-    serie: dict = {}
-    for r in rows:
-        s = serie.setdefault(r["ano"], {"ano": r["ano"], "Ouro": 0, "Prata": 0, "Bronze": 0})
-        if r["medalha"] in s:
-            s[r["medalha"]] += 1
-
-    alunos: dict = {}
-    for r in rows:
-        a = alunos.setdefault(r["aluno_id"], {"id": r["aluno_id"], "nome": r["nome"], "xp": 0,
-                                              "ouro": 0, "prata": 0, "bronze": 0, "anos": set()})
-        a["xp"] += r["xp"]
-        a["anos"].add(r["ano"])
-        key = {"Ouro": "ouro", "Prata": "prata", "Bronze": "bronze"}.get(r["medalha"])
-        if key:
-            a[key] += 1
-    top = sorted(alunos.values(), key=lambda a: (-a["xp"], a["nome"]))[:15]
-    for a in top:
-        a["anos"] = sorted(a["anos"])
-
-    return {
-        "id": chave, "nome": nomes[0], "variantes": nomes[1:], "municipio": rows[0]["municipio"], "uf": uf,
-        "rede": rows[0]["rede"], "esfera": rows[0]["esfera"], "xp": xp, "metodo": metodo,
-        "tier": gm.tier(xp, escola=True, metodo=metodo),
-        "rank": pos if xp else None, "rank_total": total, "rank_uf": pos_uf if xp else None, "rank_uf_total": total_uf,
-        "impa": resumo["p_impa3"], "pontuacoes": pontuacoes(resumo),
-        "medalhas": gm.medal_counts(rows), "alunos": len(alunos),
-        "anos": sorted({r["ano"] for r in rows}), "serie": [serie[a] for a in sorted(serie)],
-        "top_alunos": top, "conquistas": gm.conquistas_escola(rows, pos if xp else None, pos_uf if xp else None),
-        "recentes": rows[:60],
-    }
-
-# ---------------------------------------------------------------- visão geral
-
-
-def overview(con, params: dict) -> dict:
-    metodo, col = metodo_de(params)
-
-    def build():
-        tot = dict(con.execute(f"SELECT {AGG} FROM medalhas").fetchone())
-        tot["alunos"] = con.execute("SELECT COUNT(*) FROM alunos").fetchone()[0]
-        tot["escolas"] = con.execute("SELECT COUNT(*) FROM escolas").fetchone()[0]
-        serie = rows_as_dicts(con.execute(
-            """SELECT ano, competicao, SUM(medalha='Ouro') AS ouro, SUM(medalha='Prata') AS prata,
-                      SUM(medalha='Bronze') AS bronze, COUNT(*) AS total
-               FROM medalhas GROUP BY ano, competicao ORDER BY ano"""))
-        comps = rows_as_dicts(con.execute(
-            "SELECT competicao, COUNT(*) AS n, MIN(ano) AS de, MAX(ano) AS ate FROM medalhas GROUP BY competicao"))
-        stats = {c["competicao"]: c for c in comps}
-        olimpiadas = [dict(o, **{k: stats.get(o["sigla"], {}).get(k) for k in ("n", "de", "ate")})
-                      for o in olp.catalogo()]
-        areas = sorted({o["area"] for o in olimpiadas})
-        ordem_nivel = {"1": 1, "2": 2, "3": 3, "Universitário": 9}
-        niveis = [{"id": r[0], "n": r[1], "competicoes": r[2].split(",")} for r in con.execute(
-            """SELECT nivel, COUNT(*), GROUP_CONCAT(DISTINCT competicao) FROM medalhas
-               WHERE nivel IS NOT NULL GROUP BY nivel""")]
-        niveis.sort(key=lambda n: (ordem_nivel.get(n["id"], 5), n["id"]))
-        meta = dict(con.execute("SELECT chave, valor FROM meta").fetchall())
-        ufs = [r[0] for r in con.execute("SELECT DISTINCT uf FROM medalhas WHERE uf IS NOT NULL ORDER BY uf")]
-        anos = [r[0] for r in con.execute("SELECT DISTINCT ano FROM medalhas ORDER BY ano DESC")]
-        return {"totais": tot, "serie": serie, "competicoes": comps, "ufs": ufs, "anos": anos,
-                "olimpiadas": olimpiadas, "areas": areas, "niveis": niveis, "fonte_pontos": gm.FONTE_PONTOS,
-                "metodos": olp.metodos(), "metodo_padrao": olp.METODO_PADRAO, "niveis_impa": olp.niveis_impa(),
-                "escala_site": [{"grupo": g, **{k: v for k, v in tab.items() if not k.startswith("_")}}
-                                for g, tab in olp.ESCALA_SITE.items()],
-                "tiers": {m: {"aluno": [{"nome": n, "min": mi, "cor": c} for n, mi, c in gm.tiers(m)],
-                              "escola": [{"nome": n, "min": mi, "cor": c} for n, mi, c in gm.tiers(m, True)]}
-                          for m in olp.METODOS},
-                "conquistas_aluno": gm.conquistas_aluno([]),
-                "conquistas_escola": gm.conquistas_escola([], None, None), **meta}
-    data = dict(cached("overview", build))
-    data["totais"] = com_pontos(dict(data["totais"]), col)
-    data["metodo"] = metodo
-    p = {"metodo": metodo}
-    data["top_alunos"] = cached(("top_alunos", metodo), lambda: ranking(con, {**p, "tipo": "alunos", "limite": 10})["itens"])
-    data["top_escolas"] = cached(("top_escolas", metodo), lambda: ranking(con, {**p, "tipo": "escolas", "limite": 10})["itens"])
-    data["estados"] = cached(("estados", metodo), lambda: ranking(con, {**p, "tipo": "estados", "limite": 30})["itens"])
-    return data
-
-# ---------------------------------------------------------------- API pública (v1)
-#
-# Rotas estáveis para outros sistemas consultarem um aluno ou uma escola pelo nome e confirmarem
-# premiações. Respostas em JSON, com CORS liberado. A interface web usa as rotas internas acima,
-# que podem mudar; estas só mudam numa nova versão (/api/v2).
-
-V1_LIMITE_PADRAO, V1_LIMITE_MAX, V1_LIMITE_MEDALHISTAS = 20, 100, 10
-V1_FILTROS = ("uf", "municipio", "competicao", "area", "medalha", "nivel", "ano", "ano_de", "ano_ate", "rede")
-PREMIACAO_COLS = "competicao, ano, nivel, medalha, premio, nome, escola, municipio, uf, rede, fonte, aluno_id, escola_chave"
-
-
-class ParametroInvalido(ValueError):
-    pass
-
-
-def _bool(params: dict, key: str, padrao: bool) -> bool:
-    v = (params.get(key) or "").strip().lower()
-    return padrao if not v else v in ("1", "true", "sim", "s", "yes")
-
-
-def _paginacao(params: dict) -> tuple[int, int]:
-    try:
-        limite = int(params.get("limite") or V1_LIMITE_PADRAO)
-        offset = int(params.get("offset") or 0)
-    except ValueError:
-        raise ParametroInvalido("limite e offset devem ser números inteiros") from None
-    return min(max(limite, 1), V1_LIMITE_MAX), max(offset, 0)
-
-
-def _tokens_obrigatorios(params: dict, key: str = "nome") -> list:
-    tokens = query_tokens(params.get(key) or "")
-    if not tokens:
-        raise ParametroInvalido(f"informe o parâmetro '{key}' (ex.: ?{key}=...)")
-    return tokens
-
-
-def _where_v1(params: dict, campo: str, tokens: list) -> tuple[str, list]:
-    where, args = build_filters({k: params[k] for k in V1_FILTROS if params.get(k)})
-    for tok, expansion in tokens:
-        cond, cond_args = token_condition(campo, tok, expansion)
-        where.append(cond)
-        args += cond_args
-    return " AND ".join(where) or "1", args
-
-
-def _pontos_e_posicoes(resumo) -> tuple[dict, dict]:
-    pontos, posicao = {}, {}
-    for m, info in olp.METODOS.items():
-        c = info["coluna"]
-        pontos[m] = resumo[c] or 0
-        posicao[m] = ({"nacional": resumo[f"{c}_pos"], "estadual": resumo[f"{c}_pos_uf"]}
-                      if resumo[c] else None)
-    return pontos, posicao
-
-
-def _premiacao(r: dict, nomes: dict) -> dict:
-    return {"olimpiada": r["competicao"], "olimpiada_nome": nomes.get(r["competicao"], r["competicao"]),
-            "ano": r["ano"], "nivel": r["nivel"], "medalha": r["medalha"], "premio": r["premio"],
-            "nome_na_lista": r["nome"], "escola": r["escola"], "municipio": r["municipio"], "uf": r["uf"],
-            "fonte": r["fonte"]}
-
-
-def _sem_repetir(valores) -> list[str]:
-    """Une grafias do mesmo valor ("SAO PAULO", "São Paulo"), ficando com a mais legível (acentos e minúsculas)."""
-    grupos: dict = {}
-    for v in valores:
-        if v:
-            grupos.setdefault(normalize(v), []).append(v)
-    legivel = lambda v: (sum(c.islower() for c in v), sum(not c.isascii() for c in v))  # noqa: E731
-    return [max(vs, key=legivel) for vs in grupos.values()]
-
-
-def _link(params: dict, rota: str, ident: str) -> str:
-    return f"{params.get('_base', '')}/#/{rota}/{quote(ident, safe='')}"
-
-
-def v1_alunos(con, params: dict) -> dict:
-    """Alunos cujo nome casa com `nome` (todas as palavras, em qualquer ordem, ignorando acentos)."""
-    tokens = _tokens_obrigatorios(params)
-    limite, offset = _paginacao(params)
-    metodo, col = metodo_de(params)
-    sql_where, args = _where_v1(params, "nome", tokens)
-    if params.get("escola"):  # "o aluno X da escola Y": restringe às premiações por aquela escola
-        for tok, expansion in query_tokens(params["escola"]):
-            cond, cond_args = token_condition("escola", tok, expansion)
-            sql_where += f" AND {cond}"
-            args += cond_args
-
-    alvo = normalize(params["nome"])
-    grupos = con.execute(
-        f"""SELECT aluno_id, MAX(nome_busca = ?) AS exato, SUM({col}) AS pts, COUNT(*) AS n
-            FROM medalhas WHERE {sql_where} GROUP BY aluno_id || ''  -- sem o índice: varre a tabela uma vez (bem mais rápido)
-            ORDER BY exato DESC, pts DESC, aluno_id""", [alvo, *args]).fetchall()
-    ids = [g["aluno_id"] for g in grupos[offset:offset + limite]]
-
-    nomes = {o["sigla"]: o["nome"] for o in olp.catalogo()}
-    premiacoes: dict = {i: [] for i in ids}
-    resumos: dict = {}
-    if ids:
-        marks = ",".join("?" * len(ids))
-        for r in con.execute(f"SELECT {PREMIACAO_COLS} FROM medalhas WHERE {sql_where} AND aluno_id IN ({marks}) "
-                             "ORDER BY ano DESC, competicao", [*args, *ids]):
-            premiacoes[r["aluno_id"]].append(dict(r))
-        resumos = {r["id"]: r for r in con.execute(f"SELECT * FROM alunos WHERE id IN ({marks})", ids)}
-
-    incluir = _bool(params, "premiacoes", True)
-    alunos = []
-    for i in ids:
-        resumo, rows = resumos[i], premiacoes[i]
-        pontos, posicao = _pontos_e_posicoes(resumo)
-        escolas: dict = {}
-        for r in rows:  # mais recente primeiro; grafias da mesma escola (mesma chave) viram um item só
-            if r["escola_chave"]:
-                escolas.setdefault(r["escola_chave"], []).append(r["escola"])
-        item = {
-            "id": i, "nome": resumo["nome"], "uf": resumo["uf"],
-            "escolas": [{"id": k, "nome": _sem_repetir(v)[0], "perfil": _link(params, "escola", k)}
-                        for k, v in escolas.items()],
-            "municipios": sorted(_sem_repetir(r["municipio"] for r in rows), key=normalize),
-            "olimpiadas": sorted({r["competicao"] for r in rows}),
-            "anos": {"de": resumo["de"], "ate": resumo["ate"]},
-            "medalhas": {"ouro": resumo["ouro"], "prata": resumo["prata"], "bronze": resumo["bronze"],
-                         "mencao_honrosa": resumo["mencao"], "total": resumo["total"]},
-            "pontos": pontos, "posicao": posicao,
-            "premiacoes_encontradas": len(rows),
-            "perfil": _link(params, "aluno", i),
-        }
-        if incluir:
-            item["premiacoes"] = [_premiacao(r, nomes) for r in rows]
-        alunos.append(item)
-    return {"consulta": {k: v for k, v in params.items() if not k.startswith("_")}, "metodo": metodo,
-            "total": len(grupos), "offset": offset, "limite": limite, "alunos": alunos}
-
-
-def v1_escolas(con, params: dict) -> dict:
-    """Escolas cujo nome casa com `nome` (siglas como IFAL, ETEC e EEEFM são expandidas)."""
-    tokens = _tokens_obrigatorios(params)
-    limite, offset = _paginacao(params)
-    if _bool(params, "medalhistas", False):  # cada escola pode trazer centenas de alunos: páginas menores
-        limite = min(limite, V1_LIMITE_MEDALHISTAS)
-    metodo, col = metodo_de(params)
-    sql_where, args = _where_v1(params, "escola", tokens)
-    grupos = con.execute(
-        f"""SELECT escola_chave, SUM({col}) AS pts, COUNT(*) AS n FROM medalhas
-            WHERE {sql_where} AND escola_chave IS NOT NULL GROUP BY escola_chave || ''
-            ORDER BY pts DESC, n DESC, escola_chave""", args).fetchall()
-    ids = [g["escola_chave"] for g in grupos[offset:offset + limite]]
-
-    resumos, premiacoes = {}, {i: [] for i in ids}
-    incluir = _bool(params, "medalhistas", False)
-    if ids:
-        marks = ",".join("?" * len(ids))
-        resumos = {r["id"]: r for r in con.execute(f"SELECT * FROM escolas WHERE id IN ({marks})", ids)}
-        if incluir:
-            for r in con.execute(f"SELECT {PREMIACAO_COLS} FROM medalhas WHERE {sql_where} AND escola_chave IN ({marks}) "
-                                 "ORDER BY ano DESC, nome_busca", [*args, *ids]):
-                premiacoes[r["escola_chave"]].append(dict(r))
-
-    nomes = {o["sigla"]: o["nome"] for o in olp.catalogo()}
-    escolas = []
-    for i in ids:
-        resumo = resumos[i]
-        pontos, posicao = _pontos_e_posicoes(resumo)
-        item = {
-            "id": i, "nome": resumo["nome"], "municipio": resumo["municipio"], "uf": resumo["uf"],
-            "rede": resumo["rede"], "esfera": resumo["esfera"], "alunos_premiados": resumo["alunos"],
-            "anos": {"de": resumo["de"], "ate": resumo["ate"]},
-            "medalhas": {"ouro": resumo["ouro"], "prata": resumo["prata"], "bronze": resumo["bronze"],
-                         "mencao_honrosa": resumo["mencao"], "total": resumo["total"]},
-            "pontos": pontos, "posicao": posicao,
-            "perfil": _link(params, "escola", i),
-        }
-        if incluir:
-            por_aluno: dict = {}
-            for r in premiacoes[i]:
-                a = por_aluno.setdefault(r["aluno_id"], {"id": r["aluno_id"], "nome": r["nome"], "premiacoes": []})
-                a["premiacoes"].append(_premiacao(r, nomes))
-            item["medalhistas"] = list(por_aluno.values())
-        escolas.append(item)
-    return {"consulta": {k: v for k, v in params.items() if not k.startswith("_")}, "metodo": metodo,
-            "total": len(grupos), "offset": offset, "limite": limite, "escolas": escolas}
-
-
-def v1_indice(con, params: dict) -> dict:
-    base = params.get("_base", "")
-    filtros = "uf, municipio, competicao, area, medalha, nivel, ano, ano_de, ano_ate, rede"
-    return {
-        "nome": "Medalhas API", "versao": "1",
-        "atualizado_em": dict(con.execute("SELECT chave, valor FROM meta").fetchall()).get("atualizado_em"),
-        "rotas": {
-            "/api/v1/alunos": {
-                "descricao": "Busca alunos pelo nome e lista as premiações de cada um.",
-                "obrigatorio": {"nome": "nome ou parte do nome (palavras em qualquer ordem, sem acento)"},
-                "opcional": {"escola": "só premiações por esta escola", "filtros": filtros,
-                             "metodo": "impa | impa3 | site (ordem dos resultados)",
-                             "premiacoes": "1 (padrão) ou 0 para só o resumo", "limite": f"1–{V1_LIMITE_MAX} (padrão {V1_LIMITE_PADRAO})",
-                             "offset": "paginação"},
-                "exemplo": f"{base}/api/v1/alunos?nome=erick akira koga",
-            },
-            "/api/v1/escolas": {
-                "descricao": "Busca escolas pelo nome (aceita siglas como IFAL e ETEC).",
-                "obrigatorio": {"nome": "nome ou sigla da escola"},
-                "opcional": {"filtros": filtros, "metodo": "impa | impa3 | site (ordem dos resultados)",
-                             "medalhistas": "1 para incluir os alunos premiados e suas premiações "
-                                            f"(padrão 0; no máximo {V1_LIMITE_MEDALHISTAS} escolas por página)",
-                             "limite": f"1–{V1_LIMITE_MAX} (padrão {V1_LIMITE_PADRAO})", "offset": "paginação"},
-                "exemplo": f"{base}/api/v1/escolas?nome=ifal&medalhistas=1",
-            },
-        },
-        "limites": {"consultas_por_minuto": LIMITES["v1"][0], "consultas_por_dia": LIMITES["v1"][1],
-                    "por": "IP", "ao_exceder": "HTTP 429 com cabeçalho Retry-After (segundos)"},
-        "metodos": olp.metodos(),
-        "olimpiadas": [{"sigla": o["sigla"], "nome": o["nome"], "area": o["area"]} for o in olp.catalogo()],
-    }
-
-# ---------------------------------------------------------------- limite de consultas
-#
-# Protege o servidor quando ele fica aberto a outras máquinas:
-#  - por IP: balde de fichas por minuto (permite rajadas curtas) + teto diário;
-#  - global: no máximo N consultas à base ao mesmo tempo; as demais esperam um pouco ou recebem 503.
-# A API pública tem limites menores que a API usada pelo próprio site (que faz várias chamadas por página).
-
-LIMITES = {  # grupo -> [por minuto, por dia (None = sem teto)]; ajustáveis por linha de comando
-    "v1": [60, 2000],
-    "site": [600, None],
-}
-MAX_SIMULTANEAS = 8
-ESPERA_FILA = 10  # segundos aguardando vaga antes de responder 503
 CONFIAR_PROXY = False  # usa X-Forwarded-For (só ligue atrás de um proxy reverso seu, como nginx)
 
-
-class LimiteConsultas:
-    def __init__(self):
-        self._lock = threading.Lock()
-        self._baldes: dict = {}  # (grupo, ip) -> [fichas, último acesso]
-        self._dia: dict = {}     # (grupo, ip) -> [data, consultas no dia]
-        self._chamadas = 0
-
-    def consumir(self, grupo: str, ip: str) -> tuple[bool, dict]:
-        """(permitido, cabeçalhos X-RateLimit-* / Retry-After)."""
-        por_min, por_dia = LIMITES[grupo]
-        agora, hoje, chave = time.monotonic(), time.strftime("%Y-%m-%d"), (grupo, ip)
-        with self._lock:
-            self._chamadas += 1
-            if self._chamadas % 1000 == 0:  # esquece IPs parados há mais de 10 minutos
-                self._baldes = {k: v for k, v in self._baldes.items() if agora - v[1] < 600}
-                self._dia = {k: v for k, v in self._dia.items() if v[0] == hoje}
-            fichas, antes = self._baldes.get(chave, [por_min, agora])
-            fichas = min(por_min, fichas + (agora - antes) * por_min / 60)
-            dia = self._dia.get(chave)
-            usadas = dia[1] if dia and dia[0] == hoje else 0
-            cab = {"X-RateLimit-Limit": f"{por_min}/min" + (f", {por_dia}/dia" if por_dia else "")}
-            if por_dia and usadas >= por_dia:
-                amanha = time.mktime(time.strptime(hoje, "%Y-%m-%d")) + 86400
-                cab["Retry-After"] = str(max(1, int(amanha - time.time())))
-                cab["X-RateLimit-Remaining"] = "0"
-                return False, cab
-            if fichas < 1:
-                self._baldes[chave] = [fichas, agora]
-                cab["Retry-After"] = str(max(1, round((1 - fichas) * 60 / por_min)))
-                cab["X-RateLimit-Remaining"] = "0"
-                return False, cab
-            self._baldes[chave] = [fichas - 1, agora]
-            self._dia[chave] = [hoje, usadas + 1]
-            restantes = int(fichas - 1)
-            if por_dia:
-                restantes = min(restantes, por_dia - usadas - 1)
-            cab["X-RateLimit-Remaining"] = str(restantes)
-            return True, cab
-
-
-limitador = LimiteConsultas()
-vagas = threading.BoundedSemaphore(MAX_SIMULTANEAS)
-
-# ---------------------------------------------------------------- HTTP
-
-
+# API interna, usada pelas páginas do site (pode mudar sem aviso; integrações devem usar /api/v1)
 ROUTES = {
     "/api/busca": lambda con, p: search(con, p),
     "/api/ranking": lambda con, p: ranking(con, p),
     "/api/aluno": lambda con, p: perfil_aluno(con, p.get("id", ""), p),
     "/api/escola": lambda con, p: perfil_escola(con, p.get("id", ""), p),
     "/api/overview": lambda con, p: overview(con, p),
-    "/api/v1": v1_indice,
-    "/api/v1/alunos": v1_alunos,
-    "/api/v1/escolas": v1_escolas,
 }
+EXPOE = "X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Scope, Retry-After, Content-Disposition, X-Total-Rows"
 
 
 class Handler(BaseHTTPRequestHandler):
-    def _send(self, body: bytes, ctype: str, status: int = 200, headers: dict | None = None) -> None:
+    timeout = 20  # segundos sem receber/enviar dados: derruba conexões lentas de propósito (slowloris)
+
+    # ------------------------------------------------ respostas
+    def _cabecalhos(self, status: int, headers: dict) -> None:
         self.send_response(status)
-        self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Access-Control-Allow-Origin", "*")  # API pública: pode ser chamada de outros sites
-        self.send_header("Access-Control-Expose-Headers", "X-RateLimit-Limit, X-RateLimit-Remaining, Retry-After")
-        for k, v in (headers or {}).items():
+        self.send_header("Access-Control-Expose-Headers", EXPOE)
+        self.send_header("X-Content-Type-Options", "nosniff")
+        for k, v in headers.items():
             self.send_header(k, v)
         self.end_headers()
-        self.wfile.write(body)
+
+    def _send(self, body: bytes, ctype: str, status: int = 200, headers: dict | None = None) -> None:
+        self._cabecalhos(status, {"Content-Type": ctype, "Content-Length": str(len(body)), **(headers or {})})
+        if self.command != "HEAD":
+            self.wfile.write(body)
 
     def _json(self, data, status=200, headers: dict | None = None) -> None:
         self._send(json.dumps(data, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8",
@@ -736,40 +63,94 @@ class Handler(BaseHTTPRequestHandler):
             return self.headers["X-Forwarded-For"].split(",")[0].strip()
         return self.client_address[0]
 
+    def _aceita_gzip(self) -> bool:
+        return "gzip" in (self.headers.get("Accept-Encoding") or "")
+
+    def _recusar(self, cab: dict) -> None:
+        espera = int(cab["Retry-After"])
+        escopo = cab.get("X-RateLimit-Scope")
+        if escopo == "dia":
+            msg = "limite diário de consultas atingido; volta a liberar à meia-noite"
+        elif escopo == "bloqueio":
+            msg = f"muitas requisições depois do limite: IP bloqueado por {espera} segundo(s)"
+        else:
+            msg = f"limite de consultas atingido; tente de novo em {espera} segundo(s)"
+        self._json({"erro": msg, "tente_em_segundos": espera}, 429, cab)
+
+    # ------------------------------------------------ API
     def _api(self, path: str, params: dict) -> None:
-        grupo = "v1" if path == "/api/v1" or path.startswith("/api/v1/") else "site"
-        ok, cab = limitador.consumir(grupo, self._ip())
-        if not ok:
-            espera = int(cab["Retry-After"])
-            msg = (f"limite de consultas por minuto atingido; tente de novo em {espera} segundo(s)" if espera <= 60
-                   else "limite diário de consultas atingido; volta a liberar à meia-noite")
-            self._json({"erro": msg}, 429, cab)
+        if path.startswith("/api/v1"):
+            achou = api_v1.rota(path)
+            if not achou:
+                self._json({"erro": f"rota inexistente: {path}. Veja as rotas em /api/v1"}, 404)
+                return
+            fn, grupo = achou
+        elif path in ROUTES:
+            fn, grupo = ROUTES[path], "site"
+        else:
+            self._json({"erro": f"rota inexistente: {path}"}, 404)
             return
-        if not vagas.acquire(timeout=ESPERA_FILA):
-            self._json({"erro": "servidor ocupado; tente de novo em instantes"}, 503, {"Retry-After": "5"})
+
+        ok, cab = limites.limitador.consumir(grupo, self._ip())
+        if not ok:
+            self._recusar(cab)
+            return
+        if not limites.consultas.acquire(timeout=limites.ESPERA_CONSULTA):
+            self._json({"erro": "servidor ocupado; tente de novo em instantes", "tente_em_segundos": 5}, 503,
+                       {"Retry-After": "5"})
             return
         try:
             with closing(connect()) as con:
-                data = ROUTES[path](con, params)
+                data = api_v1.exportar(con, params, self._aceita_gzip()) if fn == "exportar" else fn(con, params)
         finally:
-            vagas.release()
-        self._json(data, headers=cab)
+            limites.consultas.release()  # o envio do arquivo acontece já sem ocupar a base
 
+        if isinstance(data, api_v1.Download):
+            self._enviar_download(data, cab)
+        else:
+            self._json(data, headers=cab)
+
+    def _enviar_download(self, dl: "api_v1.Download", cab: dict) -> None:
+        gz = dl.gzipado and self._aceita_gzip()
+        headers = {"Content-Type": dl.ctype, "X-Total-Rows": str(dl.linhas),
+                   "Content-Disposition": f'attachment; filename="{dl.nome}"', **cab}
+        if gz:
+            headers["Content-Encoding"] = "gzip"
+            arq = dl.arquivo
+            if hasattr(arq, "stat"):
+                tamanho = arq.stat().st_size
+            else:
+                arq.seek(0, 2)
+                tamanho = arq.tell()
+                arq.seek(0)
+            headers["Content-Length"] = str(tamanho)
+        self._cabecalhos(200, headers)
+        if self.command == "HEAD":
+            return
+        api_v1.enviar_arquivo(dl, self.wfile, gz)
+
+    # ------------------------------------------------ HTTP
     def do_OPTIONS(self) -> None:  # preflight CORS
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Access-Control-Max-Age", "86400")
         self.end_headers()
 
     def do_GET(self) -> None:
+        ip = self._ip()
+        espera = limites.limitador.bloqueio_restante(ip)
+        if espera:
+            self._recusar({"Retry-After": str(espera), "X-RateLimit-Scope": "bloqueio"})
+            return
         url = urlparse(self.path)
         params = {k: v[0] for k, v in parse_qs(url.query).items()}
-        params["_base"] = f"http://{self.headers.get('Host') or 'localhost'}"
+        proto = (self.headers.get("X-Forwarded-Proto") if CONFIAR_PROXY else None) or "http"
+        params["_base"] = f"{proto}://{self.headers.get('Host') or 'localhost'}"
         path = url.path.rstrip("/") or "/"
         try:
-            if path in ROUTES:
+            if path.startswith("/api/"):
                 self._api(path, params)
                 return
             rel = "index.html" if url.path in ("/", "") else unquote(url.path.lstrip("/"))
@@ -781,14 +162,43 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(target.read_bytes(), ctype)
             else:
                 self._send(b"Not found", "text/plain", 404)
+        except api_v1.NaoEncontrado as e:
+            self._json({"erro": str(e)}, 404)
         except ValueError as e:  # ex.: ano=abc, offset=xyz
             self._json({"erro": f"parâmetro inválido: {e}"}, 400)
+        except (BrokenPipeError, ConnectionResetError, TimeoutError):
+            pass  # o cliente desistiu no meio do envio
         except Exception as e:  # noqa: BLE001 — bug do servidor: registra no terminal com o traceback
             traceback.print_exc()
-            self._json({"erro": f"erro interno do servidor ({type(e).__name__}: {e})"}, 500)
+            self._json({"erro": f"erro interno do servidor ({type(e).__name__})"}, 500)
+
+    do_HEAD = do_GET
 
     def log_message(self, *args) -> None:
         pass
+
+
+class Servidor(ThreadingHTTPServer):
+    """Recusa conexões além do teto (por IP e no total) antes de criar uma thread para elas."""
+    daemon_threads = True
+    request_queue_size = 64
+
+    def verify_request(self, request, client_address) -> bool:
+        # atrás de um proxy todo mundo chega com o IP do proxy: aí só vale o teto total
+        return limites.conexoes.entrar(client_address[0], por_ip=not CONFIAR_PROXY)
+
+    def process_request(self, request, client_address):
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            limites.conexoes.sair(client_address[0])
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            limites.conexoes.sair(client_address[0])
 
 
 def warm_up() -> None:
@@ -809,20 +219,17 @@ def main() -> None:
     port = int(sys.argv[sys.argv.index("--port") + 1]) if "--port" in sys.argv else 8000
     # --host 0.0.0.0 deixa a API acessível para outras máquinas da rede
     host = sys.argv[sys.argv.index("--host") + 1] if "--host" in sys.argv else "127.0.0.1"
-    global CONFIAR_PROXY, vagas
+    global CONFIAR_PROXY
     CONFIAR_PROXY = "--trust-proxy" in sys.argv
-    for flag, grupo, i in (("--rate-limit", "v1", 0), ("--daily-limit", "v1", 1), ("--site-rate-limit", "site", 0)):
-        if flag in sys.argv:
-            valor = int(sys.argv[sys.argv.index(flag) + 1])
-            LIMITES[grupo][i] = valor if valor > 0 else (None if i else 10**9)  # 0 = sem limite
-    if "--max-concurrent" in sys.argv:
-        vagas = threading.BoundedSemaphore(int(sys.argv[sys.argv.index("--max-concurrent") + 1]))
-    server = ThreadingHTTPServer((host, port), Handler)
+    limites.configurar(sys.argv)
+    server = Servidor((host, port), Handler)
     threading.Thread(target=warm_up, daemon=True).start()
     url = f"http://localhost:{port}"
     print(f"Medalhas rodando em {url}  (Ctrl+C para sair)")
-    por_min, por_dia = LIMITES["v1"]
-    print(f"API pública: {por_min} consultas/min e {por_dia or 'sem limite de'} consultas/dia por IP")
+    v1, exp = limites.GRUPOS["v1"], limites.GRUPOS["exportar"]
+    print(f"Limites por IP: API {v1['quantidade']}/min e {v1['por_dia'] or 'sem teto'}/dia; "
+          f"exportação {exp['quantidade']}/h e {exp['por_dia'] or 'sem teto'}/dia; "
+          f"{limites.MAX_CONEXOES_IP} conexões simultâneas")
     if "--no-browser" not in sys.argv:
         webbrowser.open(url)
     try:
