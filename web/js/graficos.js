@@ -1,0 +1,93 @@
+/* Gráficos (ECharts), confete e contador animado. Ficam fora do Alpine para não virarem proxies reativos. */
+
+const charts = {};
+const VIZ = { ouro: "#b5870c", prata: "#6688d6", bronze: "#b5602b", text: "#a3abc2", muted: "#6b7489", grid: "rgba(255,255,255,.06)", surface: "#0f1424" };
+let brGeo = null;
+
+function chart(el, key) {
+  if (!el) return null;
+  if (charts[key] && charts[key].getDom() !== el) { charts[key].dispose(); delete charts[key]; }
+  charts[key] = charts[key] || echarts.init(el, null, { renderer: "canvas" });
+  return charts[key];
+}
+window.addEventListener("resize", () => Object.values(charts).forEach(c => c.resize()));
+
+const tooltipBase = {
+  backgroundColor: "rgba(12,17,32,.96)", borderColor: "rgba(255,255,255,.12)", borderWidth: 1,
+  textStyle: { color: "#e8ebf5", fontFamily: "Inter", fontSize: 12 }, extraCssText: "border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.5);",
+};
+
+function stackedYears(el, key, rows) {
+  const c = chart(el, key); if (!c) return;
+  const anos = rows.map(r => r.ano);
+  const serie = (name, field, color, top) => ({
+    name, type: "bar", stack: "m", data: rows.map(r => r[field]), barMaxWidth: 26,
+    itemStyle: { color, borderColor: VIZ.surface, borderWidth: 1, borderRadius: top ? [4, 4, 0, 0] : 0 },
+    emphasis: { focus: "series" },
+  });
+  c.setOption({
+    animationDuration: 900, animationEasing: "cubicOut",
+    grid: { left: 8, right: 8, top: 36, bottom: 4, containLabel: true },
+    legend: { top: 0, left: 0, icon: "roundRect", itemWidth: 10, itemHeight: 10, textStyle: { color: VIZ.text, fontFamily: "Inter" } },
+    tooltip: { ...tooltipBase, trigger: "axis", axisPointer: { type: "shadow", shadowStyle: { color: "rgba(255,255,255,.04)" } },
+      formatter: ps => `<b>${ps[0].axisValue}</b><br>` + ps.map(p => `${p.marker} ${p.seriesName}: <b>${fmt(p.value)}</b>`).join("<br>")
+        + `<br><span style="color:${VIZ.muted}">Total: ${fmt(ps.reduce((s, p) => s + p.value, 0))}</span>` },
+    xAxis: { type: "category", data: anos, axisLine: { lineStyle: { color: VIZ.grid } }, axisTick: { show: false }, axisLabel: { color: VIZ.muted, fontFamily: "Inter" } },
+    yAxis: { type: "value", splitLine: { lineStyle: { color: VIZ.grid } }, axisLabel: { color: VIZ.muted, fontFamily: "Inter", formatter: v => fmt(v) } },
+    series: [serie("Ouro", "ouro", VIZ.ouro), serie("Prata", "prata", VIZ.prata), serie("Bronze", "bronze", VIZ.bronze, true)],
+  }, true);
+}
+
+async function brazilMap(el, key, estados, metric, onClick) {
+  const c = chart(el, key); if (!c) return;
+  c.showLoading({ text: "", color: "#f5c542", maskColor: "transparent" });
+  if (!brGeo) {
+    const geo = await fetch("https://cdn.jsdelivr.net/gh/codeforgermany/click_that_hood@main/public/data/brazil-states.geojson").then(r => r.json());
+    geo.features.forEach(f => { f.properties.name = f.properties.sigla; });
+    echarts.registerMap("BR", geo);
+    brGeo = geo;
+  }
+  c.hideLoading();
+  const labels = { xp: "Pontos", ouro: "Ouros", total: "Premiações", alunos: "Alunos premiados" };
+  const data = estados.map(e => ({ name: e.id, value: e[metric], raw: e }));
+  const max = Math.max(...data.map(d => d.value), 1);
+  c.setOption({
+    tooltip: { ...tooltipBase, trigger: "item", formatter: p => {
+      const e = p.data?.raw; if (!e) return p.name;
+      return `<b>${UF_NOMES[e.id]}</b> <span style="color:${VIZ.muted}">#${e.pos}</span><br>
+        ${labels[metric]}: <b>${fmt(e[metric])}</b><br>
+        <span style="color:${VIZ.ouro}">●</span> ${fmt(e.ouro)} &nbsp;<span style="color:${VIZ.prata}">●</span> ${fmt(e.prata)} &nbsp;<span style="color:${VIZ.bronze}">●</span> ${fmt(e.bronze)}`;
+    } },
+    visualMap: { min: 0, max, calculable: false, orient: "horizontal", left: "center", bottom: 0, itemWidth: 12, itemHeight: 180,
+      text: [fmt(max), "0"], textStyle: { color: VIZ.text, fontFamily: "Inter" },
+      inRange: { color: ["#1b2236", "#3a3017", "#6b5212", "#a07810", "#d9a521", "#ffd76e"] } },
+    series: [{ type: "map", map: "BR", roam: false, data, top: 10, bottom: 50,
+      itemStyle: { borderColor: "#070a14", borderWidth: 1, areaColor: "#1b2236" },
+      emphasis: { label: { show: true, color: "#fff", fontWeight: 700 }, itemStyle: { areaColor: "#ffe08a", shadowBlur: 20, shadowColor: "rgba(245,197,66,.6)" } },
+      select: { disabled: true },
+      label: { show: false } }],
+  }, true);
+  c.off("click");
+  c.on("click", p => p.name && onClick(p.name));
+}
+
+// ---------------------------------------------------------------- confete
+function celebrate() {
+  if (!window.confetti || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const colors = ["#f5c542", "#ffe08a", "#ffffff", "#7c8cff"];
+  confetti({ particleCount: 90, spread: 70, origin: { y: .25 }, colors, scalar: .9 });
+  setTimeout(() => confetti({ particleCount: 60, angle: 60, spread: 55, origin: { x: 0, y: .4 }, colors }), 180);
+  setTimeout(() => confetti({ particleCount: 60, angle: 120, spread: 55, origin: { x: 1, y: .4 }, colors }), 300);
+}
+
+// ---------------------------------------------------------------- contador animado
+function countUp(el, to) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) { el.textContent = fmt(to); return; }
+  const from = 0, dur = 1400, t0 = performance.now();
+  const step = t => {
+    const p = Math.min((t - t0) / dur, 1), e = 1 - Math.pow(1 - p, 4);
+    el.textContent = fmt(Math.round(from + (to - from) * e));
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
