@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Medalhas · Hall da Fama da Matemática Brasileira</title>
-<meta name="description" content="Busca e rankings de todos os medalhistas da OBMEP e da OBM.">
+<meta name="description" content="Busca, rankings, API e dados abertos dos medalhistas brasileiros em olimpíadas científicas.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏅</text></svg>">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,6 +23,8 @@
 <script defer src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.10.0/styles/github-dark.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.10.0/highlight.min.js"></script>
 <script defer src="/app.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
 </head>
@@ -45,6 +47,7 @@
       <a href="#/ranking/alunos" class="nav-link" :class="is('ranking') && 'active'">Rankings</a>
       <a href="#/estados" class="nav-link" :class="is('estados') && 'active'">Estados</a>
       <a href="#/sobre" class="nav-link" :class="is('sobre') && 'active'">Como funciona</a>
+      <a href="#/api" class="nav-link" :class="is('api') && 'active'">API &amp; Dados</a>
     </nav>
     <div class="ml-auto hidden md:block"><div class="seg" title="Como os pontos são calculados em todo o site">
       <span class="hidden self-center px-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 lg:inline">Pontuação</span>
@@ -68,6 +71,7 @@
     <a href="#/ranking/alunos" class="nav-link" :class="is('ranking') && 'active'">Rankings</a>
     <a href="#/estados" class="nav-link" :class="is('estados') && 'active'">Estados</a>
     <a href="#/sobre" class="nav-link" :class="is('sobre') && 'active'">Como funciona</a>
+    <a href="#/api" class="nav-link" :class="is('api') && 'active'">API &amp; Dados</a>
   </nav>
   <div class="overflow-x-auto px-4 pb-2 md:hidden"><div class="seg" title="Como os pontos são calculados em todo o site">
       <span class="hidden self-center px-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 lg:inline">Pontuação</span>
@@ -237,10 +241,26 @@
         <span x-show="busca.total > busca.limite" class="text-amber-300"> · mostrando as primeiras <span x-text="fmt(busca.limite)"></span>, refine a busca</span>
       </p>
     </div>
-    <div class="seg">
-      <button @click="setCampo('nome')" :class="campo==='nome' && 'on'">Pessoa</button>
-      <button @click="setCampo('escola')" :class="campo==='escola' && 'on'">Escola</button>
-      <button @click="setCampo('tudo')" :class="campo==='tudo' && 'on'">Tudo</button>
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="seg">
+        <button @click="setCampo('nome')" :class="campo==='nome' && 'on'">Pessoa</button>
+        <button @click="setCampo('escola')" :class="campo==='escola' && 'on'">Escola</button>
+        <button @click="setCampo('tudo')" :class="campo==='tudo' && 'on'">Tudo</button>
+      </div>
+      <template x-if="busca.total > 0">
+  <div class="relative " x-data="{ aberto: false }" @click.outside="aberto = false" @keydown.escape.window="aberto = false">
+    <button type="button" class="btn" @click="aberto = !aberto" :disabled="exportando" :aria-expanded="aberto" aria-haspopup="menu">
+      <i x-icon="exportando ? 'loader-circle' : 'download'" class="h-4 w-4" :class="exportando && 'animate-spin'"></i><span>Exportar</span><i x-icon="'chevron-down'" class="h-3.5 w-3.5 opacity-60"></i>
+    </button>
+    <div x-show="aberto" x-cloak x-transition.opacity.duration.150ms class="menu" role="menu">
+      <div class="menu-titulo">Todas as premiações desta busca</div>
+      <button class="menu-item" @click="aberto = false; baixar(exportBusca, 'csv')"><i x-icon="'file-spreadsheet'"></i><span>CSV<small>planilhas, Python, R</small></span></button>
+      <button class="menu-item" @click="aberto = false; baixar(exportBusca, 'excel')"><i x-icon="'sheet'"></i><span>Excel<small>CSV com ; para o Excel em português</small></span></button>
+      <button class="menu-item" @click="aberto = false; baixar(exportBusca, 'json')"><i x-icon="'braces'"></i><span>JSON<small>para programas</small></span></button>
+      <a href="#/api" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
+    </div>
+  </div>
+      </template>
     </div>
   </div>
 
@@ -345,6 +365,22 @@
       <a :href="rankLink('escolas')" class="rounded-[.6rem] px-4 py-1.5 text-sm" :class="rk.tipo==='escolas' ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.14)]' : 'text-slate-400 hover:text-white'"><i x-icon="'school'" class="mr-1 inline h-4 w-4"></i>Escolas</a>
       <a :href="rankLink('estados')" class="rounded-[.6rem] px-4 py-1.5 text-sm" :class="rk.tipo==='estados' ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.14)]' : 'text-slate-400 hover:text-white'"><i x-icon="'map'" class="mr-1 inline h-4 w-4"></i>Estados</a>
     </div>
+  <div class="relative " x-data="{ aberto: false }" @click.outside="aberto = false" @keydown.escape.window="aberto = false">
+    <button type="button" class="btn" @click="aberto = !aberto" :disabled="exportando" :aria-expanded="aberto" aria-haspopup="menu">
+      <i x-icon="exportando ? 'loader-circle' : 'download'" class="h-4 w-4" :class="exportando && 'animate-spin'"></i><span>Exportar</span><i x-icon="'chevron-down'" class="h-3.5 w-3.5 opacity-60"></i>
+    </button>
+    <div x-show="aberto" x-cloak x-transition.opacity.duration.150ms class="menu" role="menu">
+      <div class="menu-titulo">Ranking completo com estes filtros</div>
+      <button class="menu-item" @click="aberto = false; baixar(exportRanking(rk.tipo), 'csv')"><i x-icon="'file-spreadsheet'"></i><span>CSV<small>planilhas, Python, R</small></span></button>
+      <button class="menu-item" @click="aberto = false; baixar(exportRanking(rk.tipo), 'excel')"><i x-icon="'sheet'"></i><span>Excel<small>CSV com ; para o Excel em português</small></span></button>
+      <button class="menu-item" @click="aberto = false; baixar(exportRanking(rk.tipo), 'json')"><i x-icon="'braces'"></i><span>JSON<small>para programas</small></span></button>
+      <div class="menu-titulo">Premiações com estes filtros</div>
+      <button class="menu-item" @click="aberto = false; baixar(exportRanking('premiacoes'), 'csv')"><i x-icon="'file-spreadsheet'"></i><span>CSV<small>planilhas, Python, R</small></span></button>
+      <button class="menu-item" @click="aberto = false; baixar(exportRanking('premiacoes'), 'excel')"><i x-icon="'sheet'"></i><span>Excel<small>CSV com ; para o Excel em português</small></span></button>
+      <button class="menu-item" @click="aberto = false; baixar(exportRanking('premiacoes'), 'json')"><i x-icon="'braces'"></i><span>JSON<small>para programas</small></span></button>
+      <a href="#/api" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
+    </div>
+  </div>
   </div>
 
   <!-- filtros -->
@@ -528,6 +564,20 @@
   <div x-show="aluno?.erro" class="glass card p-12 text-center text-slate-400" x-text="aluno?.erro"></div>
   <template x-if="aluno && !aluno.erro">
     <div>
+      <div class="mb-3 flex justify-end">
+  <div class="relative " x-data="{ aberto: false }" @click.outside="aberto = false" @keydown.escape.window="aberto = false">
+    <button type="button" class="btn" @click="aberto = !aberto" :disabled="exportando" :aria-expanded="aberto" aria-haspopup="menu">
+      <i x-icon="exportando ? 'loader-circle' : 'download'" class="h-4 w-4" :class="exportando && 'animate-spin'"></i><span>Exportar</span><i x-icon="'chevron-down'" class="h-3.5 w-3.5 opacity-60"></i>
+    </button>
+    <div x-show="aberto" x-cloak x-transition.opacity.duration.150ms class="menu" role="menu">
+      <div class="menu-titulo">Todas as premiações deste aluno</div>
+      <button class="menu-item" @click="aberto = false; baixar({ aluno_id: aluno.id }, 'csv')"><i x-icon="'file-spreadsheet'"></i><span>CSV<small>planilhas, Python, R</small></span></button>
+      <button class="menu-item" @click="aberto = false; baixar({ aluno_id: aluno.id }, 'excel')"><i x-icon="'sheet'"></i><span>Excel<small>CSV com ; para o Excel em português</small></span></button>
+      <button class="menu-item" @click="aberto = false; baixar({ aluno_id: aluno.id }, 'json')"><i x-icon="'braces'"></i><span>JSON<small>para programas</small></span></button>
+      <a href="#/api" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
+    </div>
+  </div>
+      </div>
       <!-- hero -->
       <div class="glass card relative overflow-hidden p-6 sm:p-8">
         <div class="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full blur-3xl" :style="`background:${aluno.tier.cor}22`"></div>
@@ -669,6 +719,20 @@
   <div x-show="escola?.erro" class="glass card p-12 text-center text-slate-400" x-text="escola?.erro"></div>
   <template x-if="escola && !escola.erro">
     <div>
+      <div class="mb-3 flex justify-end">
+  <div class="relative " x-data="{ aberto: false }" @click.outside="aberto = false" @keydown.escape.window="aberto = false">
+    <button type="button" class="btn" @click="aberto = !aberto" :disabled="exportando" :aria-expanded="aberto" aria-haspopup="menu">
+      <i x-icon="exportando ? 'loader-circle' : 'download'" class="h-4 w-4" :class="exportando && 'animate-spin'"></i><span>Exportar</span><i x-icon="'chevron-down'" class="h-3.5 w-3.5 opacity-60"></i>
+    </button>
+    <div x-show="aberto" x-cloak x-transition.opacity.duration.150ms class="menu" role="menu">
+      <div class="menu-titulo">Todos os medalhistas desta escola</div>
+      <button class="menu-item" @click="aberto = false; baixar({ escola_id: escola.id }, 'csv')"><i x-icon="'file-spreadsheet'"></i><span>CSV<small>planilhas, Python, R</small></span></button>
+      <button class="menu-item" @click="aberto = false; baixar({ escola_id: escola.id }, 'excel')"><i x-icon="'sheet'"></i><span>Excel<small>CSV com ; para o Excel em português</small></span></button>
+      <button class="menu-item" @click="aberto = false; baixar({ escola_id: escola.id }, 'json')"><i x-icon="'braces'"></i><span>JSON<small>para programas</small></span></button>
+      <a href="#/api" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
+    </div>
+  </div>
+      </div>
       <div class="glass card relative overflow-hidden p-6 sm:p-8">
         <div class="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full blur-3xl" :style="`background:${escola.tier.cor}22`"></div>
         <div class="relative flex flex-col gap-6 md:flex-row md:items-center">
@@ -874,10 +938,238 @@
   </div>
 </section>
 
+<!-- ================================================================ API & DADOS -->
+<section x-show="is('api')" x-cloak class="fade-in pt-10">
+  <p class="text-sm font-medium uppercase tracking-[.18em] text-gold-400">Para desenvolvedores e pesquisadores</p>
+  <h1 class="font-display text-4xl font-bold">API &amp; Dados</h1>
+  <p class="mt-3 max-w-3xl text-slate-300">
+    Acesso livre, sem cadastro e sem chave, a todas as <b class="text-white" x-text="ov ? fmt(ov.totais.total) : '…'"></b> premiações da base.
+    Consulte um aluno ou uma escola pela API, ou baixe os dados inteiros ou filtrados em CSV e JSON.
+    As respostas são JSON em UTF-8, e a API pode ser chamada de qualquer site (CORS liberado).
+  </p>
+  <div class="mt-4 flex flex-wrap items-center gap-2 text-sm">
+    <span class="text-slate-500">Endereço base</span>
+    <code class="code-inline" x-text="BASE + '/api/v1'"></code>
+    <button class="btn !py-1 !text-xs" @click="copiar(BASE + '/api/v1', 'base')"><i x-icon="doc.copiado==='base' ? 'check' : 'copy'" class="h-3.5 w-3.5"></i><span x-text="doc.copiado==='base' ? 'copiado' : 'copiar'"></span></button>
+    <a class="btn !py-1 !text-xs" href="/api/v1/openapi.json" target="_blank" rel="noopener"><i x-icon="'file-json'" class="h-3.5 w-3.5"></i>OpenAPI 3.1</a>
+    <a class="btn !py-1 !text-xs" href="/api/v1" target="_blank" rel="noopener"><i x-icon="'list'" class="h-3.5 w-3.5"></i>Índice JSON</a>
+  </div>
+
+  <div class="mt-8 grid items-start gap-6 lg:grid-cols-[1.35fr_1fr]">
+    <div class="glass card glow-gold p-6">
+      <div class="flex items-start gap-3">
+        <div class="grid h-11 w-11 flex-none place-items-center rounded-xl bg-gold-400/15 text-gold-300"><i x-icon="'database'" class="h-5 w-5"></i></div>
+        <div>
+          <h2 class="font-display text-xl font-semibold">Baixar a base inteira</h2>
+          <p class="mt-1 text-sm text-slate-400">
+            <span x-text="ov ? fmt(ov.totais.total) : '…'"></span> premiações de <span x-text="ov?.olimpiadas?.length || '…'"></span> olimpíadas
+            (<span x-text="ov ? ov.totais.de + '–' + ov.totais.ate : '…'"></span>), uma por linha, com aluno, escola, município, UF, nível, medalha,
+            pontos nos três métodos e o link da fonte oficial.
+          </p>
+        </div>
+      </div>
+      <div class="mt-5 flex flex-wrap gap-2">
+        <button class="btn btn-gold" @click="baixar({}, 'csv')" :disabled="exportando"><i x-icon="'file-spreadsheet'" class="h-4 w-4"></i>CSV</button>
+        <button class="btn" @click="baixar({}, 'excel')" :disabled="exportando"><i x-icon="'sheet'" class="h-4 w-4"></i>Excel (CSV com ;)</button>
+        <button class="btn" @click="baixar({}, 'json')" :disabled="exportando"><i x-icon="'braces'" class="h-4 w-4"></i>JSON</button>
+      </div>
+      <p class="mt-4 text-xs text-slate-500">
+        Quer só um recorte? A busca, os rankings e os perfis de aluno e de escola têm um botão <b class="text-slate-300">Exportar</b>
+        que baixa exatamente o que está na tela, com os filtros aplicados.
+      </p>
+    </div>
+
+    <div class="glass card p-6">
+      <h2 class="font-display flex items-center gap-2 text-lg font-semibold"><i x-icon="'shield-check'" class="h-5 w-5 text-emerald-300"></i>Limites de uso</h2>
+      <p class="mt-1 text-sm text-slate-400">Contados por IP, para que ninguém derrube o servidor com excesso de requisições.</p>
+      <ul class="mt-4 space-y-2.5 text-sm" x-show="doc.limites">
+        <li class="flex justify-between gap-4"><span class="text-slate-400">Consultas à API</span>
+          <b class="tabular text-right" x-text="doc.limites && `${fmt(doc.limites.api_publica.consultas)}/min · ${fmt(doc.limites.api_publica.por_dia)}/dia`"></b></li>
+        <li class="flex justify-between gap-4"><span class="text-slate-400">Exportações (downloads)</span>
+          <b class="tabular text-right" x-text="doc.limites && `${fmt(doc.limites.exportacao.consultas)}/hora · ${fmt(doc.limites.exportacao.por_dia)}/dia`"></b></li>
+        <li class="flex justify-between gap-4"><span class="text-slate-400">Conexões simultâneas</span>
+          <b class="tabular text-right" x-text="doc.limites?.conexoes_simultaneas_por_ip"></b></li>
+        <li class="flex justify-between gap-4"><span class="text-slate-400">Insistir depois do limite</span>
+          <b class="text-right text-amber-300" x-text="doc.limites && `${doc.limites.bloqueio_por_abuso.recusas} recusas em ${doc.limites.bloqueio_por_abuso.em_segundos} s bloqueiam por ${doc.limites.bloqueio_por_abuso.bloqueio_segundos / 60} min`"></b></li>
+      </ul>
+      <p class="mt-4 text-xs text-slate-500">
+        O limite por minuto aceita rajadas curtas e recarrega aos poucos. Passou do limite: resposta <code class="code-inline">429</code>
+        com o cabeçalho <code class="code-inline">Retry-After</code> dizendo quantos segundos esperar.
+      </p>
+    </div>
+  </div>
+
+  <!-- guias -->
+  <div class="mt-14 flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h2 class="font-display text-2xl font-bold">Guias rápidos</h2>
+      <p class="text-sm text-slate-400">Os três usos mais comuns, prontos para copiar.</p>
+    </div>
+    <div class="seg">
+      <template x-for="l in [['curl','cURL'],['python','Python'],['javascript','JavaScript']]" :key="l[0]">
+        <button @click="doc.lang = l[0]" :class="doc.lang===l[0] && 'on'" x-text="l[1]"></button>
+      </template>
+    </div>
+  </div>
+
+  <div class="mt-6 space-y-6">
+    <template x-for="(g, i) in [
+        { id: 'aluno', icone: 'user-round-search', titulo: 'Medalhas de um aluno específico',
+          passos: ['Busque pelo nome em /alunos?nome=. Cada resultado já traz as premiações e o id do aluno.',
+                   'Para apontar sempre para a mesma pessoa, use o id em /alunos/{id}. Homônimos de outros estados têm outro id; filtre com uf= se precisar.',
+                   'Para confirmar uma medalha, junte filtros (competicao, ano, medalha): total maior que zero confirma. Cada premiação traz o link da fonte oficial.'] },
+        { id: 'escola', icone: 'school', titulo: 'Todos os medalhistas de uma escola',
+          passos: ['Ache a escola em /escolas?nome=. Siglas funcionam (IFAL, ETEC, EEEFM…) e cada campus é uma escola com id próprio.',
+                   'Liste os alunos premiados em /escolas/{id}/medalhistas, até 500 por página. Avance com offset até chegar ao total.',
+                   'Os filtros comuns também valem aqui: só nível 3, só OBMEP, só ouros, um intervalo de anos…'] },
+        { id: 'tudo', icone: 'database', titulo: 'Todos os dados',
+          passos: ['Para a base inteira, baixe /exportar em CSV ou JSON. É um arquivo só, compactado na transferência (cerca de 7 MB).',
+                   'Os mesmos filtros geram recortes: uma olimpíada, um estado, um período. conjunto=alunos|escolas|estados baixa o ranking completo.',
+                   'Se preferir paginar, /premiacoes devolve até 1000 por página com o link da próxima. Respeite o limite: uma página por segundo.'] },
+      ]" :key="g.id">
+      <article class="glass card grid gap-6 p-6 lg:grid-cols-[1fr_1.4fr]">
+        <div>
+          <div class="flex items-center gap-3">
+            <span class="grid h-9 w-9 place-items-center rounded-xl bg-white/5 font-display font-bold text-gold-300" x-text="i + 1"></span>
+            <i x-icon="g.icone" class="h-5 w-5 text-slate-400"></i>
+          </div>
+          <h3 class="font-display mt-3 text-xl font-semibold" x-text="g.titulo"></h3>
+          <ol class="mt-3 space-y-2 text-sm text-slate-300">
+            <template x-for="(p, j) in g.passos" :key="j">
+              <li class="flex gap-2"><span class="mt-0.5 text-xs font-bold text-gold-400" x-text="(j + 1) + '.'"></span><span x-text="p"></span></li>
+            </template>
+          </ol>
+        </div>
+        <div class="code-box">
+          <div class="code-bar">
+            <span x-text="{curl: 'terminal', python: 'Python 3 · requests', javascript: 'JavaScript · fetch'}[doc.lang]"></span>
+            <button @click="copiar(receitaTexto(g.id), g.id)" class="inline-flex items-center gap-1 hover:text-white">
+              <i x-icon="doc.copiado===g.id ? 'check' : 'copy'" class="h-3.5 w-3.5"></i><span x-text="doc.copiado===g.id ? 'copiado' : 'copiar'"></span></button>
+          </div>
+          <pre class="code"><code class="hljs" x-html="codigo(g.id)"></code></pre>
+        </div>
+      </article>
+    </template>
+  </div>
+
+  <!-- referência -->
+  <h2 class="font-display mt-14 text-2xl font-bold">Referência</h2>
+  <p class="text-sm text-slate-400">Todas as rotas são <code class="code-inline">GET</code>. Ids vão no caminho codificados para URL
+    (<code class="code-inline">encodeURIComponent</code> em JavaScript, <code class="code-inline">quote(id, safe="")</code> em Python).</p>
+  <div class="mt-5 space-y-3">
+    <template x-for="r in ROTAS" :key="r.id">
+      <details class="glass card group overflow-hidden">
+        <summary class="flex cursor-pointer list-none flex-wrap items-center gap-3 px-5 py-4 hover:bg-white/[.03]">
+          <span class="method">GET</span>
+          <code class="font-mono text-sm text-white" x-text="r.path"></code>
+          <span class="text-sm text-slate-400" x-text="r.titulo"></span>
+          <i x-icon="'chevron-down'" class="ml-auto h-4 w-4 text-slate-500 transition group-open:rotate-180"></i>
+        </summary>
+        <div class="border-t hairline px-5 py-5">
+          <p class="max-w-4xl text-sm text-slate-300" x-text="r.desc"></p>
+          <div class="mt-4 overflow-x-auto" x-show="r.params.some(p => !p.comum)">
+            <table class="w-full min-w-[520px] text-sm">
+              <thead><tr class="text-left text-xs uppercase tracking-wider text-slate-500"><th class="pb-2 pr-4">Parâmetro</th><th class="pb-2 pr-4">Tipo</th><th class="pb-2">Descrição</th></tr></thead>
+              <tbody class="divide-y divide-white/5">
+                <template x-for="p in r.params.filter(p => !p.comum)" :key="p.nome">
+                  <tr><td class="py-1.5 pr-4 align-top"><code class="font-mono text-gold-300" x-text="p.nome"></code><span x-show="p.obrig" class="ml-1 text-[10px] font-bold uppercase text-rose-300">obrigatório</span></td>
+                    <td class="pr-4 align-top text-slate-500" x-text="p.tipo"></td><td class="text-slate-300" x-text="p.desc"></td></tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+          <p x-show="r.params.some(p => p.comum)" class="mt-3 text-xs text-slate-400"><i x-icon="'filter'" class="mr-1 h-3.5 w-3.5"></i>Aceita também os <a href="#filtros" class="link" @click.prevent="document.getElementById('filtros').scrollIntoView({behavior: 'smooth'})">filtros comuns</a>.</p>
+          <div class="mt-4" x-show="r.teste">
+            <div class="flex flex-wrap items-center gap-2">
+              <button class="btn btn-gold !py-1.5 !text-xs" @click="testar(r)" :disabled="!!doc.carregando[r.id]">
+                <i x-icon="doc.carregando[r.id] ? 'loader-circle' : 'play'" class="h-3.5 w-3.5" :class="doc.carregando[r.id] && 'animate-spin'"></i>Testar agora</button>
+              <code class="code-inline truncate" x-text="'GET ' + decodeURIComponent(r.teste || '')"></code>
+            </div>
+            <div class="code-box mt-3" x-show="doc.resp[r.id]">
+              <div class="code-bar">
+                <span><span :class="doc.resp[r.id]?.status === 200 ? 'text-emerald-300' : 'text-rose-300'" x-text="'HTTP ' + doc.resp[r.id]?.status"></span>
+                  <span class="text-slate-500" x-show="doc.resp[r.id]?.restam" x-text="` · restam ${doc.resp[r.id]?.restam} consultas`"></span></span>
+                <span class="text-slate-500">listas encurtadas para 2 itens</span>
+              </div>
+              <pre class="code max-h-96"><code class="hljs" x-html="doc.resp[r.id]?.html"></code></pre>
+            </div>
+          </div>
+        </div>
+      </details>
+    </template>
+  </div>
+
+  <div class="mt-10 grid gap-6 lg:grid-cols-2">
+    <div id="filtros" class="glass card scroll-mt-24 p-6">
+      <h3 class="font-display text-lg font-semibold">Filtros comuns</h3>
+      <p class="mb-4 text-sm text-slate-400">Valem em todas as rotas de consulta e na exportação. Combine quantos quiser.</p>
+      <table class="w-full text-sm">
+        <tbody class="divide-y divide-white/5">
+          <template x-for="p in FILTROS" :key="p.nome">
+            <tr><td class="py-1.5 pr-4 align-top"><code class="font-mono text-gold-300" x-text="p.nome"></code></td><td class="text-slate-300" x-text="p.desc"></td></tr>
+          </template>
+        </tbody>
+      </table>
+      <div class="mt-4 text-xs uppercase tracking-wider text-slate-500">Siglas aceitas em <code class="code-inline normal-case">competicao</code></div>
+      <div class="mt-2 flex flex-wrap gap-1.5">
+        <template x-for="o in ov?.olimpiadas || []" :key="o.sigla">
+          <span class="rounded-md border hairline bg-white/5 px-1.5 py-0.5 font-mono text-xs text-slate-300" :title="o.nome" x-text="o.sigla"></span>
+        </template>
+      </div>
+    </div>
+
+    <div class="glass card p-6">
+      <h3 class="font-display text-lg font-semibold">Campos de uma premiação</h3>
+      <p class="mb-4 text-sm text-slate-400">O mesmo objeto aparece em <code class="code-inline">/alunos</code>, <code class="code-inline">/medalhistas</code>,
+        <code class="code-inline">/premiacoes</code> e nas colunas da exportação.</p>
+      <table class="w-full text-sm">
+        <tbody class="divide-y divide-white/5">
+          <template x-for="c in CAMPOS_PREMIACAO" :key="c[0]">
+            <tr><td class="py-1.5 pr-4 align-top"><code class="font-mono text-gold-300" x-text="c[0]"></code></td><td class="text-slate-300" x-text="c[1]"></td></tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="glass card p-6">
+      <h3 class="font-display text-lg font-semibold">Respostas e erros</h3>
+      <table class="mt-3 w-full text-sm">
+        <tbody class="divide-y divide-white/5">
+          <tr><td class="py-1.5 pr-4"><code class="font-mono text-emerald-300">200</code></td><td class="text-slate-300">Deu certo. Buscas sem resultado também são 200, com <code class="code-inline">total: 0</code>.</td></tr>
+          <tr><td class="py-1.5 pr-4"><code class="font-mono text-amber-300">400</code></td><td class="text-slate-300">Parâmetro inválido (UF, ano, olimpíada…). A mensagem diz o que corrigir.</td></tr>
+          <tr><td class="py-1.5 pr-4"><code class="font-mono text-amber-300">404</code></td><td class="text-slate-300">Aluno, escola ou rota não existe.</td></tr>
+          <tr><td class="py-1.5 pr-4"><code class="font-mono text-rose-300">429</code></td><td class="text-slate-300">Limite atingido. Espere os segundos de <code class="code-inline">Retry-After</code>.</td></tr>
+          <tr><td class="py-1.5 pr-4"><code class="font-mono text-rose-300">503</code></td><td class="text-slate-300">Servidor ocupado. Tente de novo em alguns segundos.</td></tr>
+        </tbody>
+      </table>
+      <p class="mt-3 text-xs text-slate-500">Todo erro vem como <code class="code-inline">{"erro": "mensagem"}</code>.</p>
+    </div>
+
+    <div class="glass card p-6">
+      <h3 class="font-display text-lg font-semibold">Cabeçalhos úteis</h3>
+      <table class="mt-3 w-full text-sm">
+        <tbody class="divide-y divide-white/5">
+          <tr><td class="py-1.5 pr-4 align-top"><code class="font-mono text-gold-300">X-RateLimit-Limit</code></td><td class="text-slate-300">Sua cota (ex.: 60/min, 2000/dia)</td></tr>
+          <tr><td class="py-1.5 pr-4 align-top"><code class="font-mono text-gold-300">X-RateLimit-Remaining</code></td><td class="text-slate-300">Consultas que ainda restam agora</td></tr>
+          <tr><td class="py-1.5 pr-4 align-top"><code class="font-mono text-gold-300">Retry-After</code></td><td class="text-slate-300">Segundos até poder tentar de novo (no 429 e no 503)</td></tr>
+          <tr><td class="py-1.5 pr-4 align-top"><code class="font-mono text-gold-300">X-Total-Rows</code></td><td class="text-slate-300">Linhas do arquivo exportado</td></tr>
+        </tbody>
+      </table>
+      <h4 class="mt-5 text-sm font-semibold text-white">Boas práticas</h4>
+      <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-400">
+        <li>Para muitos dados, use <code class="code-inline">/exportar</code> em vez de milhares de consultas.</li>
+        <li>Guarde em cache o que já baixou: a base muda poucas vezes por ano.</li>
+        <li>Ao receber 429, espere o <code class="code-inline">Retry-After</code> antes de repetir.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
 </main>
 
 <footer class="border-t hairline py-8 text-center text-xs text-slate-500">
-  Dados públicos da OBMEP e da OBM · cada premiação aponta para a fonte oficial
+  Dados públicos das olimpíadas científicas · cada premiação aponta para a fonte oficial ·
+  <a href="#/api" class="link">API &amp; dados abertos</a>
 </footer>
 
 <!-- aviso flutuante -->
