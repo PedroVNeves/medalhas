@@ -1,7 +1,8 @@
 # medalhas
 
 Base de pesquisa e rankings dos medalhistas brasileiros em olimpíadas: **OBMEP**, **OBM**, **OBI**, **IMO**,
-**Ibero**, **Cone Sul** e mais 12 competições internacionais (1979–2026), com busca por pessoa ou escola.
+**Ibero**, **Cone Sul** e mais 12 competições internacionais (1979–2026), com busca por pessoa ou escola,
+[API pública](#api-pública-v1) e exportação dos dados em CSV e JSON.
 
 ## Como usar
 
@@ -15,7 +16,7 @@ python server.py     # abre a busca em http://localhost:8000
 - `python build_db.py --refresh` apaga o cache e baixa tudo de novo (use quando sair um ano novo).
 - `python server.py --port 9000 --no-browser` para mudar a porta / não abrir o navegador.
 - `python server.py --host 0.0.0.0` para aceitar conexões de outras máquinas (API pública); veja os
-  [limites de consulta](#limite-de-consultas).
+  [proteções](#proteção-contra-excesso-de-requisições).
 
 ## Fontes
 
@@ -54,6 +55,8 @@ canvas-confetti via CDN):
   por pontos, quadro de medalhas (ouro → prata → bronze) ou total de medalhas.
 - **Mapa do Brasil** por pontos, ouros, premiações ou alunos.
 - **Perfis** de aluno e escola com posição nacional/estadual, nível, conquistas, trajetória e gráfico por ano.
+- **Exportar** na busca, nos rankings e nos perfis: baixa o que está na tela em CSV, CSV para Excel ou JSON.
+- **API & Dados**: documentação da API com exemplos, teste ao vivo e download da base inteira.
 
 ### Métodos de pontuação
 
@@ -98,84 +101,9 @@ como *Hat-trick Dourado*, *Dupla Coroa*, *Imparável* e *Grand Slam*.
 Os filtros de olimpíada, área e nível da busca e dos rankings são montados a partir dos dados, então
 não é preciso mexer no front-end. O filtro de área só aparece quando houver mais de uma área.
 
-### API pública (v1)
+### API interna (usada pelas páginas do site)
 
-Rotas estáveis para outros sistemas consultarem um aluno ou uma escola pelo nome e confirmarem as
-premiações. Respondem JSON (UTF-8), com CORS liberado (`Access-Control-Allow-Origin: *`), então podem ser
-chamadas de outro site, de um script ou de uma planilha. `GET /api/v1` devolve esta documentação em JSON.
-
-```bash
-curl "http://localhost:8000/api/v1/alunos?nome=erick+akira+koga"
-curl "http://localhost:8000/api/v1/alunos?nome=leandro+mello&escola=ifal"
-curl "http://localhost:8000/api/v1/escolas?nome=instituto+federal+de+alagoas&medalhistas=1"
-```
-
-| Rota | Parâmetros |
-|---|---|
-| `/api/v1/alunos` | **`nome`** (obrigatório; palavras em qualquer ordem, acentos ignorados), `escola` (só premiações por essa escola), filtros, `metodo`, `premiacoes=0` (só o resumo), `limite` (1–100, padrão 20), `offset` |
-| `/api/v1/escolas` | **`nome`** (obrigatório; aceita siglas como IFAL, ETEC, EEEFM), filtros, `metodo`, `medalhistas=1` (inclui os alunos premiados; no máximo 10 escolas por página), `limite`, `offset` |
-
-Filtros: `uf`, `municipio`, `competicao`, `area`, `medalha`, `nivel`, `ano`, `ano_de`, `ano_ate`, `rede`
-(`competicao` e `nivel` aceitam vários valores separados por vírgula). `metodo` (`impa`, `impa3`, `site`)
-só muda a ordem dos resultados; os pontos dos três métodos vêm sempre.
-
-Resposta de `/api/v1/alunos` (resumida):
-
-```json
-{
-  "total": 1, "offset": 0, "limite": 20, "metodo": "impa",
-  "alunos": [{
-    "id": "ERICK AKIRA KOGA|SP", "nome": "Erick Akira Koga", "uf": "SP",
-    "escolas": [{"id": "COLEGIO ETAPA|SAO PAULO|SP", "nome": "Colégio Etapa", "perfil": "http://…/#/escola/…"}],
-    "municipios": ["FORTALEZA", "Guarulhos", "São Paulo"],
-    "olimpiadas": ["APMO", "IMO", "OBM", "OBMEP", "OIM", "…"],
-    "anos": {"de": 2019, "ate": 2026},
-    "medalhas": {"ouro": 8, "prata": 9, "bronze": 5, "mencao_honrosa": 3, "total": 25},
-    "pontos": {"impa": 118, "impa3": 44, "site": 3450},
-    "posicao": {"impa": {"nacional": 63, "estadual": 17}, "impa3": {…}, "site": {…}},
-    "premiacoes_encontradas": 25,
-    "perfil": "http://…/#/aluno/ERICK%20AKIRA%20KOGA%7CSP",
-    "premiacoes": [{"olimpiada": "APMO", "olimpiada_nome": "Asian Pacific Mathematics Olympiad",
-                    "ano": 2026, "nivel": null, "medalha": "Prata", "premio": "Prata",
-                    "nome_na_lista": "Erick Akira Koga", "escola": null, "municipio": "Guarulhos",
-                    "uf": "SP", "fonte": "https://www.obm.org.br/resultados-apmo/"}]
-  }]
-}
-```
-
-- `medalhas`, `pontos` e `posicao` são da carreira inteira; `premiacoes` traz só as que passam nos
-  filtros. `posicao` de um método é `null` quando o aluno não pontua nele.
-- Quem tem exatamente o nome pesquisado vem primeiro, depois a ordem é por pontos.
-- `fonte` é a página oficial onde a premiação foi publicada, para conferência.
-- Erros voltam com status 400 e `{"erro": "…"}` (ex.: sem `nome`).
-
-Por padrão o servidor só aceita conexões da própria máquina. Para outras máquinas da rede chamarem a
-API, rode `python server.py --host 0.0.0.0` (e libere a porta no firewall).
-
-#### Limite de consultas
-
-Para o servidor não ser sobrecarregado, cada IP tem uma cota:
-
-| | Padrão | Opção para mudar |
-|---|---|---|
-| API pública (`/api/v1/*`) | 60 consultas/min e 2000/dia | `--rate-limit 30 --daily-limit 500` |
-| API do site (`/api/*`) | 600 consultas/min | `--site-rate-limit 300` |
-| Consultas à base ao mesmo tempo (todos os IPs) | 8 | `--max-concurrent 4` |
-
-- O limite por minuto aceita rajadas curtas e vai recarregando aos poucos (1 consulta por segundo no
-  padrão). Use `0` para tirar um limite.
-- Quem passa do limite recebe **HTTP 429** com o cabeçalho `Retry-After` (segundos até poder tentar de
-  novo). O teto diário volta a liberar à meia-noite.
-- Toda resposta traz `X-RateLimit-Limit` e `X-RateLimit-Remaining` (consultas que ainda restam).
-- Se o servidor está no limite de consultas simultâneas, a requisição espera até 10 s por uma vaga e
-  depois recebe **HTTP 503** com `Retry-After: 5`.
-- Atrás de um proxy reverso (nginx, Caddy, Cloudflare), todos os acessos chegariam com o IP do proxy:
-  rode com `--trust-proxy` para usar o IP real do cabeçalho `X-Forwarded-For`. Sem proxy, não use essa
-  opção, porque qualquer um poderia forjar o cabeçalho e fugir do limite.
-
-### API interna (usada pelo site)
-
-Pode mudar sem aviso; para integrações use a v1.
+Pode mudar sem aviso; para integrações use a [API pública](#api-pública-v1).
 
 | Rota | O que retorna |
 |---|---|
@@ -190,6 +118,116 @@ nível 3, ou `nivel=1,2,3,Universitário`).
 
 Rankings sem filtro e perfis leem as tabelas-resumo `alunos` e `escolas`, pré-calculadas pelo
 `build_db.py`; rankings filtrados são agregados na hora e ficam em cache na memória.
+
+## API pública (v1)
+
+Acesso livre, sem cadastro e sem chave. Respostas em JSON (UTF-8) e CORS liberado, então a API pode ser
+chamada de outro site, de um script ou de uma planilha. A documentação completa, com exemplos em cURL,
+Python e JavaScript e um botão para testar cada rota, está na página **API & Dados** do site (`#/api`).
+A especificação [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) fica em `/api/v1/openapi.json`, para
+importar no Postman, Insomnia ou Swagger Editor.
+
+| Rota | Para quê |
+|---|---|
+| `GET /api/v1/alunos?nome=` | buscar alunos pelo nome (com as premiações de cada um) |
+| `GET /api/v1/alunos/{id}` | um aluno específico e todas as premiações dele |
+| `GET /api/v1/escolas?nome=` | buscar escolas pelo nome ou sigla (IFAL, ETEC…) |
+| `GET /api/v1/escolas/{id}` | resumo de uma escola |
+| `GET /api/v1/escolas/{id}/medalhistas` | todos os alunos premiados de uma escola (até 500 por página) |
+| `GET /api/v1/premiacoes` | todas as premiações, filtradas ou não, paginadas (até 1000 por página) |
+| `GET /api/v1/ranking/{alunos\|escolas\|estados}` | rankings com os mesmos critérios do site |
+| `GET /api/v1/exportar` | baixar premiações ou rankings em CSV ou JSON, inteiros ou filtrados |
+| `GET /api/v1/olimpiadas` | olimpíadas, níveis e valores aceitos nos filtros |
+| `GET /api/v1` | índice com rotas, exemplos e limites atuais |
+
+Ids vão no caminho codificados para URL (`encodeURIComponent` no JavaScript, `quote(id, safe="")` no
+Python): o aluno `ERICK AKIRA KOGA|SP` vira `/api/v1/alunos/ERICK%20AKIRA%20KOGA%7CSP`.
+
+**Filtros comuns** (valem em todas as consultas e na exportação): `uf`, `municipio`, `competicao`,
+`area`, `medalha`, `nivel`, `ano`, `ano_de`, `ano_ate`, `rede`. `competicao` e `nivel` aceitam vários
+valores separados por vírgula. Valores inválidos voltam com erro 400 explicando o que corrigir.
+`metodo` (`impa`, `impa3`, `site`) muda a ordem dos resultados; os pontos dos três métodos vêm sempre.
+
+### Medalhas de um aluno específico
+
+```bash
+# 1. buscar pelo nome: devolve o id e já traz as premiações
+curl "http://localhost:8000/api/v1/alunos?nome=erick+akira+koga"
+
+# 2. o mesmo aluno pelo id (estável: homônimos de outros estados têm outro id)
+curl "http://localhost:8000/api/v1/alunos/ERICK%20AKIRA%20KOGA%7CSP"
+
+# confirmar uma medalha: total > 0 significa que ela existe
+curl "http://localhost:8000/api/v1/alunos?nome=erick+akira+koga&competicao=OBM&ano=2023&premiacoes=0"
+```
+
+Cada aluno traz `medalhas`, `pontos` e `posicao` (nacional e estadual) nos três métodos, e cada premiação
+traz `olimpiada`, `ano`, `nivel`, `medalha`, `escola`, `municipio`, `uf`, `pontos` e `fonte` (a página
+oficial onde ela foi publicada).
+
+### Todos os medalhistas de uma escola
+
+```python
+import requests
+from urllib.parse import quote
+
+BASE = "http://localhost:8000/api/v1"
+escola = requests.get(f"{BASE}/escolas", params={"nome": "ifal maceio"}).json()["escolas"][0]
+
+medalhistas, offset = [], 0
+while True:
+    pagina = requests.get(f"{BASE}/escolas/{quote(escola['id'], safe='')}/medalhistas",
+                          params={"limite": 500, "offset": offset}).json()
+    medalhistas += pagina["medalhistas"]
+    offset += pagina["limite"]
+    if offset >= pagina["total"]:
+        break
+```
+
+### Todos os dados
+
+```bash
+curl --compressed -OJ "http://localhost:8000/api/v1/exportar?formato=csv"            # base inteira (CSV)
+curl --compressed -OJ "http://localhost:8000/api/v1/exportar?formato=csv&separador=;" # para o Excel em português
+curl --compressed -OJ "http://localhost:8000/api/v1/exportar?formato=json"           # base inteira (JSON)
+curl --compressed -OJ "http://localhost:8000/api/v1/exportar?competicao=OBM&uf=SP"   # só um recorte
+curl --compressed -OJ "http://localhost:8000/api/v1/exportar?conjunto=escolas&metodo=impa3"  # ranking completo
+```
+
+- O CSV é UTF-8 com BOM (o Excel reconhece os acentos); `separador=;` abre direto no Excel em português.
+- A base inteira tem ~45 MB em CSV, mas trafega compactada (~7 MB) quando o cliente aceita gzip
+  (`curl --compressed`, navegadores, `requests`). O arquivo é gerado uma vez por versão da base e
+  reaproveitado (`data/exportar/`).
+- Exportações filtradas são geradas num arquivo temporário e a conexão com a base é liberada antes do
+  envio, então um cliente lento não segura o servidor.
+- No site, a busca, os rankings e os perfis de aluno e de escola têm um botão **Exportar** que baixa o
+  que está na tela (CSV, CSV para Excel ou JSON), e a página **API & Dados** baixa a base inteira.
+
+### Proteção contra excesso de requisições
+
+O servidor aceita conexões só da própria máquina por padrão. Para abrir a API para a rede, rode
+`python server.py --host 0.0.0.0` e libere a porta no firewall. A proteção (`limites.py`) funciona por IP:
+
+| Camada | Padrão | Ao exceder | Opção |
+|---|---|---|---|
+| Consultas à API pública | 60/min e 2000/dia | 429 + `Retry-After` | `--rate-limit`, `--daily-limit` |
+| Exportações (downloads) | 20/hora e 100/dia | 429 + `Retry-After` | `--export-limit` |
+| API usada pelo site | 600/min | 429 + `Retry-After` | `--site-rate-limit` |
+| Insistir depois do limite | 30 recusas em 60 s | IP bloqueado por 10 min em todo o site | — |
+| Conexões abertas por IP | 12 (64 no total) | conexão recusada | `--max-connections-per-ip` |
+| Consultas à base ao mesmo tempo | 8 | espera até 10 s, depois 503 | `--max-concurrent` |
+| Conexão parada (sem enviar nada) | 20 s | conexão encerrada | — |
+
+- O limite por minuto aceita rajadas curtas e recarrega aos poucos (1 consulta por segundo no padrão).
+  `0` remove um limite.
+- Toda resposta traz `X-RateLimit-Limit` e `X-RateLimit-Remaining`; a recusa traz `Retry-After` (segundos)
+  e `{"erro": "...", "tente_em_segundos": N}`. O teto diário volta à meia-noite.
+- Textos de busca têm no máximo 100 caracteres e 8 palavras, e as páginas têm tamanho máximo, para
+  nenhuma consulta isolada pesar demais.
+- Atrás de um proxy reverso (nginx, Caddy, Cloudflare), rode com `--trust-proxy` para usar o IP real de
+  `X-Forwarded-For`. Sem proxy, não use essa opção: qualquer um poderia forjar o cabeçalho e fugir do limite.
+- Os contadores ficam na memória e zeram quando o servidor reinicia. Contra ataques grandes de verdade
+  (milhares de IPs), a proteção precisa vir antes do servidor, por exemplo com o Cloudflare na frente.
 
 ## Como a busca de escolas funciona
 
@@ -210,6 +248,9 @@ scraper/obm.py      coleta OBM
 olimpiadas.py       cadastro das olimpíadas (área, pontos, regra IMPA Tech, coletor)
 build_db.py         gera o SQLite (data/medalhas.db) com tabelas-resumo de alunos e escolas
 gamificacao.py      pontos, níveis e conquistas
-server.py           servidor local, API pública (v1) e API do site
+consultas.py        consultas à base: busca, rankings, perfis, visão geral
+api_v1.py           API pública v1, exportação CSV/JSON e especificação OpenAPI
+limites.py          proteção por IP: cotas, bloqueio por abuso, teto de conexões
+server.py           servidor HTTP: páginas, API do site e API pública
 web/                interface (index.html, app.js, styles.css)
 ```
