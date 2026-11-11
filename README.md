@@ -38,7 +38,7 @@ Observações:
   ("Enzo Holanda") são completados quando há um único medalhista compatível.
 - **Mesma pessoa:** mesmo nome (sem acento) e mesma UF. Como alunos de ponta mudam de estado, o mesmo
   nome em UFs diferentes é unido quando o nome é raro, as premiações cabem em 12 anos e não há a mesma
-  olimpíada no mesmo ano em duas UFs (`atribuir_alunos` em `build_db.py`).
+  olimpíada no mesmo ano em duas UFs (`medalhas/dominio/identidade.py`).
 - Cada resultado tem link para a página oficial (`fonte ↗`) para conferência.
 
 Ainda não coletadas: **OBQ** (resultados só em PDFs com formato diferente a cada ano), **OBFEP**
@@ -72,7 +72,8 @@ vale para rankings, mapa, perfis e níveis:
 No método **IMPA N3** o filtro de nível fica travado no Nível 3 (o servidor força `nivel=3` em busca e
 rankings); tentar mudar mostra um aviso com a opção de trocar de método.
 
-Escala da nossa versão (`ESCALA_SITE` em `olimpiadas.py`, com as regras verificadas ao importar):
+Escala da nossa versão (`ESCALA_SITE` em `medalhas/dominio/pontuacao.py`, com as regras verificadas ao
+importar):
 ouro OBM = 2× ouro OBMEP, bronze OBM > ouro OBMEP, bronze Ibero > prata OBM, bronze IMO > prata Ibero,
 e olimpíadas de entrada valem menos que um bronze da OBMEP.
 
@@ -84,18 +85,19 @@ e olimpíadas de entrada valem menos que um bronze da OBMEP.
 | Ibero | 320 | 240 | 170 | 60 |
 | IMO | 600 | 400 | 280 | 100 |
 
-Os três totais e as posições nacional e estadual em cada método são pré-calculados no `build_db.py`.
+Os três totais e as posições nacional e estadual em cada método são pré-calculados ao gerar a base.
 No ranking por pontos, quem tem zero no método fica de fora. Os níveis (Estreante → Promessa → Talento →
-Destaque → Elite → Mestre → Lenda) têm limites próprios por método (`gamificacao.py`), e há conquistas
+Destaque → Elite → Mestre → Lenda) têm limites próprios por método (`medalhas/dominio/gamificacao.py`), e há conquistas
 como *Hat-trick Dourado*, *Dupla Coroa*, *Imparável* e *Grand Slam*.
 
 ### Adicionar uma olimpíada
 
-1. Escreva o coletor em `scraper/<sigla>.py` com uma função `scrape()` que devolve registros no mesmo
-   formato dos existentes (`competicao, ano, nivel, nome, escola, municipio, uf, premio, medalha, fonte…`).
-2. Cadastre a olimpíada em `olimpiadas.py`: nome, área (Matemática, Astronomia, História…), tabela de
-   pontos do IMPA (`pontos`), tabela da nossa versão (`pontos_site`) e quais níveis contam para o
-   IMPA Tech (`impa_niveis`, vazio se nenhum).
+1. Cadastre a olimpíada em `CATALOGO` (`medalhas/dominio/olimpiadas.py`): nome, área (Matemática,
+   Astronomia, História…), degrau na escala da nossa versão (`escala`), tabela do IMPA (`tabela_impa`) e
+   quais níveis contam para o IMPA Tech (`niveis_impa`, vazio se nenhum).
+2. Escreva o coletor em `medalhas/adaptadores/coletores/<sigla>.py`, com uma função `coletar(log)` que
+   devolve `Premiacao` (`medalhas/dominio/premiacao.py`), e registre-o em `coletores/__init__.py`.
+   O teste `test_toda_olimpiada_do_catalogo_tem_coletor` acusa se faltar.
 3. Rode `python build_db.py`.
 
 Os filtros de olimpíada, área e nível da busca e dos rankings são montados a partir dos dados, então
@@ -116,8 +118,8 @@ Todas as rotas aceitam `metodo=impa|impa3|site`; o campo `xp` das respostas é s
 método pedido. `competicao`, `area` e `nivel` aceitam vários valores separados por vírgula (ex.: `nivel=3` para só o
 nível 3, ou `nivel=1,2,3,Universitário`).
 
-Rankings sem filtro e perfis leem as tabelas-resumo `alunos` e `escolas`, pré-calculadas pelo
-`build_db.py`; rankings filtrados são agregados na hora e ficam em cache na memória.
+Rankings sem filtro e perfis leem as tabelas-resumo `alunos` e `escolas`, pré-calculadas ao gerar a
+base; rankings filtrados são agregados na hora e ficam em cache na memória.
 
 ## API pública (v1)
 
@@ -206,7 +208,8 @@ curl --compressed -OJ "http://localhost:8000/api/v1/exportar?conjunto=escolas&me
 ### Proteção contra excesso de requisições
 
 O servidor aceita conexões só da própria máquina por padrão. Para abrir a API para a rede, rode
-`python server.py --host 0.0.0.0` e libere a porta no firewall. A proteção (`limites.py`) funciona por IP:
+`python server.py --host 0.0.0.0` e libere a porta no firewall. A proteção (`medalhas/adaptadores/http/limites.py`) funciona
+por IP:
 
 | Camada | Padrão | Ao exceder | Opção |
 |---|---|---|---|
@@ -232,25 +235,82 @@ O servidor aceita conexões só da própria máquina por padrão. Para abrir a A
 ## Como a busca de escolas funciona
 
 - Acentos, pontuação e ordem das palavras são ignorados ("MILITAR DE FORTALEZA, COLEGIO" = "Colégio Militar de Fortaleza").
-- Abreviações e siglas são expandidas nos dados **e** no texto digitado (`scraper/escolas.py`):
+- Abreviações e siglas são expandidas nos dados **e** no texto digitado
+(`medalhas/dominio/escolas.py`):
   `EE` → escola estadual, `EMEF`, `EEEFM`, `ETEC`/`ETE` → escola técnica estadual, `PROFA` → professor,
   `IFAL` → instituto federal de Alagoas (todas as `IF<UF>`, `IFSUL`, `IFBAIANO`, `CEFET`…).
   Assim, "instituto federal de alagoas" traz também as escolas cadastradas como "IFAL".
 - Grafias diferentes da mesma escola (mesmo município) são agrupadas em um único cartão.
 - Para incluir uma sigla nova, adicione em `SIGLAS` ou `ABREVIACOES` e rode `python build_db.py`.
 
-## Estrutura
+## Arquitetura
+
+O código segue a **arquitetura hexagonal** (portas e adaptadores): as regras de negócio ficam no centro,
+sem saber de banco, rede ou HTTP, e as dependências apontam sempre para dentro.
 
 ```
-scraper/common.py   download com cache + normalização de texto
-scraper/obmep.py    coleta OBMEP
-scraper/obm.py      coleta OBM
-olimpiadas.py       cadastro das olimpíadas (área, pontos, regra IMPA Tech, coletor)
-build_db.py         gera o SQLite (data/medalhas.db) com tabelas-resumo de alunos e escolas
-gamificacao.py      pontos, níveis e conquistas
-consultas.py        consultas à base: busca, rankings, perfis, visão geral
-api_v1.py           API pública v1, exportação CSV/JSON e especificação OpenAPI
-limites.py          proteção por IP: cotas, bloqueio por abuso, teto de conexões
-server.py           servidor HTTP: páginas, API do site e API pública
-web/                interface (index.html, app.js, styles.css)
+adaptadores (coletores, SQLite, HTTP)  ->  aplicacao (casos de uso, portas)  ->  dominio (regras)
 ```
+
+```
+build_db.py                    ponto de montagem: coletores + SQLite -> gerar_base
+server.py                      ponto de montagem: SQLite (leitura) -> servidor HTTP
+medalhas/
+  config.py                    caminhos no disco (único módulo que os conhece)
+  dominio/                     regras puras, sem I/O
+    premiacao.py               a premiação (TypedDict), medalhas e UFs
+    olimpiadas.py              catálogo das olimpíadas
+    pontuacao.py               tabela do IMPA Tech, escala da nossa versão e métodos
+    escolas.py                 siglas, abreviações e chave que agrupa grafias da mesma escola
+    identidade.py              quais premiações são da mesma pessoa
+    ranking.py                 ordenação e posição (empates dividem a posição)
+    gamificacao.py             tiers e conquistas
+    texto.py                   normalização de nomes
+  aplicacao/
+    portas.py                  interfaces: Coletor, RepositorioPremiacoes, FonteDeLeitura, SessaoDeLeitura
+    gerar_base.py              caso de uso: coletar -> reconhecer pessoas -> indexar -> gravar
+  adaptadores/
+    coletores/                 leitura das páginas oficiais (download com cache em cache/)
+    sqlite/                    esquema, gravação, tabelas-resumo e consultas (site e API)
+    http/                      servidor, site estático, API do site, limites por IP
+      api_v1/                  API pública: parâmetros, rotas, apresentação JSON, exportação, OpenAPI
+web/
+  index.html, styles.css       página única (Tailwind, Alpine.js, ECharts via CDN)
+  js/util.js                   chamada à API, formatação, ícones
+  js/graficos.js               gráficos, mapa, confete
+  js/documentacao-api.js       conteúdo da página API & Dados
+  js/app.js                    componente Alpine: rotas, estado e ações
+tests/                         testes (unittest, sem dependências)
+```
+
+Decisões:
+- **Leitura sem caso de uso intermediário.** As consultas do site e da API são relatórios (agregações,
+  rankings, paginação) e passam direto pela porta `SessaoDeLeitura`. Uma camada a mais só repetiria as
+  assinaturas. As regras que elas usam (pontuação, ranking, tiers) continuam no domínio.
+- **Uma conexão por requisição.** O servidor abre uma `SessaoDeLeitura` por chamada à API e a fecha antes
+  de enviar arquivos de exportação, para um cliente lento não ocupar uma vaga de consulta.
+- **O HTTP não conhece o SQLite.** O `Servidor` recebe a fonte de leitura pronta (`server.py` faz a
+  montagem); trocar o banco é escrever outro adaptador com a mesma porta.
+- **Contrato público isolado.** O formato das respostas da API v1 fica só em `api_v1/apresentacao.py`.
+
+## Testes
+
+```bash
+python -m unittest discover -s tests -t .
+```
+
+- `test_arquitetura.py`: confere a direção das dependências (o domínio não importa adaptadores nem faz I/O;
+  o HTTP não importa o SQLite; e assim por diante).
+- `test_dominio.py`: pontuação, identidade de alunos e escolas, ranking e gamificação.
+- `test_adaptadores.py`: leitura das páginas oficiais, limites por IP e validação dos parâmetros da API.
+- `test_integracao.py`: ponta a ponta com uma base pequena: coletor falso, SQLite num diretório temporário
+  e servidor HTTP numa porta livre. Não usa a base real nem a internet.
+
+## Padrão de código
+
+- Python 3.10+, só biblioteca padrão. Nomes e comentários em português (o domínio é brasileiro); mensagens
+  de commit em inglês ([Conventional Commits](https://www.conventionalcommits.org)).
+- Linhas de até 120 caracteres; *type hints* nas funções públicas; docstring em todo módulo dizendo a
+  responsabilidade dele.
+- Comentários explicam o **porquê** (uma regra do edital, uma armadilha do site oficial), não o quê.
+- SQL sempre com parâmetros (`?`); nomes de coluna interpolados vêm só de listas fixas do código.
