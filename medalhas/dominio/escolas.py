@@ -1,15 +1,13 @@
-"""Canonicalização de nomes de escola: abreviações, siglas (IFAL, ETEC, EE…) e chave de agrupamento.
+"""Identidade de escolas: abreviações, siglas (IFAL, ETEC, EE…) e a chave que agrupa grafias diferentes.
 
-Tudo aqui opera sobre texto já normalizado (sem acento, maiúsculo — ver common.normalize),
-e é aplicado tanto aos dados quanto ao texto digitado na busca.
+Tudo aqui opera sobre texto normalizado (sem acento, maiúsculo; ver texto.normalizar) e vale tanto
+para os dados quanto para o que o usuário digita na busca.
 """
-import re
+from .texto import normalizar
 
-from .common import normalize
-
-STOPWORDS = {"DE", "DA", "DO", "DAS", "DOS", "E", "D"}
-# Palavras ignoradas na chave de agrupamento de institutos/centros federais
-FEDERAL_FILLER = {"EDUCACAO", "CIENCIA", "TECNOLOGIA", "CAMPUS", "UNIDADE", "AVANCADO"}
+PARTICULAS = {"DE", "DA", "DO", "DAS", "DOS", "E", "D"}
+# Palavras ignoradas na chave de institutos e centros federais (cada edição escreve de um jeito)
+_ENCHIMENTO_FEDERAL = {"EDUCACAO", "CIENCIA", "TECNOLOGIA", "CAMPUS", "UNIDADE", "AVANCADO"}
 
 UF_NOMES = {
     "AC": "ACRE", "AL": "ALAGOAS", "AM": "AMAZONAS", "AP": "AMAPA", "BA": "BAHIA", "CE": "CEARA",
@@ -37,7 +35,7 @@ ABREVIACOES = {
     "PROFISS": "PROFISSIONAL", "TECN": "TECNICA", "INTEGR": "INTEGRAL",
 }
 
-# Siglas de tipo de escola -> expansão
+# Sigla de tipo de escola -> expansão
 SIGLAS = {
     "EE": "ESCOLA ESTADUAL",
     "EM": "ESCOLA MUNICIPAL",
@@ -86,66 +84,69 @@ for _uf, _nome in UF_NOMES.items():
     SIGLAS.setdefault(f"IF{_uf}", f"INSTITUTO FEDERAL {_nome}")
     SIGLAS.setdefault(f"CEFET{_uf}", f"CENTRO FEDERAL EDUCACAO TECNOLOGICA {_nome}")
 
+Expansao = list[tuple[str, list[str]]]   # [(palavra digitada, palavras que ela representa)]
 
-def _collapse_letters(tokens: list[str]) -> list[str]:
-    """'E E E F ABEL' -> 'EEEF ABEL' (siglas escritas com espaços)."""
-    out, run = [], []
-    for t in tokens + [""]:
-        if len(t) == 1 and t.isalpha():
-            run.append(t)
+
+def _juntar_letras_soltas(palavras: list[str]) -> list[str]:
+    """Siglas escritas com espaços viram uma palavra só: 'E E E F ABEL' -> 'EEEF ABEL'."""
+    saida, sequencia = [], []
+    for p in palavras + [""]:
+        if len(p) == 1 and p.isalpha():
+            sequencia.append(p)
             continue
-        if len(run) >= 2:
-            out.append("".join(run))
+        if len(sequencia) >= 2:
+            saida.append("".join(sequencia))
         else:
-            out.extend(run)
-        run = []
-        if t:
-            out.append(t)
-    return out
+            saida.extend(sequencia)
+        sequencia = []
+        if p:
+            saida.append(p)
+    return saida
 
 
-def expand_token(tok: str) -> list[str]:
-    """Expande uma única palavra (abreviação ou sigla). Retorna [tok] se não houver expansão."""
-    if tok in SIGLAS:
-        return SIGLAS[tok].split()
-    if tok in ABREVIACOES:
-        return ABREVIACOES[tok].split()
-    return [tok]
+def expandir_palavra(palavra: str) -> list[str]:
+    """Expande uma sigla ou abreviação. Sem expansão conhecida, devolve [palavra]."""
+    if palavra in SIGLAS:
+        return SIGLAS[palavra].split()
+    if palavra in ABREVIACOES:
+        return ABREVIACOES[palavra].split()
+    return [palavra]
 
 
-def canon_tokens(normalized: str) -> list[str]:
-    """Tokens canônicos (expandidos, sem stopwords) de um texto já normalizado."""
-    tokens = [t for t in _collapse_letters(normalized.split()) if t not in STOPWORDS]
-    return [w for _, exp in _expand_all(tokens) for w in exp if w not in STOPWORDS]
+def _expandir(palavras: list[str]) -> Expansao:
+    pares = [(p, expandir_palavra(p)) for p in palavras]
+    # em nomes de instituto/centro federal, a UF ("DO RN", "DE PE") vira o nome do estado
+    if any("FEDERAL" in exp for _, exp in pares):
+        pares = [(p, UF_NOMES[p].split() if p in UF_NOMES else exp) for p, exp in pares]
+    return pares
 
 
-def _expand_all(tokens: list[str]) -> list[tuple[str, list[str]]]:
-    pairs = [(t, expand_token(t)) for t in tokens]
-    # Em nomes de instituto/centro federal, siglas de UF ('DO RN', 'DE PE') viram o nome do estado
-    if any("FEDERAL" in exp for _, exp in pairs):
-        pairs = [(t, UF_NOMES[t].split() if t in UF_NOMES else exp) for t, exp in pairs]
-    return pairs
+def palavras_canonicas(normalizado: str) -> list[str]:
+    """Palavras expandidas e sem partículas de um texto já normalizado."""
+    palavras = [p for p in _juntar_letras_soltas(normalizado.split()) if p not in PARTICULAS]
+    return [w for _, exp in _expandir(palavras) for w in exp if w not in PARTICULAS]
 
 
-def school_fields(escola: str | None, municipio: str | None, uf: str | None) -> tuple[str, str]:
-    """Retorna (escola_termos, escola_chave).
+def indexar_escola(escola: str | None, municipio: str | None, uf: str | None) -> tuple[str, str]:
+    """(termos de busca, chave da escola).
 
-    escola_termos: texto pesquisável com palavras originais + expandidas.
-    escola_chave:  identifica a mesma escola mesmo com acento/ordem/abreviação diferentes.
+    termos: palavras originais e expandidas, entre espaços, para busca por início de palavra.
+    chave:  identifica a mesma escola apesar de acentos, ordem das palavras e abreviações, ex.:
+            'IFAL CAMPUS X' == 'INSTITUTO FEDERAL DE EDUCACAO CIENCIA E TECNOLOGIA DE ALAGOAS CAMPUS X'.
     """
     if not escola:
         return "", ""
-    norm = normalize(escola)
-    canon = canon_tokens(norm)
-    termos = " " + " ".join(dict.fromkeys(_collapse_letters(norm.split()) + canon)) + " "
-    key_tokens = set(canon)
-    if "FEDERAL" in key_tokens:  # 'IFAL CAMPUS X' == 'INSTITUTO FEDERAL DE EDUCACAO CIENCIA E TECNOLOGIA DE ALAGOAS CAMPUS X'
-        key_tokens -= FEDERAL_FILLER
-    chave = " ".join(sorted(key_tokens)) + "|" + normalize(municipio or "") + "|" + (uf or "")
+    norm = normalizar(escola)
+    canon = palavras_canonicas(norm)
+    termos = " " + " ".join(dict.fromkeys(_juntar_letras_soltas(norm.split()) + canon)) + " "
+    palavras_chave = set(canon)
+    if "FEDERAL" in palavras_chave:
+        palavras_chave -= _ENCHIMENTO_FEDERAL
+    chave = " ".join(sorted(palavras_chave)) + "|" + normalizar(municipio) + "|" + (uf or "")
     return termos, chave
 
 
-def query_tokens(q: str) -> list[tuple[str, list[str]]]:
-    """Para cada palavra digitada: (palavra, expansão). Stopwords são descartadas."""
-    tokens = [t for t in _collapse_letters(normalize(q).split()) if t not in STOPWORDS]
-    return _expand_all(tokens)
+def palavras_da_busca(texto: str) -> Expansao:
+    """O que o usuário digitou, palavra a palavra, com a expansão de cada uma (partículas descartadas)."""
+    palavras = [p for p in _juntar_letras_soltas(normalizar(texto).split()) if p not in PARTICULAS]
+    return _expandir(palavras)

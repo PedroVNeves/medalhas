@@ -14,7 +14,7 @@ import threading
 import time
 from collections import Counter
 
-# grupo -> {"quantidade": por janela, "janela": segundos, "por_dia": teto diário ou None}
+# grupo -> {"quantidade": fichas por janela, "janela": segundos, "por_dia": teto diário ou None}
 GRUPOS = {
     "v1": {"quantidade": 60, "janela": 60, "por_dia": 2000},        # API pública
     "exportar": {"quantidade": 20, "janela": 3600, "por_dia": 100},  # downloads de arquivos
@@ -29,14 +29,18 @@ MAX_CONEXOES = 64         # conexões abertas ao mesmo tempo (todos os IPs)
 MAX_CONEXOES_IP = 12      # conexões abertas ao mesmo tempo por IP
 MAX_CONSULTAS = 8         # consultas à base rodando ao mesmo tempo
 ESPERA_CONSULTA = 10      # segundos esperando vaga antes de responder 503
+SEM_LIMITE = 10**9        # cota "infinita" (limite desligado com 0 na linha de comando)
 
 
 def _meia_noite() -> float:
+    """Instante (time.time) da próxima meia-noite local, quando o teto diário volta a zero."""
     t = time.localtime()
     return time.mktime((t.tm_year, t.tm_mon, t.tm_mday + 1, 0, 0, 0, 0, 0, -1))
 
 
 class Limitador:
+    """Cotas por (grupo de rotas, IP) e bloqueio de quem insiste depois de recusado. Seguro entre threads."""
+
     def __init__(self):
         self._lock = threading.Lock()
         self._baldes: dict = {}      # (grupo, ip) -> [fichas, instante]
@@ -118,6 +122,7 @@ class Conexoes:
         self._total = 0
 
     def entrar(self, ip: str, por_ip: bool = True) -> bool:
+        """Registra a conexão se houver vaga. por_ip=False ignora o teto por IP (atrás de proxy)."""
         with self._lock:
             if self._total >= MAX_CONEXOES or (por_ip and self._por_ip[ip] >= MAX_CONEXOES_IP):
                 return False
@@ -133,22 +138,21 @@ class Conexoes:
                 del self._por_ip[ip]
 
 
-def configurar(argv: list[str]) -> None:
-    """Ajustes por linha de comando (0 = sem limite)."""
-    def valor(flag):
-        return int(argv[argv.index(flag) + 1]) if flag in argv else None
-
-    for flag, grupo, campo in (("--rate-limit", "v1", "quantidade"), ("--daily-limit", "v1", "por_dia"),
-                               ("--export-limit", "exportar", "quantidade"), ("--site-rate-limit", "site", "quantidade")):
-        v = valor(flag)
-        if v is not None:
-            GRUPOS[grupo][campo] = v if v > 0 else (None if campo == "por_dia" else 10**9)
+def configurar(api_por_minuto: int | None = None, api_por_dia: int | None = None,
+               exportacoes_por_hora: int | None = None, site_por_minuto: int | None = None,
+               consultas_simultaneas: int | None = None, conexoes_por_ip: int | None = None) -> None:
+    """Ajusta os limites (None mantém o padrão; 0 remove o limite de cota)."""
     global MAX_CONSULTAS, MAX_CONEXOES_IP, consultas
-    if valor("--max-concurrent"):
-        MAX_CONSULTAS = valor("--max-concurrent")
+    for valor, grupo, campo in ((api_por_minuto, "v1", "quantidade"), (api_por_dia, "v1", "por_dia"),
+                                (exportacoes_por_hora, "exportar", "quantidade"),
+                                (site_por_minuto, "site", "quantidade")):
+        if valor is not None:
+            GRUPOS[grupo][campo] = valor if valor > 0 else (None if campo == "por_dia" else SEM_LIMITE)
+    if consultas_simultaneas:
+        MAX_CONSULTAS = consultas_simultaneas
         consultas = threading.BoundedSemaphore(MAX_CONSULTAS)
-    if valor("--max-connections-per-ip"):
-        MAX_CONEXOES_IP = valor("--max-connections-per-ip")
+    if conexoes_por_ip:
+        MAX_CONEXOES_IP = conexoes_por_ip
 
 
 def resumo() -> dict:
