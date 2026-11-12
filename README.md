@@ -232,6 +232,44 @@ por IP:
 - Os contadores ficam na memória e zeram quando o servidor reinicia. Contra ataques grandes de verdade
   (milhares de IPs), a proteção precisa vir antes do servidor, por exemplo com o Cloudflare na frente.
 
+## Publicar na internet (Firebase Hosting + Cloud Run)
+
+```
+visitante -> seu-dominio.com.br (Firebase Hosting: HTTPS, CDN, arquivos de web/)
+                 └── /api/**  ->  Cloud Run "medalhas" (server.py + data/medalhas.db dentro da imagem)
+```
+
+- `Dockerfile`: imagem do servidor; a base vai dentro dela (só leitura). `.gcloudignore` define o que sobe.
+- `firebase.json`: publica `web/` e repassa `/api/**` ao Cloud Run em `southamerica-east1` (São Paulo).
+- O servidor roda com `--trust-proxy`: lê o IP do visitante em `X-Forwarded-For` e o domínio em
+  `X-Forwarded-Host` (para os links da API apontarem para o seu domínio).
+
+Primeira vez (precisa do [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) e de
+`npm install -g firebase-tools`; o Cloud Run exige o plano **Blaze** do Firebase, pago por uso):
+
+```bash
+gcloud auth login
+firebase login
+firebase projects:create SEU-PROJETO     # ou use um projeto existente; ative o Blaze no console
+gcloud config set project SEU-PROJETO
+firebase use --add SEU-PROJETO           # grava o .firebaserc
+```
+
+Publicar (e republicar sempre que mudar o código ou rodar `python build_db.py`):
+
+```bash
+gcloud run deploy medalhas --source . --region southamerica-east1 --allow-unauthenticated \
+  --memory 1Gi --concurrency 40 --max-instances 3
+firebase deploy --only hosting
+```
+
+`--max-instances` limita o custo: cada instância tem seus próprios contadores de limite por IP.
+Sem tráfego o Cloud Run desliga (custo zero, primeira visita depois disso demora alguns segundos).
+
+**Domínio próprio:** no console do Firebase, *Hosting → Adicionar domínio personalizado*, e crie no
+registrador do domínio (Registro.br, Cloudflare…) os registros `TXT` e `A` que ele mostrar. O
+certificado HTTPS é emitido sozinho em algumas horas.
+
 ## Como a busca de escolas funciona
 
 - Acentos, pontuação e ordem das palavras são ignorados ("MILITAR DE FORTALEZA, COLEGIO" = "Colégio Militar de Fortaleza").

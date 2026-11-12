@@ -4,3 +4,4 @@ cache/
 data/*.db
 data/*.tmp
 data/exportar/
+.firebase/

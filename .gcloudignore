@@ -1,0 +1,15 @@
+# Arquivos que NÃO sobem para o Cloud Build em `gcloud run deploy --source .`.
+# Diferente do .gitignore, a base data/medalhas.db precisa subir (ela vai dentro da imagem).
+.gcloudignore
+.git/
+.gitignore
+.firebase/
+.firebaserc
+firebase.json
+__pycache__/
+*.pyc
+cache/
+node_modules/
+tests/
+data/exportar/
+data/*.tmp

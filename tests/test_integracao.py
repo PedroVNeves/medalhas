@@ -118,6 +118,21 @@ class TestPontaAPonta(unittest.TestCase):
         self.json("/api/v1/ranking/planetas", 404)
         self.json("/api/v1/nada", 404)
 
+    def test_links_usam_o_dominio_publico_atras_do_proxy(self):
+        caminho = "/api/v1/alunos?nome=costa"
+        cabecalhos = {"X-Forwarded-Host": "medalhas.exemplo.com.br", "X-Forwarded-Proto": "https"}
+        pedido = urllib.request.Request(self.base + caminho, headers=cabecalhos)
+        self.servidor.confiar_proxy = True
+        try:
+            with urllib.request.urlopen(pedido, timeout=10) as r:
+                corpo = r.read().decode()
+        finally:
+            self.servidor.confiar_proxy = False
+        self.assertIn("https://medalhas.exemplo.com.br/api/v1/alunos/", corpo)
+        # sem --trust-proxy o cabeçalho é ignorado (qualquer um poderia forjá-lo)
+        with urllib.request.urlopen(urllib.request.Request(self.base + caminho, headers=cabecalhos)) as r:
+            self.assertNotIn("medalhas.exemplo.com.br", r.read().decode())
+
     def test_arquivos_estaticos(self):
         self.assertEqual(self.get("/")[0], 200)
         self.assertEqual(self.get("/js/app.js")[0], 200)

@@ -82,8 +82,14 @@ class Handler(BaseHTTPRequestHandler):
         return "gzip" in (self.headers.get("Accept-Encoding") or "")
 
     def _base(self) -> str:
-        protocolo = (self.headers.get("X-Forwarded-Proto") if self.server.confiar_proxy else None) or "http"
-        return f"{protocolo}://{self.headers.get('Host') or 'localhost'}"
+        """URL pública do site, para os links da API. Atrás de um proxy (Firebase Hosting), o Host que chega
+        é o do servidor interno (Cloud Run); o domínio que o usuário digitou vem em X-Forwarded-Host."""
+        def repassado(nome: str) -> str | None:
+            valor = self.headers.get(nome) if self.server.confiar_proxy else None
+            return valor.split(",")[0].strip() if valor else None
+        protocolo = repassado("X-Forwarded-Proto") or "http"
+        host = repassado("X-Forwarded-Host") or self.headers.get("Host") or "localhost"
+        return f"{protocolo}://{host}"
 
     # ------------------------------------------------ API
     def _api(self, caminho: str, params: dict) -> None:
