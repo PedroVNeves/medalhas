@@ -138,6 +138,24 @@ class TestPontaAPonta(unittest.TestCase):
         self.assertEqual(self.get("/js/app.js")[0], 200)
         self.assertEqual(self.get("/../server.py")[0], 404)
 
+    def test_json_compactado_quando_o_cliente_aceita_gzip(self):
+        import gzip
+        pedido = urllib.request.Request(self.base + "/api/overview", headers={"Accept-Encoding": "gzip"})
+        with urllib.request.urlopen(pedido, timeout=10) as r:
+            self.assertEqual(r.headers["Content-Encoding"], "gzip")
+            self.assertIn("Accept-Encoding", r.headers["Vary"])
+            dados = json.loads(gzip.decompress(r.read()))
+        _, cab, corpo = self.get("/api/overview")   # sem Accept-Encoding: texto puro, mesmo conteúdo
+        self.assertNotIn("Content-Encoding", cab)
+        self.assertEqual(json.loads(corpo), dados)
+
+    def test_visao_geral_pode_ficar_no_cdn(self):
+        _, cab, _ = self.get("/api/overview")
+        self.assertIn("s-maxage=", cab["Cache-Control"])
+        self.assertNotIn("X-RateLimit-Remaining", cab)   # a cota é de um IP: não pode ir para o cache
+        _, cab, _ = self.get("/api/busca?q=maria")
+        self.assertEqual(cab["Cache-Control"], "no-cache")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -214,7 +214,7 @@ por IP:
 | Camada | Padrão | Ao exceder | Opção |
 |---|---|---|---|
 | Consultas à API pública | 60/min e 2000/dia | 429 + `Retry-After` | `--rate-limit`, `--daily-limit` |
-| Exportações (downloads) | 20/hora e 100/dia | 429 + `Retry-After` | `--export-limit` |
+| Exportações (downloads) | 5/hora e 10/dia | 429 + `Retry-After` | `--export-limit` |
 | API usada pelo site | 600/min | 429 + `Retry-After` | `--site-rate-limit` |
 | Insistir depois do limite | 30 recusas em 60 s | IP bloqueado por 10 min em todo o site | — |
 | Conexões abertas por IP | 12 (64 no total) | conexão recusada | `--max-connections-per-ip` |
@@ -262,6 +262,10 @@ gcloud run deploy medalhas --source . --region southamerica-east1 --allow-unauth
   --memory 1Gi --concurrency 40 --max-instances 3
 firebase deploy --only hosting
 ```
+
+Rode sempre os dois comandos, nessa ordem: `/api/overview` (dados da página inicial) fica até um dia no
+CDN do Firebase Hosting, e é o `firebase deploy` que limpa esse cache. Sem ele, a página inicial
+continuaria mostrando os números antigos.
 
 `--max-instances` limita o custo: cada instância tem seus próprios contadores de limite por IP.
 Sem tráfego o Cloud Run desliga (custo zero, primeira visita depois disso demora alguns segundos).

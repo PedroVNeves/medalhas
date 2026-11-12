@@ -26,6 +26,9 @@ Funcao = Callable[[SessaoDeLeitura, Pedido], object]
 class Rota:
     funcao: Funcao
     grupo: str   # grupo de limite por IP (limites.GRUPOS)
+    # segundos que o CDN do Firebase Hosting pode guardar a resposta (0 = não guarda). Só para respostas
+    # que mudam apenas quando a base muda: cada `firebase deploy` limpa o CDN.
+    cache_cdn: int = 0
 
 
 # ---------------------------------------------------------------- referência

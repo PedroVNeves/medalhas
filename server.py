@@ -4,7 +4,7 @@ Uso:
     python server.py                 # abre em http://localhost:8000
     python server.py --port 9000 --no-browser
     python server.py --host 0.0.0.0  # aceita conexões de outras máquinas (API pública)
-    python server.py --rate-limit 30 --daily-limit 500 --export-limit 10   # limites por IP
+    python server.py --rate-limit 30 --daily-limit 500 --export-limit 3    # limites por IP
 
 Ponto de montagem: liga a leitura SQLite ao servidor HTTP e aplica os limites da linha de comando.
 """
@@ -29,7 +29,7 @@ def argumentos(argv: list[str] | None = None) -> argparse.Namespace:
     limite = p.add_argument_group("limites por IP (0 remove o limite)")
     limite.add_argument("--rate-limit", type=int, help="consultas por minuto à API pública (padrão 60)")
     limite.add_argument("--daily-limit", type=int, help="consultas por dia à API pública (padrão 2000)")
-    limite.add_argument("--export-limit", type=int, help="exportações por hora (padrão 20)")
+    limite.add_argument("--export-limit", type=int, help="exportações por hora (padrão 5; teto de 10 por dia)")
     limite.add_argument("--site-rate-limit", type=int, help="requisições por minuto da API do site (padrão 600)")
     limite.add_argument("--max-concurrent", type=int, help="consultas simultâneas à base (padrão 8)")
     limite.add_argument("--max-connections-per-ip", type=int, help="conexões abertas por IP (padrão 12)")

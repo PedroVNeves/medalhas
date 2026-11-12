@@ -17,7 +17,8 @@ from collections import Counter
 # grupo -> {"quantidade": fichas por janela, "janela": segundos, "por_dia": teto diário ou None}
 GRUPOS = {
     "v1": {"quantidade": 60, "janela": 60, "por_dia": 2000},        # API pública
-    "exportar": {"quantidade": 20, "janela": 3600, "por_dia": 100},  # downloads de arquivos
+    # downloads de arquivos: a base inteira tem ~7 MB compactada, e 10 GB/mês é a cota grátis do Hosting
+    "exportar": {"quantidade": 5, "janela": 3600, "por_dia": 10},
     "site": {"quantidade": 600, "janela": 60, "por_dia": None},      # API usada pelas páginas do site
 }
 

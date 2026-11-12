@@ -3,6 +3,7 @@
 Cada requisição da API segue o mesmo caminho:
     bloqueio por abuso? -> rota -> cota do IP -> vaga de consulta -> sessão de leitura -> resposta
 """
+import gzip
 import json
 import mimetypes
 import traceback
@@ -20,6 +21,9 @@ from .rotas_site import ROTAS
 CABECALHOS_EXPOSTOS = ("X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Scope, Retry-After, "
                        "Content-Disposition, X-Total-Rows")
 TEMPO_OCIOSO = 20   # segundos sem enviar/receber dados: derruba conexões lentas de propósito (slowloris)
+COMPACTAR_A_PARTIR = 1024   # bytes; abaixo disso o gzip quase não ganha nada
+TIPOS_COMPACTAVEIS = ("application/json", "text/", "application/javascript")
+CACHE_NAVEGADOR = 300   # segundos que o navegador reaproveita respostas marcadas com cache_cdn
 
 mimetypes.add_type("text/javascript", ".js")
 mimetypes.add_type("text/css", ".css")
@@ -32,7 +36,8 @@ class Handler(BaseHTTPRequestHandler):
     # ------------------------------------------------ respostas
     def _cabecalhos(self, status: int, cabecalhos: dict) -> None:
         self.send_response(status)
-        self.send_header("Cache-Control", "no-cache")
+        if "Cache-Control" not in cabecalhos:
+            self.send_header("Cache-Control", "no-cache")
         self.send_header("Access-Control-Allow-Origin", "*")   # API pública: pode ser chamada de outros sites
         self.send_header("Access-Control-Expose-Headers", CABECALHOS_EXPOSTOS)
         self.send_header("X-Content-Type-Options", "nosniff")
@@ -41,7 +46,16 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _enviar(self, corpo: bytes, tipo: str, status: int = 200, cabecalhos: dict | None = None) -> None:
-        self._cabecalhos(status, {"Content-Type": tipo, "Content-Length": str(len(corpo)), **(cabecalhos or {})})
+        cab = {"Content-Type": tipo, **(cabecalhos or {})}
+        # JSON e texto compactam ~85% (a visão geral cai de 67 KB para 10 KB): menos espera no celular e
+        # menos transferência na cota do Firebase Hosting
+        if len(corpo) >= COMPACTAR_A_PARTIR and tipo.startswith(TIPOS_COMPACTAVEIS):
+            cab["Vary"] = "Accept-Encoding"
+            if self._aceita_gzip():
+                corpo = gzip.compress(corpo, compresslevel=6, mtime=0)
+                cab["Content-Encoding"] = "gzip"
+        cab["Content-Length"] = str(len(corpo))
+        self._cabecalhos(status, cab)
         if self.command != "HEAD":
             self.wfile.write(corpo)
 
@@ -122,6 +136,11 @@ class Handler(BaseHTTPRequestHandler):
 
         if isinstance(dados, api_v1.Download):
             self._enviar_download(dados, cabecalhos)
+        elif rota.cache_cdn:
+            # resposta igual para todos até a próxima publicação: o CDN do Firebase Hosting guarda a cópia
+            # (e a apaga a cada `firebase deploy`). Sem os X-RateLimit-*, que são de um IP só.
+            self._json(dados, cabecalhos={"Cache-Control": f"public, max-age={CACHE_NAVEGADOR}, "
+                                                           f"s-maxage={rota.cache_cdn}"})
         else:
             self._json(dados, cabecalhos=cabecalhos)
 
