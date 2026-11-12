@@ -268,8 +268,14 @@
     </div>
   </div>
 
-  <div class="glass card mt-6 flex flex-wrap items-center gap-2 p-3">
-    <i x-icon="'sliders-horizontal'" class="ml-1 h-4 w-4 text-slate-500"></i>
+  <!-- no celular os filtros começam recolhidos (ocupam muito espaço); o botão "Filtros" abre -->
+  <div class="glass card filtros mt-6 flex flex-wrap items-center gap-2 p-3" x-data="{ abertos: false }" :class="abertos && 'aberto'">
+    <button type="button" class="filtros-toggle flex w-full items-center gap-2 px-1 py-0.5 text-sm font-medium text-slate-300 md:hidden" @click="abertos = !abertos" :aria-expanded="abertos">
+      <i x-icon="'sliders-horizontal'" class="h-4 w-4 text-slate-500"></i>Filtros
+      <span x-show="buscaFiltrosAtivos" x-text="buscaFiltrosAtivos" class="rounded-full bg-gold-400/20 px-1.5 text-xs text-gold-300"></span>
+      <i x-icon="'chevron-down'" class="ml-auto h-4 w-4 text-slate-500 transition-transform" :class="abertos && 'rotate-180'"></i>
+    </button>
+    <i x-icon="'sliders-horizontal'" class="filtros-icone ml-1 h-4 w-4 text-slate-500"></i>
     <select class="select" @change="setBuscaFilter('uf', $event.target.value)">
       <option value="">Todo o Brasil</option>
       <template x-for="u in ov?.ufs || []" :key="u"><option :value="u" x-text="`${u} · ${UF_NOMES[u]}`" :selected="u===bf.uf"></option></template>
@@ -306,7 +312,7 @@
     <span x-show="route.query.escola_chave" class="inline-flex items-center gap-1 rounded-full border border-indigo-400/30 bg-indigo-400/10 px-2 py-0.5 text-xs text-indigo-200">só esta escola
       <button @click="go(`#/busca?${new URLSearchParams({q, campo})}`)" class="hover:text-white" title="Remover"><i x-icon="'x'" class="h-3 w-3"></i></button></span>
 
-    <div x-show="impa3" class="flex w-full items-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-200">
+    <div x-show="impa3" class="filtros-fixo flex w-full items-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-200">
       <i x-icon="'lock'" class="h-3.5 w-3.5 flex-none"></i>
       <span class="flex-1">Filtrado pela pontuação <b>IMPA N3</b>: só contam os níveis aceitos pelo edital do IMPA Tech (<span x-text="descreveImpa(ov?.niveis_impa)"></span>).</span>
       <button @click="setMetodo('impa')" class="rounded-lg border border-emerald-400/30 px-2 py-0.5 hover:bg-emerald-400/10">usar IMPA · todos os níveis</button>
@@ -388,8 +394,13 @@
   </div>
 
   <!-- filtros -->
-  <div class="glass card mt-6 flex flex-wrap items-center gap-2 p-3">
-    <i x-icon="'sliders-horizontal'" class="ml-1 h-4 w-4 text-slate-500"></i>
+  <div class="glass card filtros mt-6 flex flex-wrap items-center gap-2 p-3" x-data="{ abertos: false }" :class="abertos && 'aberto'">
+    <button type="button" class="filtros-toggle flex w-full items-center gap-2 px-1 py-0.5 text-sm font-medium text-slate-300 md:hidden" @click="abertos = !abertos" :aria-expanded="abertos">
+      <i x-icon="'sliders-horizontal'" class="h-4 w-4 text-slate-500"></i>Filtros
+      <span x-show="filtrosAtivos" x-text="filtrosAtivos" class="rounded-full bg-gold-400/20 px-1.5 text-xs text-gold-300"></span>
+      <i x-icon="'chevron-down'" class="ml-auto h-4 w-4 text-slate-500 transition-transform" :class="abertos && 'rotate-180'"></i>
+    </button>
+    <i x-icon="'sliders-horizontal'" class="filtros-icone ml-1 h-4 w-4 text-slate-500"></i>
     <select class="select" x-show="rk.tipo!=='estados'" @change="setFilter('uf', $event.target.value)">
       <option value="">Todo o Brasil</option>
       <template x-for="u in ov?.ufs || []" :key="u"><option :value="u" x-text="`${u} · ${UF_NOMES[u]}`" :selected="u===rk.f.uf"></option></template>
@@ -423,13 +434,13 @@
       <option value="">Pública + privada</option><option value="Pública" :selected="rk.f.rede==='Pública'">Escola pública</option><option value="Privada" :selected="rk.f.rede==='Privada'">Escola privada</option>
     </select>
     <button x-show="filtrosAtivos" @click="limparFiltros()" class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-400 hover:text-white"><i x-icon="'x'" class="h-3.5 w-3.5"></i>limpar</button>
-    <div class="seg ml-auto max-w-full overflow-x-auto">
+    <div class="seg filtros-fixo ml-auto max-w-full overflow-x-auto">
       <button @click="setFilter('ordem','xp')" :class="rk.f.ordem==='xp' && 'on'" title="Soma de pontos (XP)">Pontos</button>
       <button @click="setFilter('ordem','medalhas')" :class="rk.f.ordem==='medalhas' && 'on'" title="Ouro, depois prata, depois bronze">Quadro de medalhas</button>
       <button @click="setFilter('ordem','total')" :class="rk.f.ordem==='total' && 'on'" title="Total de medalhas">Total</button>
     </div>
 
-    <div x-show="impa3" class="flex w-full items-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-200">
+    <div x-show="impa3" class="filtros-fixo flex w-full items-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-200">
       <i x-icon="'lock'" class="h-3.5 w-3.5 flex-none"></i>
       <span class="flex-1">Filtrado pela pontuação <b>IMPA N3</b>: só contam os níveis aceitos pelo edital do IMPA Tech (<span x-text="descreveImpa(ov?.niveis_impa)"></span>).</span>
       <button @click="setMetodo('impa')" class="rounded-lg border border-emerald-400/30 px-2 py-0.5 hover:bg-emerald-400/10">usar IMPA · todos os níveis</button>
@@ -532,7 +543,7 @@
 <section x-show="is('estados')" x-cloak class="fade-in pt-10">
   <p class="text-sm font-medium uppercase tracking-[.18em] text-gold-400">Brasil</p>
   <h1 class="font-display text-4xl font-bold">Medalhas por estado</h1>
-  <p class="mt-1 text-sm text-slate-400">Clique em um estado para ver o ranking de alunos dele.</p>
+  <p class="mt-1 text-sm text-slate-400" x-text="toque ? 'Toque em um estado para ver os números dele.' : 'Clique em um estado para ver o ranking de alunos dele.'">Clique em um estado para ver o ranking de alunos dele.</p>
   <div class="mt-6 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
     <div class="glass card p-5">
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -543,7 +554,36 @@
           </template>
         </div>
       </div>
-      <div x-ref="mapChart" class="chart mx-auto aspect-square max-w-[480px] sm:aspect-auto sm:h-[560px] sm:max-w-none"></div>
+      <div>
+        <div x-ref="mapChart" class="chart mx-auto aspect-square max-w-[480px] sm:aspect-auto sm:h-[560px] sm:max-w-none"></div>
+        <!-- mini card do estado tocado (telas de toque) -->
+        <div x-ref="mapCard" x-show="mapEstado" x-cloak x-transition.opacity.duration.150ms
+          class="mt-3 rounded-2xl border hairline bg-white/5 p-3">
+          <template x-if="mapEstado">
+            <div>
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <div class="font-display truncate text-lg font-semibold" x-text="UF_NOMES[mapEstado.id]"></div>
+                  <div class="text-xs text-slate-400"><span x-text="`#${mapEstado.pos} no Brasil`"></span> · <span x-text="`${fmt(mapEstado.alunos)} alunos premiados`"></span></div>
+                </div>
+                <button type="button" @click="mapSel = ''; destacarEstado('map', '')" class="-mr-1 -mt-1 rounded-lg p-1.5 text-slate-400 hover:text-white" aria-label="Fechar"><i x-icon="'x'" class="h-4 w-4"></i></button>
+              </div>
+              <div class="mt-2 flex items-center justify-between gap-2">
+                <div>
+                  <div class="text-[11px] uppercase tracking-wider text-slate-500" x-text="{xp:'Pontos', ouro:'Ouros', total:'Premiações', alunos:'Alunos premiados'}[mapMetric]"></div>
+                  <div class="font-display text-2xl font-bold text-gold-grad tabular" x-text="fmt(mapEstado[mapMetric])"></div>
+                </div>
+                <div class="space-y-0.5 text-right text-xs tabular text-slate-300">
+                  <div><span class="text-slate-500">ouro</span> <b x-text="fmt(mapEstado.ouro)"></b> <span class="dot ouro"></span></div>
+                  <div><span class="text-slate-500">prata</span> <b x-text="fmt(mapEstado.prata)"></b> <span class="dot prata"></span></div>
+                  <div><span class="text-slate-500">bronze</span> <b x-text="fmt(mapEstado.bronze)"></b> <span class="dot bronze"></span></div>
+                </div>
+              </div>
+              <a :href="rankLink('alunos', { uf: mapEstado.id })" class="btn mt-3 w-full justify-center">Ver ranking do estado<i x-icon="'arrow-right'" class="h-4 w-4"></i></a>
+            </div>
+          </template>
+        </div>
+      </div>
     </div>
     <div class="glass card overflow-hidden">
       <div class="border-b hairline px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Ranking dos estados</div>

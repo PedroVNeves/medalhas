@@ -2,13 +2,15 @@
 
 function app() {
   return {
-    UF_NOMES, fmt, prettySchool, initials, nivelLabel, medalClass, nivelCurto, descreveImpa,
+    UF_NOMES, fmt, prettySchool, destacarEstado, initials, nivelLabel, medalClass, nivelCurto, descreveImpa,
     route: { name: "home", param: "", query: {} },
     metodo: METODO,
     aviso: null, _avisoT: null,
     ov: null,
     yearComp: "",
     mapMetric: "xp",
+    mapSel: "",   // estado tocado no mapa (telas de toque, que não têm "passar o mouse")
+    toque: matchMedia("(hover: none)").matches,
     // busca
     q: "", campo: "nome", busca: { loading: false, total: 0, grupos: [] }, _t: null,
     bf: { uf: "", area: "", competicao: "", medalha: "", ano: "", nivel: "", rede: "" },
@@ -84,7 +86,7 @@ function app() {
         this.runSearch();
       }
       if (r.name === "ranking") { this.rk.tipo = r.param || "alunos"; Object.assign(this.rk.f, { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", ordem: "xp" }, Object.fromEntries(Object.entries(query).filter(([k]) => k !== "metodo"))); this.loadRanking(); }
-      if (r.name === "estados") this.$nextTick(() => this.drawMap());
+      if (r.name === "estados") { this.mapSel = ""; this.$nextTick(() => this.drawMap()); }
       if (r.name === "api") this.loadDoc();
       if (r.name === "aluno") this.loadAluno(r.param);
       if (r.name === "escola") this.loadEscola(r.param);
@@ -134,7 +136,7 @@ function app() {
       if (this.route.query.escola_chave) extra.escola_chave = this.route.query.escola_chave;
       return { ...base, ...extra };
     },
-    get buscaFiltrosAtivos() { return Object.values(this.bf).some(Boolean); },
+    get buscaFiltrosAtivos() { return Object.values(this.bf).filter(Boolean).length; },
     setBuscaFilter(k, v) {
       this.bf[k] = v;
       const query = this.buscaQuery({ q: this.q.trim(), campo: this.campo });
@@ -220,8 +222,16 @@ function app() {
     // ------------------------------------------------ estados
     drawMap() {
       if (!this.ov) return;
-      brazilMap(this.$refs.mapChart, "map", this.ov.estados, this.mapMetric, uf => this.go(this.rankLink("alunos", { uf })));
+      // no toque, o clique abre o mini card (com "ver ranking"); com mouse, o tooltip já mostra os números
+      brazilMap(this.$refs.mapChart, "map", this.ov.estados, this.mapMetric,
+        uf => this.toque ? this.tocarEstado(uf) : this.go(this.rankLink("alunos", { uf })), !this.toque)
+        .then(() => this.mapSel && destacarEstado("map", this.mapSel));   // trocar o indicador redesenha o mapa
     },
+    tocarEstado(uf) {
+      this.mapSel = uf;   // rola até o card se ele nascer abaixo da dobra da tela
+      this.$nextTick(() => this.$refs.mapCard?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
+    },
+    get mapEstado() { return this.mapSel && this.ov ? this.ov.estados.find(e => e.id === this.mapSel) : null; },
     get estadosOrdenados() { return this.ov ? [...this.ov.estados].sort((a, b) => b[this.mapMetric] - a[this.mapMetric]) : []; },
 
     // ------------------------------------------------ perfis

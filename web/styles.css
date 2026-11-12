@@ -62,6 +62,13 @@ i[x-icon] { display: inline-block; flex: none; vertical-align: -0.125em; }
 /* min-width: 0: dentro de grids e flex, o card não cresce além da coluna por causa de um nome comprido
    (sem isso o "truncate" dos textos não funciona e a página fica mais larga que a tela no celular) */
 .card { border-radius: 1.25rem; min-width: 0; }
+/* barra de filtros no celular: recolhida mostra só o botão "Filtros" e o que é .filtros-fixo */
+@media (max-width: 767px) {
+  .filtros:not(.aberto) > :not(.filtros-toggle):not(.filtros-fixo) { display: none !important; }
+  .filtros .filtros-icone { display: none !important; }
+}
+.dot { display: inline-block; width: .55rem; height: .55rem; border-radius: 999px; vertical-align: middle; }
+.dot.ouro { background: #f5c542; } .dot.prata { background: #c3cbdb; } .dot.bronze { background: #cd7f32; }
 .hairline { border-color: var(--line); }
 .glow-gold { box-shadow: 0 0 0 1px rgba(245,197,66,.35), 0 10px 40px -10px rgba(245,197,66,.45); }
 

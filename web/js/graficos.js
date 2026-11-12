@@ -45,7 +45,7 @@ function stackedYears(el, key, rows) {
   }, true);
 }
 
-async function brazilMap(el, key, estados, metric, onClick) {
+async function brazilMap(el, key, estados, metric, onClick, comTooltip = true) {
   const c = chart(el, key); if (!c) return;
   c.showLoading({ text: "", color: "#f5c542", maskColor: "transparent" });
   if (!brGeo) {
@@ -60,7 +60,7 @@ async function brazilMap(el, key, estados, metric, onClick) {
   const data = estados.map(e => ({ name: e.id, value: e[metric], raw: e }));
   const max = Math.max(...data.map(d => d.value), 1);
   c.setOption({
-    tooltip: { ...tooltipBase, trigger: "item", formatter: p => {
+    tooltip: { ...tooltipBase, show: comTooltip, trigger: "item", formatter: p => {
       const e = p.data?.raw; if (!e) return p.name;
       return `<b>${UF_NOMES[e.id]}</b> <span style="color:${VIZ.muted}">#${e.pos}</span><br>
         ${labels[metric]}: <b>${fmt(e[metric])}</b><br>
@@ -78,7 +78,18 @@ async function brazilMap(el, key, estados, metric, onClick) {
       label: { show: false } }],
   }, true);
   c.off("click");
-  c.on("click", p => p.name && onClick(p.name));
+  c.on("click", p => {
+    if (!p.name) return;
+    if (!comTooltip) destacarEstado(key, p.name);   // no toque, o estado escolhido fica aceso
+    onClick(p.name);
+  });
+}
+
+// Acende um estado no mapa (ou apaga todos com nome vazio).
+function destacarEstado(key, nome) {
+  const c = charts[key]; if (!c) return;
+  c.dispatchAction({ type: "downplay", seriesIndex: 0 });
+  if (nome) c.dispatchAction({ type: "highlight", seriesIndex: 0, name: nome });
 }
 
 // ---------------------------------------------------------------- confete
