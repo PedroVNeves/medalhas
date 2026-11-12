@@ -229,6 +229,8 @@ i[x-icon] { display: inline-block; flex: none; vertical-align: -0.125em; }
 .menu-titulo { padding: .5rem .6rem .25rem; font-size: .68rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .menu-item { display: flex; width: 100%; align-items: center; gap: .65rem; padding: .5rem .6rem; border-radius: .65rem; text-align: left; font-size: .88rem; font-weight: 600; color: var(--text); }
 .menu-item:hover, .menu-item:focus-visible { background: rgba(255,255,255,.07); outline: none; }
+.menu-item.on { background: rgba(245,197,66,.1); color: var(--gold-2); }
+.menu-lista { width: 20rem; max-width: calc(100vw - 2.5rem); max-height: 22rem; overflow-y: auto; }
 .menu-item > i { width: 1.05rem; height: 1.05rem; color: var(--gold); }
 .menu-item small { display: block; font-size: .72rem; font-weight: 400; color: var(--muted); }
 .menu-rodape { display: flex; align-items: center; gap: .4rem; margin-top: .3rem; padding: .55rem .6rem .35rem; border-top: 1px solid var(--line); font-size: .78rem; color: var(--text-2); }

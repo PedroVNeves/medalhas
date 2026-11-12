@@ -222,12 +222,28 @@
         <h3 class="font-display text-lg font-semibold">Medalhas por ano</h3>
         <p class="text-xs text-slate-500">Ouro, prata e bronze distribuídos a cada edição</p>
       </div>
-      <select class="select max-w-full" aria-label="Olimpíada do gráfico" x-model="yearComp" @change="drawYears()">
-        <option value="">Todas as olimpíadas</option>
-        <template x-for="o in ov?.olimpiadas || []" :key="o.sigla">
-          <option :value="o.sigla" :title="o.nome" x-text="o.sigla"></option>
-        </template>
-      </select>
+      <div class="flex flex-wrap items-center gap-2">
+        <!-- escala log: com todas as olimpíadas, os anos antigos (dezenas de medalhas) sumiriam ao lado dos ~9 mil de hoje -->
+        <div class="seg" role="group" aria-label="Escala do gráfico">
+          <button type="button" @click="yearLog = false; drawYears()" :class="!yearLog && 'on'" :aria-pressed="!yearLog">Linear</button>
+          <button type="button" @click="yearLog = true; drawYears()" :class="yearLog && 'on'" :aria-pressed="yearLog" title="Escala logarítmica: mostra juntos anos com dezenas e com milhares de medalhas">Log</button>
+        </div>
+        <!-- menu próprio em vez de <select>: a lista nativa abria desalinhada para a esquerda no computador -->
+        <div class="relative" x-data="{ aberto: false }" @click.outside="aberto = false" @keydown.escape.window="aberto = false">
+          <button type="button" class="btn" @click="aberto = !aberto" :aria-expanded="aberto" aria-haspopup="listbox" aria-label="Olimpíada do gráfico">
+            <span x-text="yearComp || 'Todas as olimpíadas'"></span><i x-icon="'chevron-down'" class="h-3.5 w-3.5 opacity-60"></i>
+          </button>
+          <div x-show="aberto" x-cloak x-transition.opacity.duration.150ms class="menu menu-lista" role="listbox">
+            <button type="button" class="menu-item" role="option" :aria-selected="!yearComp" :class="!yearComp && 'on'"
+                    @click="aberto = false; escolherYearComp('')">Todas as olimpíadas</button>
+            <template x-for="o in ov?.olimpiadas || []" :key="o.sigla">
+              <button type="button" class="menu-item" role="option" :aria-selected="yearComp === o.sigla" :class="yearComp === o.sigla && 'on'"
+                      @click="aberto = false; escolherYearComp(o.sigla)"><span>
+                <span x-text="o.sigla"></span><small x-text="o.nome"></small></span></button>
+            </template>
+          </div>
+        </div>
+      </div>
     </div>
     <div x-ref="yearsChart" class="chart h-80"></div>
   </div>

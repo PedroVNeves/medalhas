@@ -24,12 +24,16 @@ const tooltipBase = {
   textStyle: { color: "#e8ebf5", fontFamily: "Inter", fontSize: 12 }, extraCssText: "border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.5);",
 };
 
-function stackedYears(el, key, rows) {
+// log = true: eixo logarítmico, para os anos com dezenas de medalhas aparecerem ao lado dos com milhares.
+// Nesse modo as barras ficam lado a lado: empilhadas num eixo log, a fatia de baixo (ouro) pareceria
+// muito maior do que é. Zero não existe em escala log, então vira lacuna (o tooltip mostra 0).
+function stackedYears(el, key, rows, log = false) {
   const c = chart(el, key); if (!c) return;
   const anos = rows.map(r => r.ano);
   const serie = (name, field, color, top) => ({
-    name, type: "bar", stack: "m", data: rows.map(r => r[field]), barMaxWidth: 26,
-    itemStyle: { color, borderColor: VIZ.surface, borderWidth: 1, borderRadius: top ? [4, 4, 0, 0] : 0 },
+    name, type: "bar", stack: log ? undefined : "m", barMaxWidth: log ? 9 : 26, barGap: log ? "10%" : undefined, barMinHeight: log ? 3 : 0,
+    data: rows.map(r => (log && !r[field] ? null : r[field])),
+    itemStyle: { color, borderColor: VIZ.surface, borderWidth: log ? 0 : 1, borderRadius: top || log ? [3, 3, 0, 0] : 0 },
     emphasis: { focus: "series" },
   });
   c.setOption({
@@ -37,10 +41,11 @@ function stackedYears(el, key, rows) {
     grid: { left: 8, right: 8, top: 36, bottom: 4, containLabel: true },
     legend: { top: 0, left: 0, icon: "roundRect", itemWidth: 10, itemHeight: 10, textStyle: { color: VIZ.text, fontFamily: "Inter" } },
     tooltip: { ...tooltipBase, trigger: "axis", axisPointer: { type: "shadow", shadowStyle: { color: "rgba(255,255,255,.04)" } },
-      formatter: ps => `<b>${ps[0].axisValue}</b><br>` + ps.map(p => `${p.marker} ${p.seriesName}: <b>${fmt(p.value)}</b>`).join("<br>")
-        + `<br><span style="color:${VIZ.muted}">Total: ${fmt(ps.reduce((s, p) => s + p.value, 0))}</span>` },
+      formatter: ps => `<b>${ps[0].axisValue}</b><br>` + ps.map(p => `${p.marker} ${p.seriesName}: <b>${fmt(p.value || 0)}</b>`).join("<br>")
+        + `<br><span style="color:${VIZ.muted}">Total: ${fmt(ps.reduce((s, p) => s + (p.value || 0), 0))}</span>` },
     xAxis: { type: "category", data: anos, axisLine: { lineStyle: { color: VIZ.grid } }, axisTick: { show: false }, axisLabel: { color: VIZ.muted, fontFamily: "Inter" } },
-    yAxis: { type: "value", splitLine: { lineStyle: { color: VIZ.grid } }, axisLabel: { color: VIZ.muted, fontFamily: "Inter", formatter: v => fmt(v) } },
+    yAxis: { type: log ? "log" : "value", min: log ? 1 : undefined, logBase: 10,
+      splitLine: { lineStyle: { color: VIZ.grid } }, axisLabel: { color: VIZ.muted, fontFamily: "Inter", formatter: v => fmt(v) } },
     series: [serie("Ouro", "ouro", VIZ.ouro), serie("Prata", "prata", VIZ.prata), serie("Bronze", "bronze", VIZ.bronze, true)],
   }, true);
 }

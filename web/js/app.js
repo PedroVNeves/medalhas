@@ -8,6 +8,7 @@ function app() {
     aviso: null, _avisoT: null,
     ov: null,
     yearComp: "",
+    yearLog: true,
     mapMetric: "xp",
     mapSel: "",   // estado tocado no mapa (telas de toque, que não têm "passar o mouse")
     toque: matchMedia("(hover: none)").matches,
@@ -109,7 +110,14 @@ function app() {
         const o = by[r.ano] ||= { ano: r.ano, ouro: 0, prata: 0, bronze: 0 };
         o.ouro += r.ouro; o.prata += r.prata; o.bronze += r.bronze;
       }
-      stackedYears(this.$refs.yearsChart, "years", Object.values(by).sort((a, b) => a.ano - b.ano));
+      stackedYears(this.$refs.yearsChart, "years", Object.values(by).sort((a, b) => a.ano - b.ano), this.yearLog);
+    },
+    // Todas as olimpíadas juntas vão de dezenas (anos 80/90) a ~9 mil medalhas (OBMEP): começa em escala log.
+    // Uma olimpíada só tem ordens de grandeza parecidas entre os anos, então volta para a escala linear.
+    escolherYearComp(sigla) {
+      this.yearComp = sigla;
+      this.yearLog = !sigla;
+      this.drawYears();
     },
     get podio() { return this.ov ? this.ov.top_alunos.slice(0, 3) : []; },
 
