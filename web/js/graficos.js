@@ -4,13 +4,20 @@ const charts = {};
 const VIZ = { ouro: "#b5870c", prata: "#6688d6", bronze: "#b5602b", text: "#a3abc2", muted: "#6b7489", grid: "rgba(255,255,255,.06)", surface: "#0f1424" };
 let brGeo = null;
 
+// O gráfico acompanha o tamanho da própria área, não só o da janela: as seções começam escondidas
+// (x-show), então na criação a largura pode ser 0 e o ECharts desenharia com um tamanho padrão.
+const observador = new ResizeObserver(entradas => {
+  for (const { target } of entradas) {
+    if (target.clientWidth && target.clientHeight) echarts.getInstanceByDom(target)?.resize();
+  }
+});
+
 function chart(el, key) {
   if (!el) return null;
-  if (charts[key] && charts[key].getDom() !== el) { charts[key].dispose(); delete charts[key]; }
-  charts[key] = charts[key] || echarts.init(el, null, { renderer: "canvas" });
+  if (charts[key] && charts[key].getDom() !== el) { observador.unobserve(charts[key].getDom()); charts[key].dispose(); delete charts[key]; }
+  if (!charts[key]) { charts[key] = echarts.init(el, null, { renderer: "canvas" }); observador.observe(el); }
   return charts[key];
 }
-window.addEventListener("resize", () => Object.values(charts).forEach(c => c.resize()));
 
 const tooltipBase = {
   backgroundColor: "rgba(12,17,32,.96)", borderColor: "rgba(255,255,255,.12)", borderWidth: 1,
@@ -42,8 +49,9 @@ async function brazilMap(el, key, estados, metric, onClick) {
   const c = chart(el, key); if (!c) return;
   c.showLoading({ text: "", color: "#f5c542", maskColor: "transparent" });
   if (!brGeo) {
-    const geo = await fetch("https://cdn.jsdelivr.net/gh/codeforgermany/click_that_hood@main/public/data/brazil-states.geojson").then(r => r.json());
-    geo.features.forEach(f => { f.properties.name = f.properties.sigla; });
+    // contorno dos estados (name = sigla da UF), simplificado a partir do brazil-states.geojson do
+    // projeto click_that_hood (Code for Germany): ~150 KB compactado em vez de 3,4 MB de um CDN externo
+    const geo = await fetch("brasil-uf.json").then(r => r.json());
     echarts.registerMap("BR", geo);
     brGeo = geo;
   }
@@ -61,7 +69,9 @@ async function brazilMap(el, key, estados, metric, onClick) {
     visualMap: { min: 0, max, calculable: false, orient: "horizontal", left: "center", bottom: 0, itemWidth: 12, itemHeight: 180,
       text: [fmt(max), "0"], textStyle: { color: VIZ.text, fontFamily: "Inter" },
       inRange: { color: ["#1b2236", "#3a3017", "#6b5212", "#a07810", "#d9a521", "#ffd76e"] } },
-    series: [{ type: "map", map: "BR", roam: false, data, top: 10, bottom: 50,
+    // layoutSize em % é relativo ao menor lado da área: o mapa cabe inteiro na largura e na altura
+    // sem esticar (com top/bottom/left/right o ECharts deformaria o mapa para preencher o retângulo)
+    series: [{ type: "map", map: "BR", roam: false, data, layoutCenter: ["50%", "45%"], layoutSize: "86%",
       itemStyle: { borderColor: "#070a14", borderWidth: 1, areaColor: "#1b2236" },
       emphasis: { label: { show: true, color: "#fff", fontWeight: 700 }, itemStyle: { areaColor: "#ffe08a", shadowBlur: 20, shadowColor: "rgba(245,197,66,.6)" } },
       select: { disabled: true },

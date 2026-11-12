@@ -59,7 +59,9 @@ i[x-icon] { display: inline-block; flex: none; vertical-align: -0.125em; }
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
-.card { border-radius: 1.25rem; }
+/* min-width: 0: dentro de grids e flex, o card não cresce além da coluna por causa de um nome comprido
+   (sem isso o "truncate" dos textos não funciona e a página fica mais larga que a tela no celular) */
+.card { border-radius: 1.25rem; min-width: 0; }
 .hairline { border-color: var(--line); }
 .glow-gold { box-shadow: 0 0 0 1px rgba(245,197,66,.35), 0 10px 40px -10px rgba(245,197,66,.45); }
 

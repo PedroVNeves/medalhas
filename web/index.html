@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Medalhas · Hall da Fama da Matemática Brasileira</title>
+<title>Medalhas · Hall da Fama das Olimpíadas de Conhecimento do Brasil</title>
 <meta name="description" content="Busca, rankings, API e dados abertos dos medalhistas brasileiros em olimpíadas científicas.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏅</text></svg>">
 
@@ -97,10 +97,10 @@
         <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400"></span>
         <span x-text="ov ? `${fmt(ov.totais.total)} premiações · ${ov.totais.de}–${ov.totais.ate}` : 'carregando…'"></span>
       </span>
-      <h1 class="font-display mt-5 text-5xl font-bold leading-[1.02] sm:text-6xl lg:text-7xl">
-        Quem <span class="text-gold-grad">brilhou</span><br>na matemática<br>do Brasil.
+      <h1 class="font-display mt-5 text-4xl font-bold leading-[1.02] sm:text-6xl lg:text-7xl">
+        Quem <span class="text-gold-grad">brilhou</span><br>nas olimpíadas<br>de conhecimento<br>do Brasil.
       </h1>
-      <p class="mt-5 max-w-xl text-lg text-slate-400">Todos os medalhistas da OBMEP e da OBM em um só lugar. Encontre alunos e escolas, confira as premiações nas fontes oficiais e veja quem lidera os rankings.</p>
+      <p class="mt-5 max-w-xl text-lg text-slate-400">Os medalhistas brasileiros da OBMEP, OBM, OBI, IMO e de mais <span x-text="ov ? ov.olimpiadas.length - 4 : 14">14</span> olimpíadas em um só lugar. Encontre alunos e escolas, confira as premiações nas fontes oficiais e veja quem lidera os rankings.</p>
 
       <div class="search-shell mt-8">
         <div class="flex flex-col gap-2 p-2 sm:flex-row sm:items-center">
@@ -222,12 +222,12 @@
         <h3 class="font-display text-lg font-semibold">Medalhas por ano</h3>
         <p class="text-xs text-slate-500">Ouro, prata e bronze distribuídos a cada edição</p>
       </div>
-      <div class="seg">
-        <button @click="yearComp=''; drawYears()" :class="!yearComp && 'on'">Todas</button>
+      <select class="select max-w-full" aria-label="Olimpíada do gráfico" x-model="yearComp" @change="drawYears()">
+        <option value="">Todas as olimpíadas</option>
         <template x-for="o in ov?.olimpiadas || []" :key="o.sigla">
-          <button @click="yearComp=o.sigla; drawYears()" :class="yearComp===o.sigla && 'on'" :title="o.nome" x-text="o.sigla"></button>
+          <option :value="o.sigla" :title="o.nome" x-text="o.sigla"></option>
         </template>
-      </div>
+      </select>
     </div>
     <div x-ref="yearsChart" class="chart h-80"></div>
   </div>
@@ -441,7 +441,7 @@
     <span x-show="rk.f.competicao" x-text="' · ' + rk.f.competicao.split(',').join(' + ')"></span>
     <span x-show="nivelEfetivo(rk.f.nivel)" x-text="' · contando só ' + descreveNiveis(nivelEfetivo(rk.f.nivel))"></span>
     <span x-text="' · pontuação: ' + (metodoAtual?.nome || '')"></span>
-    <span x-show="rk.tipo==='escolas'"> · escolas vêm da OBMEP (a OBM não publica a escola)</span>
+    <span x-show="rk.tipo==='escolas'"> · escolas vêm da OBMEP, da OBI e da IMC (as demais olimpíadas não publicam a escola)</span>
   </p>
 
   <!-- pódio -->
@@ -543,7 +543,7 @@
           </template>
         </div>
       </div>
-      <div x-ref="mapChart" class="chart h-[560px]"></div>
+      <div x-ref="mapChart" class="chart mx-auto aspect-square max-w-[480px] sm:aspect-auto sm:h-[560px] sm:max-w-none"></div>
     </div>
     <div class="glass card overflow-hidden">
       <div class="border-b hairline px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Ranking dos estados</div>
@@ -889,7 +889,7 @@
     </div>
     <div class="glass card p-6">
       <h3 class="font-display mb-1 text-lg font-semibold">Escala da nossa versão</h3>
-      <p class="mb-3 text-xs text-slate-500">Por dificuldade: ouro OBM = 2× ouro OBMEP; bronze OBM &gt; ouro OBMEP; bronze Ibero &gt; prata OBM; bronze IMO &gt; prata Ibero. Ibero, IMO e as olimpíadas de entrada (Canguru e similares) entram com a coleta delas.</p>
+      <p class="mb-3 text-xs text-slate-500">Por dificuldade: ouro OBM = 2× ouro OBMEP; bronze OBM &gt; ouro OBMEP; bronze Ibero &gt; prata OBM; bronze IMO &gt; prata Ibero. Olimpíadas de entrada valem menos que um bronze da OBMEP.</p>
       <table class="mb-6 w-full text-sm">
         <thead><tr class="text-left text-xs uppercase tracking-wider text-slate-500"><th class="pb-2">Olimpíada</th><th class="pb-2 text-right">Ouro</th><th class="pb-2 text-right">Prata</th><th class="pb-2 text-right">Bronze</th><th class="pb-2 text-right">Menção</th></tr></thead>
         <tbody class="divide-y divide-white/5">
@@ -934,6 +934,9 @@
       <ul class="list-disc space-y-1 pl-5">
         <li>OBMEP: listas oficiais de premiados em <a class="link" href="https://www.obmep.org.br/premiados.htm" target="_blank" rel="noopener">obmep.org.br</a> (ouro, prata e bronze; escolas privadas desde 2017; sem edição em 2020).</li>
         <li>OBM: páginas anuais de premiados em <a class="link" href="https://www.obm.org.br/quem-somos/premiados-da-obm/" target="_blank" rel="noopener">obm.org.br</a> (inclui menções honrosas; não informa a escola).</li>
+        <li>OBI: quadros de mérito em <a class="link" href="https://olimpiada.ic.unicamp.br/" target="_blank" rel="noopener">olimpiada.ic.unicamp.br</a> (2005 em diante, com escola e honra ao mérito).</li>
+        <li>IMO: resultados do Brasil em <a class="link" href="https://www.imo-official.org/" target="_blank" rel="noopener">imo-official.org</a> (não informa o estado: ele é deduzido pelo nome nas outras olimpíadas).</li>
+        <li>Ibero, Cone Sul, EGMO, APMO e as demais competições internacionais: resultados publicados em <a class="link" href="https://www.obm.org.br/" target="_blank" rel="noopener">obm.org.br</a> (cidade e estado, sem escola).</li>
         <li>Alunos são identificados por nome + estado. Nomes abreviados de forma diferente entre as listas podem aparecer separados.</li>
         <li>Toda premiação tem o link da página oficial para conferência.</li>
       </ul>
