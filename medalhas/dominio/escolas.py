@@ -3,6 +3,8 @@
 Tudo aqui opera sobre texto normalizado (sem acento, maiúsculo; ver texto.normalizar) e vale tanto
 para os dados quanto para o que o usuário digita na busca.
 """
+import re
+
 from .texto import normalizar
 
 PARTICULAS = {"DE", "DA", "DO", "DAS", "DOS", "E", "D"}
@@ -150,3 +152,45 @@ def palavras_da_busca(texto: str) -> Expansao:
     """O que o usuário digitou, palavra a palavra, com a expansão de cada uma (partículas descartadas)."""
     palavras = [p for p in _juntar_letras_soltas(normalizar(texto).split()) if p not in PARTICULAS]
     return _expandir(palavras)
+
+
+# ---------------------------------------------------------------- nome de exibição
+
+# Palavras que continuam em maiúsculas (siglas e algarismos romanos). Cópia de KEEP_UPPER em web/js/util.js.
+_SIGLAS_EXIBICAO = re.compile(
+    r"^(I{1,3}|IV|V|VI{0,3}|IX|X|[A-Z]{1,2}|EE|EM|EMEF|EMEB|EMEIEF|EMEIF|EEEF|EEEFM|EEFM|EEF|EEM|EEEM|EEB|EEEP|"
+    r"EEPSG|ETEC|ETE|CEFET\w*|IF\w{0,10}|CEF|CEM|CED|CIEP|SESI|SENAI|SESC|UNICAMP|USP|UFMG|UFRJ|UFC|UFPE|UTFPR|"
+    r"EFM|EF|EI|LTDA|CMB|CMF|CMRJ|CAP|COC|ETAPA)$")
+_MINUSCULAS_EXIBICAO = {"DE", "DA", "DO", "DAS", "DOS", "E", "EM", "NA", "NO", "NAS", "NOS"}
+
+
+def nome_de_exibicao(nome: str | None) -> str:
+    """Nome de escola em caixa alta para a forma de exibição (igual a prettySchool em web/js/util.js).
+
+    >>> nome_de_exibicao("MILITAR DE FORTALEZA, COLEGIO")
+    'Colegio Militar de Fortaleza'
+    >>> nome_de_exibicao("EE PROF JOSE DA SILVA")
+    'EE Prof Jose da Silva'
+    """
+    if not nome:
+        return ""
+    s = nome.strip()
+    invertido = re.match(r"^(.*),\s*([^,]{2,40})$", s)
+    if invertido:
+        s = f"{invertido[2]} {invertido[1]}"
+    if s != s.upper():   # já está em caixa mista
+        return s
+    partes = re.split(r"(\s+|-|/)", s)
+    saida = []
+    for i, w in enumerate(partes):
+        if not any(c.isalpha() for c in w):
+            saida.append(w)
+            continue
+        maiuscula = w.upper()
+        if i > 0 and maiuscula in _MINUSCULAS_EXIBICAO:
+            saida.append(w.lower())
+        elif _SIGLAS_EXIBICAO.match(maiuscula.replace(".", "")):
+            saida.append(maiuscula)
+        else:
+            saida.append(w[:1] + w[1:].lower())
+    return "".join(saida)

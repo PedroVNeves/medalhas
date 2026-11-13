@@ -3,8 +3,41 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Medalhas · Hall da Fama das Olimpíadas de Conhecimento do Brasil</title>
-<meta name="description" content="Busca, rankings, API e dados abertos dos medalhistas brasileiros em olimpíadas científicas.">
+<title>Medalhas · Medalhistas da OBMEP, OBM, OBI e IMO: busca e rankings</title>
+<meta name="description" content="Busque qualquer aluno ou escola e veja as medalhas na OBMEP, OBM, OBI, IMO e mais 14 olimpíadas científicas desde 1979. Rankings de alunos, escolas e estados, API e dados abertos.">
+<link rel="canonical" href="https://medalhas.online/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#070a14">
+<!-- prévia ao compartilhar o link (WhatsApp, redes sociais) -->
+<meta property="og:type" content="website">
+<meta property="og:locale" content="pt_BR">
+<meta property="og:site_name" content="Medalhas">
+<meta property="og:url" content="https://medalhas.online/">
+<meta property="og:title" content="Medalhas · Hall da Fama das Olimpíadas de Conhecimento do Brasil">
+<meta property="og:description" content="Mais de 130 mil premiações da OBMEP, OBM, OBI, IMO e mais 14 olimpíadas. Busque alunos e escolas e veja os rankings.">
+<meta name="twitter:card" content="summary">
+<!-- resumo para IAs e uso da API sem JavaScript: https://llmstxt.org -->
+<link rel="alternate" type="text/markdown" title="Resumo para IAs" href="/llms.txt">
+<!-- dados estruturados: o Google entende a base como um conjunto de dados (aparece no Google Dataset Search) -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    { "@type": "WebSite", "@id": "https://medalhas.online/#site", "url": "https://medalhas.online/",
+      "name": "Medalhas", "alternateName": "Hall da Fama das Olimpíadas de Conhecimento do Brasil", "inLanguage": "pt-BR" },
+    { "@type": "Dataset", "name": "Medalhistas brasileiros em olimpíadas científicas",
+      "description": "Premiações (ouro, prata, bronze e menção honrosa) de estudantes brasileiros na OBMEP, OBM, OBI, IMO, Olimpíada Ibero-Americana, Cone Sul, EGMO e outras olimpíadas de conhecimento, de 1979 até hoje, com aluno, escola, município, estado, ano e nível. Dados compilados das listas oficiais de cada olimpíada.",
+      "url": "https://medalhas.online/", "isAccessibleForFree": true, "inLanguage": "pt-BR",
+      "keywords": ["OBMEP", "OBM", "OBI", "IMO", "olimpíadas de matemática", "medalhistas", "olimpíadas científicas", "Brasil"],
+      "temporalCoverage": "1979/..", "spatialCoverage": { "@type": "Place", "name": "Brasil" },
+      "includedInDataCatalog": { "@id": "https://medalhas.online/#site" },
+      "distribution": [
+        { "@type": "DataDownload", "encodingFormat": "text/csv", "contentUrl": "https://medalhas.online/api/v1/exportar?formato=csv" },
+        { "@type": "DataDownload", "encodingFormat": "application/json", "contentUrl": "https://medalhas.online/api/v1/exportar?formato=json" }
+      ] }
+  ]
+}
+</script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏅</text></svg>">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -35,11 +68,25 @@
 
 <body x-data="app()" class="min-h-screen overflow-x-clip antialiased">
 <div class="aurora"></div><div class="grid-bg"></div>
+<!-- para quem não roda JavaScript (robôs de IA, leitores simples): o que é o site e como ler os dados -->
+<noscript><main style="max-width:44rem;margin:2rem auto;padding:0 1rem;color:#e8ebf5;font:16px/1.6 system-ui,sans-serif">
+  <h1>Medalhas: Hall da Fama das Olimpíadas de Conhecimento do Brasil</h1>
+  <p>Base aberta com mais de 130 mil premiações de estudantes brasileiros na OBMEP, OBM, OBI, IMO, Olimpíada
+    Ibero-Americana, Cone Sul, EGMO, APMO, Olimpíada de Maio e outras olimpíadas científicas, de 1979 até hoje.
+    Busque alunos e escolas e veja os rankings de alunos, escolas e estados.</p>
+  <p>O site precisa de JavaScript. Os mesmos dados estão na API pública em JSON, sem cadastro:</p>
+  <ul>
+    <li><a href="/llms.txt" style="color:#f5c542">Resumo do site e da API</a></li>
+    <li><a href="/api/v1" style="color:#f5c542">Índice da API</a> e <a href="/api/v1/openapi.json" style="color:#f5c542">especificação OpenAPI</a></li>
+    <li>Medalhas de um aluno: <code>/api/v1/alunos?nome=NOME</code></li>
+    <li>Medalhistas de uma escola: <code>/api/v1/escolas?nome=NOME</code></li>
+  </ul>
+</main></noscript>
 
 <!-- ================================================================ NAV -->
 <header class="sticky top-0 z-40 border-b hairline bg-ink-900/70 backdrop-blur-xl">
   <div class="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6">
-    <a href="#/" class="group flex flex-none items-center gap-2.5 whitespace-nowrap">
+    <a href="/#/" class="group flex flex-none items-center gap-2.5 whitespace-nowrap">
       <span class="coin lg !text-base">★</span>
       <span class="leading-tight">
         <span class="font-display block text-lg font-bold text-shine">Medalhas</span>
@@ -47,11 +94,11 @@
       </span>
     </a>
     <nav class="ml-2 hidden items-center gap-1 md:flex">
-      <a href="#/" class="nav-link" :class="is('home') && 'active'">Início</a>
-      <a href="#/ranking/alunos" class="nav-link" :class="is('ranking') && 'active'">Rankings</a>
-      <a href="#/estados" class="nav-link" :class="is('estados') && 'active'">Estados</a>
-      <a href="#/sobre" class="nav-link" :class="is('sobre') && 'active'">Como funciona</a>
-      <a href="#/api" class="nav-link" :class="is('api') && 'active'">API &amp; Dados</a>
+      <a href="/#/" class="nav-link" :class="is('home') && 'active'">Início</a>
+      <a href="/#/ranking/alunos" class="nav-link" :class="is('ranking') && 'active'">Rankings</a>
+      <a href="/#/estados" class="nav-link" :class="is('estados') && 'active'">Estados</a>
+      <a href="/#/sobre" class="nav-link" :class="is('sobre') && 'active'">Como funciona</a>
+      <a href="/#/api" class="nav-link" :class="is('api') && 'active'">API &amp; Dados</a>
     </nav>
     <!-- pontuação na mesma linha só a partir de xl: até 1280px, logo + links + estes botões não cabem juntos -->
     <div class="ml-auto hidden flex-none xl:block"><div class="seg flex-nowrap" title="Como os pontos são calculados em todo o site">
@@ -73,11 +120,11 @@
   </div>
   <!-- no celular: rótulos curtos para os 5 links caberem sem rolar; se ainda faltar espaço, quebram linha -->
   <nav class="flex flex-wrap gap-0.5 px-4 pb-2 min-[360px]:gap-1 sm:px-6 md:hidden">
-    <a href="#/" class="nav-link" :class="is('home') && 'active'">Início</a>
-    <a href="#/ranking/alunos" class="nav-link" :class="is('ranking') && 'active'">Rankings</a>
-    <a href="#/estados" class="nav-link" :class="is('estados') && 'active'">Estados</a>
-    <a href="#/sobre" class="nav-link" :class="is('sobre') && 'active'"><span class="sm:hidden">Sobre</span><span class="hidden sm:inline">Como funciona</span></a>
-    <a href="#/api" class="nav-link" :class="is('api') && 'active'"><span class="sm:hidden">API</span><span class="hidden sm:inline">API &amp; Dados</span></a>
+    <a href="/#/" class="nav-link" :class="is('home') && 'active'">Início</a>
+    <a href="/#/ranking/alunos" class="nav-link" :class="is('ranking') && 'active'">Rankings</a>
+    <a href="/#/estados" class="nav-link" :class="is('estados') && 'active'">Estados</a>
+    <a href="/#/sobre" class="nav-link" :class="is('sobre') && 'active'"><span class="sm:hidden">Sobre</span><span class="hidden sm:inline">Como funciona</span></a>
+    <a href="/#/api" class="nav-link" :class="is('api') && 'active'"><span class="sm:hidden">API</span><span class="hidden sm:inline">API &amp; Dados</span></a>
   </nav>
   <div class="flex items-center gap-2 px-4 pb-2 sm:px-6 xl:hidden"><span class="hidden text-[11px] font-semibold uppercase tracking-wider text-slate-500 min-[360px]:inline">Pontuação</span><div class="seg" title="Como os pontos são calculados em todo o site">
       <template x-for="m in ov?.metodos || []" :key="m.id">
@@ -120,9 +167,9 @@
         </div>
       </div>
       <div class="mt-4 flex flex-wrap gap-2 text-sm">
-        <a href="#/ranking/alunos" class="inline-flex items-center gap-1.5 rounded-full border hairline bg-white/5 px-3 py-1.5 text-slate-300 hover:border-gold-400/40 hover:text-white"><i x-icon="'trophy'" class="h-4 w-4 text-gold-400"></i>Ranking de alunos</a>
-        <a href="#/ranking/escolas" class="inline-flex items-center gap-1.5 rounded-full border hairline bg-white/5 px-3 py-1.5 text-slate-300 hover:border-gold-400/40 hover:text-white"><i x-icon="'school'" class="h-4 w-4 text-indigo-300"></i>Melhores escolas</a>
-        <a href="#/estados" class="inline-flex items-center gap-1.5 rounded-full border hairline bg-white/5 px-3 py-1.5 text-slate-300 hover:border-gold-400/40 hover:text-white"><i x-icon="'map'" class="h-4 w-4 text-pink-300"></i>Mapa do Brasil</a>
+        <a href="/#/ranking/alunos" class="inline-flex items-center gap-1.5 rounded-full border hairline bg-white/5 px-3 py-1.5 text-slate-300 hover:border-gold-400/40 hover:text-white"><i x-icon="'trophy'" class="h-4 w-4 text-gold-400"></i>Ranking de alunos</a>
+        <a href="/#/ranking/escolas" class="inline-flex items-center gap-1.5 rounded-full border hairline bg-white/5 px-3 py-1.5 text-slate-300 hover:border-gold-400/40 hover:text-white"><i x-icon="'school'" class="h-4 w-4 text-indigo-300"></i>Melhores escolas</a>
+        <a href="/#/estados" class="inline-flex items-center gap-1.5 rounded-full border hairline bg-white/5 px-3 py-1.5 text-slate-300 hover:border-gold-400/40 hover:text-white"><i x-icon="'map'" class="h-4 w-4 text-pink-300"></i>Mapa do Brasil</a>
       </div>
     </div>
 
@@ -130,7 +177,7 @@
     <div class="glass card relative overflow-hidden p-6">
       <div class="mb-1 flex items-center justify-between">
         <h2 class="font-display text-sm font-semibold uppercase tracking-[.18em] text-slate-400">Hall da Fama</h2>
-        <a href="#/ranking/alunos" class="text-xs text-slate-400 hover:text-gold-300">ver ranking →</a>
+        <a href="/#/ranking/alunos" class="text-xs text-slate-400 hover:text-gold-300">ver ranking →</a>
       </div>
       <p class="mb-6 text-xs text-slate-500">Maiores pontuações de todos os tempos</p>
       <div class="grid grid-cols-3 items-end gap-3" x-show="podio.length">
@@ -175,7 +222,7 @@
     <div class="glass card p-5">
       <div class="mb-3 flex items-center justify-between">
         <h3 class="font-display flex items-center gap-2 text-lg font-semibold"><i x-icon="'flame'" class="h-5 w-5 text-orange-400"></i>Top 10 alunos</h3>
-        <a href="#/ranking/alunos" class="text-xs text-slate-400 hover:text-gold-300">ranking completo →</a>
+        <a href="/#/ranking/alunos" class="text-xs text-slate-400 hover:text-gold-300">ranking completo →</a>
       </div>
       <ol class="stagger divide-y divide-white/5">
         <template x-for="a in ov?.top_alunos || []" :key="a.id">
@@ -197,7 +244,7 @@
     <div class="glass card p-5">
       <div class="mb-3 flex items-center justify-between">
         <h3 class="font-display flex items-center gap-2 text-lg font-semibold"><i x-icon="'landmark'" class="h-5 w-5 text-indigo-300"></i>Top 10 escolas</h3>
-        <a href="#/ranking/escolas" class="text-xs text-slate-400 hover:text-gold-300">ranking completo →</a>
+        <a href="/#/ranking/escolas" class="text-xs text-slate-400 hover:text-gold-300">ranking completo →</a>
       </div>
       <ol class="stagger divide-y divide-white/5">
         <template x-for="e in ov?.top_escolas || []" :key="e.id">
@@ -279,7 +326,7 @@
       <button class="menu-item" @click="aberto = false; baixar(exportBusca, 'csv')"><i x-icon="'file-spreadsheet'"></i><span>CSV<small>planilhas, Python, R</small></span></button>
       <button class="menu-item" @click="aberto = false; baixar(exportBusca, 'excel')"><i x-icon="'sheet'"></i><span>Excel<small>CSV com ; para o Excel em português</small></span></button>
       <button class="menu-item" @click="aberto = false; baixar(exportBusca, 'json')"><i x-icon="'braces'"></i><span>JSON<small>para programas</small></span></button>
-      <a href="#/api" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
+      <a href="/#/api" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
     </div>
   </div>
       </template>
@@ -406,7 +453,7 @@
       <button class="menu-item" @click="aberto = false; baixar(exportRanking('premiacoes'), 'csv')"><i x-icon="'file-spreadsheet'"></i><span>CSV<small>planilhas, Python, R</small></span></button>
       <button class="menu-item" @click="aberto = false; baixar(exportRanking('premiacoes'), 'excel')"><i x-icon="'sheet'"></i><span>Excel<small>CSV com ; para o Excel em português</small></span></button>
       <button class="menu-item" @click="aberto = false; baixar(exportRanking('premiacoes'), 'json')"><i x-icon="'braces'"></i><span>JSON<small>para programas</small></span></button>
-      <a href="#/api" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
+      <a href="/#/api" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
     </div>
   </div>
   </div>
@@ -636,7 +683,7 @@
       <button class="menu-item" @click="aberto = false; baixar({ aluno_id: aluno.id }, 'csv')"><i x-icon="'file-spreadsheet'"></i><span>CSV<small>planilhas, Python, R</small></span></button>
       <button class="menu-item" @click="aberto = false; baixar({ aluno_id: aluno.id }, 'excel')"><i x-icon="'sheet'"></i><span>Excel<small>CSV com ; para o Excel em português</small></span></button>
       <button class="menu-item" @click="aberto = false; baixar({ aluno_id: aluno.id }, 'json')"><i x-icon="'braces'"></i><span>JSON<small>para programas</small></span></button>
-      <a href="#/api" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
+      <a href="/#/api" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
     </div>
   </div>
       </div>
@@ -791,7 +838,7 @@
       <button class="menu-item" @click="aberto = false; baixar({ escola_id: escola.id }, 'csv')"><i x-icon="'file-spreadsheet'"></i><span>CSV<small>planilhas, Python, R</small></span></button>
       <button class="menu-item" @click="aberto = false; baixar({ escola_id: escola.id }, 'excel')"><i x-icon="'sheet'"></i><span>Excel<small>CSV com ; para o Excel em português</small></span></button>
       <button class="menu-item" @click="aberto = false; baixar({ escola_id: escola.id }, 'json')"><i x-icon="'braces'"></i><span>JSON<small>para programas</small></span></button>
-      <a href="#/api" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
+      <a href="/#/api" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
     </div>
   </div>
       </div>
@@ -884,7 +931,7 @@
               </a></li>
             </template>
           </ol>
-          <a :href="`#/busca?${new URLSearchParams({q: escola.nome, campo: 'escola', escola_chave: escola.id})}`" class="mt-3 block text-xs text-gold-300">ver todas as premiações (com filtros) →</a>
+          <a :href="`/#/busca?${new URLSearchParams({q: escola.nome, campo: 'escola', escola_chave: escola.id})}`" class="mt-3 block text-xs text-gold-300">ver todas as premiações (com filtros) →</a>
         </div>
         <div class="glass card p-5">
           <h3 class="font-display mb-4 flex items-center gap-2 text-lg font-semibold"><i x-icon="'sparkles'" class="h-5 w-5 text-gold-400"></i>Conquistas da escola <span class="text-sm font-normal text-slate-500" x-text="`${desbloqueadas(escola.conquistas)}/${escola.conquistas.length}`"></span></h3>
@@ -1234,7 +1281,7 @@
 
 <footer class="border-t hairline py-8 text-center text-xs text-slate-500">
   Dados públicos das olimpíadas científicas · cada premiação aponta para a fonte oficial ·
-  <a href="#/api" class="link">API &amp; dados abertos</a>
+  <a href="/#/api" class="link">API &amp; dados abertos</a>
 </footer>
 
 <!-- aviso flutuante -->

@@ -3,6 +3,7 @@
 Recebem os parâmetros da URL como vieram (a API interna é tolerante: valor desconhecido vira o padrão).
 """
 from ...dominio import gamificacao, pontuacao
+from ...dominio.enderecos import Enderecos, texto_escola
 from ...dominio.escolas import palavras_da_busca
 from ...dominio.ranking import ORDEM_PADRAO, ORDENACOES, TIPOS, RankingOrdenado, com_pontos, com_posicoes, ordenar
 from .conexao import Conexao, marcadores
@@ -242,6 +243,16 @@ def perfil_escola(con: Conexao, escola_id: str, params: dict) -> dict:
         "top_alunos": destaques, "conquistas": gamificacao.conquistas_escola(premiacoes, posicao, posicao_uf),
         "recentes": premiacoes[:60],
     }
+
+
+# ---------------------------------------------------------------- endereços das páginas
+
+def enderecos(con: Conexao) -> Enderecos:
+    def montar() -> Enderecos:
+        alunos = [(r[0], r[0]) for r in con.execute("SELECT id FROM alunos")]
+        escolas = [(r[0], texto_escola(r[1], r[2], r[3])) for r in con.execute("SELECT id, nome, municipio, uf FROM escolas")]
+        return Enderecos(alunos, escolas)
+    return con.fixo("enderecos", montar)
 
 
 # ---------------------------------------------------------------- visão geral (página inicial)

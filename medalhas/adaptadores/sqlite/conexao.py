@@ -15,7 +15,19 @@ class Cache:
     def __init__(self, caminho: Path):
         self._caminho = caminho
         self._itens: dict[Any, tuple[float, Any]] = {}
+        self._fixos: dict[Any, tuple[float, Any]] = {}
         self._trava = threading.Lock()
+
+    def fixo(self, chave: Any, calcular: Callable[[], T]) -> T:
+        """Como obter, mas fora do limite de itens: para tabelas usadas em toda requisição (endereços)."""
+        versao = self._caminho.stat().st_mtime
+        with self._trava:
+            achado = self._fixos.get(chave)
+            if achado and achado[0] == versao:
+                return achado[1]
+            valor = calcular()   # dentro da trava: as threads da primeira visita esperam um único cálculo
+            self._fixos[chave] = (versao, valor)
+            return valor
 
     def obter(self, chave: Any, calcular: Callable[[], T]) -> T:
         versao = self._caminho.stat().st_mtime
@@ -48,6 +60,9 @@ class Conexao:
 
     def em_cache(self, chave: Any, calcular: Callable[[], T]) -> T:
         return self._cache.obter(chave, calcular)
+
+    def fixo(self, chave: Any, calcular: Callable[[], T]) -> T:
+        return self._cache.fixo(chave, calcular)
 
     def close(self) -> None:
         self._con.close()

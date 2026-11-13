@@ -1,4 +1,6 @@
-/* Componente Alpine da página inteira: rotas (hash), estado e ações. Depende de util.js, graficos.js e documentacao-api.js. */
+/* Componente Alpine da página inteira: rotas, estado e ações. Depende de util.js, graficos.js e documentacao-api.js. */
+
+const TITULO_SITE = "Medalhas · Medalhistas da OBMEP, OBM, OBI e IMO: busca e rankings";
 
 function app() {
   return {
@@ -13,6 +15,7 @@ function app() {
     mapSel: "",   // estado tocado no mapa (telas de toque, que não têm "passar o mouse")
     toque: matchMedia("(hover: none)").matches,
     // busca
+    _rotaAtual: null,
     q: "", campo: "nome", busca: { loading: false, total: 0, grupos: [] }, _t: null,
     bf: { uf: "", area: "", competicao: "", medalha: "", ano: "", nivel: "", rede: "" },
     // ranking
@@ -25,11 +28,23 @@ function app() {
     doc: { lang: "curl", resp: {}, carregando: {}, limites: null, copiado: "" },
 
     async init() {
+      // voltar/avançar do navegador (popstate) e endereço com # editado à mão (hashchange)
+      window.addEventListener("popstate", () => this.onRoute());
       window.addEventListener("hashchange", () => this.onRoute());
+      // links internos trocam de página sem recarregar o site (Ctrl/Cmd+clique continua abrindo outra aba)
+      document.addEventListener("click", e => {
+        if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        const a = e.target.closest("a[href]");
+        if (!a || a.target || a.hasAttribute("download")) return;
+        const url = new URL(a.href, location.href);
+        if (url.origin !== location.origin) return;
+        if (url.hash.startsWith("#/")) { e.preventDefault(); this.navegar("/" + url.hash); }
+        else if (/^\/(aluno|escola)\/[^/]+$/.test(url.pathname)) { e.preventDefault(); this.navegar(url.pathname); }
+      });
       window.addEventListener("keydown", e => {
         if (e.key === "/" && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); this.$refs.q?.focus(); }
       });
-      this.onRoute();  // a rota não espera a visão geral: perfis e rankings carregam sozinhos
+      this.onRoute(true);  // a rota não espera a visão geral: perfis e rankings carregam sozinhos
       await this.loadOverview();
     },
     async loadOverview() {
@@ -60,18 +75,37 @@ function app() {
       localStorage.setItem("metodo", m);
       if (m === "impa3") this.avisar(`Pontuação IMPA N3 ativada: o filtro de níveis foi aplicado automaticamente (${descreveImpa(this.ov?.niveis_impa)}), como no edital do IMPA Tech.`);
       const y = window.scrollY;
-      this.onRoute();
+      this.onRoute(true);
       await this.loadOverview();
       window.scrollTo({ top: y, behavior: "instant" });
     },
 
     // ------------------------------------------------ roteamento
-    go(path) { location.hash = path; },
-    onRoute() {
-      const [path, qs] = location.hash.replace(/^#/, "").split("?");
+    // Perfis têm endereço próprio, que o Google indexa: /aluno/maria-souza-lima-al e /escola/...
+    // (o servidor entrega o index.html com título e resumo daquela página). As outras telas ficam
+    // depois do # na página inicial: /#/ranking/alunos, /#/busca?q=...
+    go(path) { this.navegar(path.startsWith("#") ? "/" + path : path); },
+    navegar(url) {
+      if (url !== location.pathname + location.search + location.hash) history.pushState(null, "", url);
+      this.onRoute();
+    },
+    onRoute(forcar = false) {
+      const atual = location.pathname + location.search + location.hash;
+      if (atual === this._rotaAtual && !forcar) return;   // popstate e hashchange chegam juntos
+      this._rotaAtual = atual;
+      let caminho = location.hash.startsWith("#/") ? location.hash.slice(1) : location.pathname + location.search;
+      // links antigos: #/aluno/NOME%7CUF -> /aluno/nome-uf
+      const antigo = location.hash.match(/^#\/(aluno|escola)\/([^?]+)/);
+      if (antigo) {
+        caminho = `/${antigo[1]}/${slug(decodeURIComponent(antigo[2]))}`;
+        history.replaceState(null, "", caminho);
+        this._rotaAtual = caminho;
+      }
+      const [path, qs] = caminho.split("?");
       const parts = (path || "/").split("/").filter(Boolean);
       const query = Object.fromEntries(new URLSearchParams(qs || ""));
       this.route = { name: parts[0] || "home", param: decodeURIComponent(parts.slice(1).join("/")), query };
+      if (!["aluno", "escola"].includes(this.route.name)) document.title = TITULO_SITE;
       // links podem fixar o método: #/ranking/alunos?metodo=impa3
       if (["impa", "impa3", "site"].includes(query.metodo) && query.metodo !== this.metodo) {
         this.metodo = METODO = query.metodo;
@@ -93,9 +127,9 @@ function app() {
       if (r.name === "escola") this.loadEscola(r.param);
     },
     is(name) { return this.route.name === name; },
-    alunoLink(id) { return "#/aluno/" + encodeURIComponent(id); },
-    escolaLink(id) { return "#/escola/" + encodeURIComponent(id); },
-    rankLink(tipo, extra = {}) { const p = new URLSearchParams(extra).toString(); return `#/ranking/${tipo}${p ? "?" + p : ""}`; },
+    alunoLink(id) { return "/aluno/" + slug(id); },
+    escolaLink(id) { return "/escola/" + slug(id); },
+    rankLink(tipo, extra = {}) { const p = new URLSearchParams(extra).toString(); return `/#/ranking/${tipo}${p ? "?" + p : ""}`; },
 
     // ------------------------------------------------ home
     drawHome() {
@@ -131,7 +165,7 @@ function app() {
         const q = this.q.trim();
         if (q.length < 2) return;
         const query = this.buscaQuery({ q, campo: this.campo });
-        history.replaceState(null, "", `#/busca?${new URLSearchParams(query)}`);
+        history.replaceState(null, "", `#/busca?${new URLSearchParams(query)}`); this._rotaAtual = location.pathname + location.search + location.hash;
         this.route.query = query; this.runSearch();
       }, 220);
     },
@@ -140,7 +174,7 @@ function app() {
       const q = this.q.trim();
       if (q.length < 2) { this.$refs.q?.focus(); return; }
       if (this.is("busca")) { this.typed(); return; }
-      location.hash = `#/busca?${new URLSearchParams({ q, campo: this.campo })}`;
+      this.go(`#/busca?${new URLSearchParams({ q, campo: this.campo })}`);
     },
     setCampo(c) {
       this.campo = c;
@@ -156,7 +190,7 @@ function app() {
     setBuscaFilter(k, v) {
       this.bf[k] = v;
       const query = this.buscaQuery({ q: this.q.trim(), campo: this.campo });
-      history.replaceState(null, "", `#/busca?${new URLSearchParams(query)}`);
+      history.replaceState(null, "", `#/busca?${new URLSearchParams(query)}`); this._rotaAtual = location.pathname + location.search + location.hash;
       this.route.query = query;
       this.runSearch();
     },
@@ -251,16 +285,31 @@ function app() {
     get estadosOrdenados() { return this.ov ? [...this.ov.estados].sort((a, b) => b[this.mapMetric] - a[this.mapMetric]) : []; },
 
     // ------------------------------------------------ perfis
-    async loadAluno(id) {
+    // a página do perfil vem pelo endereço (/aluno/maria-souza-lima-al); a resposta traz o endereço
+    // oficial (o de escolas usa o nome de exibição), que substitui o da barra sem criar outra entrada
+    perfilCarregado(d) {
+      if (d.endereco && d.endereco !== location.pathname) {
+        history.replaceState(null, "", d.endereco + location.search);
+        this._rotaAtual = location.pathname + location.search + location.hash;
+      }
+      if (!d.nome) return;
+      const nome = this.is("aluno") ? d.nome : prettySchool(d.nome);
+      document.title = `${d.uf ? `${nome} (${d.uf})` : nome} · Medalhas`;
+    },
+    async loadAluno(endereco) {
       this.loadingPerfil = true; this.aluno = null;
-      const d = await API("aluno", { id });
+      const d = await API("aluno", { endereco });
       this.aluno = d; this.loadingPerfil = false;
+      this.perfilCarregado(d);
+      const id = d.id;
       if (d.medalhas?.ouro && !sessionStorage.getItem("cf:" + id)) { sessionStorage.setItem("cf:" + id, 1); setTimeout(celebrate, 350); }
     },
-    async loadEscola(id) {
+    async loadEscola(endereco) {
       this.loadingPerfil = true; this.escola = null;
-      const d = await API("escola", { id });
+      const d = await API("escola", { endereco });
       this.escola = d; this.loadingPerfil = false;
+      this.perfilCarregado(d);
+      const id = d.id;
       this.$nextTick(() => {
         if (d.serie) stackedYears(this.$refs.schoolChart, "school", d.serie.map(s => ({ ano: s.ano, ouro: s.Ouro, prata: s.Prata, bronze: s.Bronze })));
         if (d.medalhas?.ouro >= 10 && !sessionStorage.getItem("cf:" + id)) { sessionStorage.setItem("cf:" + id, 1); setTimeout(celebrate, 350); }

@@ -12,6 +12,7 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from ..dominio.enderecos import Enderecos
 from ..dominio.escolas import Expansao
 from ..dominio.premiacao import Premiacao
 from ..dominio.ranking import RankingOrdenado
@@ -58,6 +59,8 @@ class SessaoDeLeitura(Protocol):
     def perfil_aluno(self, aluno_id: str, params: dict) -> dict: ...
     def perfil_escola(self, escola_id: str, params: dict) -> dict: ...
     def visao_geral(self, params: dict) -> dict: ...
+    def enderecos(self) -> Enderecos:
+        """Endereços legíveis de todas as páginas de aluno e escola (/aluno/maria-souza-lima-al)."""
 
     # API pública (critérios já validados pelo adaptador HTTP)
     def resumo_base(self) -> dict: ...

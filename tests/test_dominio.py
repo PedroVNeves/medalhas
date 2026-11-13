@@ -1,7 +1,7 @@
 """Regras de negócio: pontuação, escolas, identidade de alunos, ranking e gamificação."""
 import unittest
 
-from medalhas.dominio import escolas, gamificacao, identidade, pontuacao, ranking
+from medalhas.dominio import enderecos, escolas, gamificacao, identidade, pontuacao, ranking
 from medalhas.dominio.texto import capitalizar_nome, normalizar
 
 
@@ -132,6 +132,35 @@ class TestGamificacao(unittest.TestCase):
         desbloqueadas = {c["id"] for c in gamificacao.conquistas_aluno(ps) if c["desbloqueada"]}
         self.assertTrue({"primeiro_podio", "midas", "hat_trick", "imparavel", "invicto"} <= desbloqueadas)
         self.assertNotIn("veterano", desbloqueadas)
+
+
+class TestEnderecos(unittest.TestCase):
+    def test_slug(self):
+        self.assertEqual(enderecos.slug("MARIA SOUZA LIMA|AL"), "maria-souza-lima-al")
+        self.assertEqual(enderecos.slug("Colégio  São Luís (SP)"), "colegio-sao-luis-sp")
+        self.assertEqual(enderecos.slug(None), "")
+
+    def test_escola_usa_o_nome_de_exibicao_e_aceita_o_slug_do_id(self):
+        e = enderecos.Enderecos([("ANA|SP", "ANA|SP")],
+                                [("BENEDITA ESCOLA MUNICIPAL|BORDA|MG", "EM BENEDITA BORDA MG")])
+        oficial = "em-benedita-borda-mg"
+        self.assertEqual(e.de("escola", "BENEDITA ESCOLA MUNICIPAL|BORDA|MG"), oficial)
+        self.assertEqual(e.resolver("escola", oficial), ("BENEDITA ESCOLA MUNICIPAL|BORDA|MG", oficial))
+        # o site monta o link pelo id; o servidor acha a escola e manda para o endereço oficial
+        self.assertEqual(e.resolver("escola", "benedita-escola-municipal-borda-mg")[1], oficial)
+        self.assertEqual(e.resolver("aluno", "ana-sp"), ("ANA|SP", "ana-sp"))
+        self.assertIsNone(e.resolver("aluno", "ninguem"))
+        self.assertEqual(e.todos("escola"), [oficial])
+
+    def test_enderecos_repetidos_ganham_numero(self):
+        e = enderecos.Enderecos([], [("B|X|SP", "USP SP"), ("A|Y|SP", "USP SP")])
+        self.assertEqual(e.de("escola", "A|Y|SP"), "usp-sp")       # o id menor fica com o endereço
+        self.assertEqual(e.de("escola", "B|X|SP"), "usp-sp-2")
+
+    def test_nome_de_exibicao_da_escola(self):
+        self.assertEqual(escolas.nome_de_exibicao("MILITAR DE FORTALEZA, COLEGIO"), "Colegio Militar de Fortaleza")
+        self.assertEqual(escolas.nome_de_exibicao("EE PROF JOSE DA SILVA"), "EE Prof Jose da Silva")
+        self.assertEqual(escolas.nome_de_exibicao("Colégio Etapa"), "Colégio Etapa")   # caixa mista fica igual
 
 
 if __name__ == "__main__":

@@ -58,6 +58,22 @@ canvas-confetti via CDN):
 - **Exportar** na busca, nos rankings e nos perfis: baixa o que está na tela em CSV, CSV para Excel ou JSON.
 - **API & Dados**: documentação da API com exemplos, teste ao vivo e download da base inteira.
 
+### Endereços e buscadores
+
+Cada aluno e cada escola tem endereço próprio, que o Google indexa: `/aluno/maria-souza-lima-al` (o id
+`NOME|UF` em forma de slug) e `/escola/em-benedita-braga-cobra-borda-da-mata-mg` (nome de exibição +
+município + UF; ver `dominio/enderecos.py`). As outras telas ficam depois do `#` na página inicial
+(`/#/ranking/alunos`, `/#/busca?q=...`), e links antigos como `#/aluno/NOME%7CUF` continuam funcionando.
+
+- Ao abrir `/aluno/...` ou `/escola/...`, o servidor (`adaptadores/http/paginas.py`) entrega o mesmo
+  `index.html` com título, descrição, endereço canônico e um resumo em texto do perfil (em `<noscript>`,
+  para robôs de IA que não rodam JavaScript). No site, a troca de página acontece sem recarregar.
+- O site monta os links de escola pelo id (`slug()` em `web/js/util.js`, cópia do Python); o servidor
+  redireciona esse endereço para o oficial, e o site troca o da barra quando o perfil carrega.
+- `/sitemap.xml` lista todas as páginas (um arquivo a cada 40 mil endereços em `/sitemaps/`).
+  `web/robots.txt` libera buscadores e IAs, e `web/llms.txt` explica o site e a API para IAs.
+- O endereço canônico usa `https://medalhas.online`; para outro domínio, defina `MEDALHAS_URL`.
+
 ### Métodos de pontuação
 
 No topo do site há um seletor global (também aceito na URL como `?metodo=`) com três métodos. A escolha
@@ -111,7 +127,7 @@ Pode mudar sem aviso; para integrações use a [API pública](#api-pública-v1).
 |---|---|
 | `/api/busca?q=&campo=nome\|escola\|tudo&uf=&competicao=&area=&medalha=&ano=&nivel=&rede=&escola_chave=` | premiações que casam com a busca |
 | `/api/ranking?tipo=alunos\|escolas\|estados&ordem=xp\|medalhas\|total\|impa&uf=&competicao=&area=&ano_de=&ano_ate=&nivel=&rede=&offset=` | ranking paginado |
-| `/api/aluno?id=` / `/api/escola?id=` | perfil completo com conquistas |
+| `/api/aluno?id=` / `/api/escola?id=` | perfil completo com conquistas (ou `?endereco=` com o slug da página) |
 | `/api/overview` | totais, série histórica, top 10, estados, catálogo de olimpíadas e níveis |
 
 Todas as rotas aceitam `metodo=impa|impa3|site`; o campo `xp` das respostas é sempre a pontuação no
@@ -235,12 +251,14 @@ por IP:
 ## Publicar na internet (Firebase Hosting + Cloud Run)
 
 ```
-visitante -> seu-dominio.com.br (Firebase Hosting: HTTPS, CDN, arquivos de web/)
-                 └── /api/**  ->  Cloud Run "medalhas" (server.py + data/medalhas.db dentro da imagem)
+visitante -> medalhas.online (Firebase Hosting: HTTPS, CDN, arquivos de web/)
+                 └── /api/**, /aluno/**, /escola/**, /sitemap.xml, /sitemaps/**
+                       ->  Cloud Run "medalhas" (server.py + data/medalhas.db dentro da imagem)
 ```
 
 - `Dockerfile`: imagem do servidor; a base vai dentro dela (só leitura). `.gcloudignore` define o que sobe.
-- `firebase.json`: publica `web/` e repassa `/api/**` ao Cloud Run em `southamerica-east1` (São Paulo).
+- `firebase.json`: publica `web/` e repassa a API, as páginas de perfil e o sitemap ao Cloud Run em
+  `southamerica-east1` (São Paulo).
 - O servidor roda com `--trust-proxy`: lê o IP do visitante em `X-Forwarded-For` e o domínio em
   `X-Forwarded-Host` (para os links da API apontarem para o seu domínio).
 
@@ -263,9 +281,10 @@ gcloud run deploy medalhas --source . --region southamerica-east1 --allow-unauth
 firebase deploy --only hosting
 ```
 
-Rode sempre os dois comandos, nessa ordem: `/api/overview` (dados da página inicial) fica até um dia no
-CDN do Firebase Hosting, e é o `firebase deploy` que limpa esse cache. Sem ele, a página inicial
-continuaria mostrando os números antigos.
+Rode sempre os dois comandos, nessa ordem: `/api/overview` (dados da página inicial) e as páginas de
+aluno e escola ficam até um dia no CDN do Firebase Hosting, e é o `firebase deploy` que limpa esse cache.
+Sem ele, o site continuaria mostrando os números antigos. As páginas de perfil saem do `index.html` que
+está dentro da imagem do Cloud Run: mudou o `index.html`, publique os dois.
 
 `--max-instances` limita o custo: cada instância tem seus próprios contadores de limite por IP.
 Sem tráfego o Cloud Run desliga (custo zero, primeira visita depois disso demora alguns segundos).
@@ -298,7 +317,7 @@ adaptadores (coletores, SQLite, HTTP)  ->  aplicacao (casos de uso, portas)  -> 
 build_db.py                    ponto de montagem: coletores + SQLite -> gerar_base
 server.py                      ponto de montagem: SQLite (leitura) -> servidor HTTP
 medalhas/
-  config.py                    caminhos no disco (único módulo que os conhece)
+  config.py                    caminhos no disco (único módulo que os conhece) e endereço do site
   dominio/                     regras puras, sem I/O
     premiacao.py               a premiação (TypedDict), medalhas e UFs
     olimpiadas.py              catálogo das olimpíadas
@@ -307,6 +326,7 @@ medalhas/
     identidade.py              quais premiações são da mesma pessoa
     ranking.py                 ordenação e posição (empates dividem a posição)
     gamificacao.py             tiers e conquistas
+    enderecos.py               endereços legíveis das páginas (/aluno/maria-souza-lima-al)
     texto.py                   normalização de nomes
   aplicacao/
     portas.py                  interfaces: Coletor, RepositorioPremiacoes, FonteDeLeitura, SessaoDeLeitura
@@ -315,6 +335,7 @@ medalhas/
     coletores/                 leitura das páginas oficiais (download com cache em cache/)
     sqlite/                    esquema, gravação, tabelas-resumo e consultas (site e API)
     http/                      servidor, site estático, API do site, limites por IP
+      paginas.py               páginas de aluno/escola com título e resumo, e o sitemap
       api_v1/                  API pública: parâmetros, rotas, apresentação JSON, exportação, OpenAPI
 web/
   index.html, styles.css       página única (Tailwind, Alpine.js, ECharts via CDN)

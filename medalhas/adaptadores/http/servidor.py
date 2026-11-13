@@ -11,10 +11,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
 from ...aplicacao.portas import FonteDeLeitura
-from ...config import PASTA_WEB
+from ...config import PASTA_WEB, URL_SITE
+from ...dominio.enderecos import TIPOS as TIPOS_DE_PAGINA
 from ...dominio import pontuacao
 from ...dominio.ranking import ORDENACOES, TIPOS
-from . import api_v1, limites
+from . import api_v1, limites, paginas
 from .pedido import Pedido
 from .rotas_site import ROTAS
 
@@ -22,7 +23,7 @@ CABECALHOS_EXPOSTOS = ("X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Sc
                        "Content-Disposition, X-Total-Rows")
 TEMPO_OCIOSO = 20   # segundos sem enviar/receber dados: derruba conexões lentas de propósito (slowloris)
 COMPACTAR_A_PARTIR = 1024   # bytes; abaixo disso o gzip quase não ganha nada
-TIPOS_COMPACTAVEIS = ("application/json", "text/", "application/javascript")
+TIPOS_COMPACTAVEIS = ("application/json", "text/", "application/javascript", "application/xml")
 CACHE_NAVEGADOR = 300   # segundos que o navegador reaproveita respostas marcadas com cache_cdn
 
 mimetypes.add_type("text/javascript", ".js")
@@ -144,6 +145,46 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._json(dados, cabecalhos=cabecalhos)
 
+    # ------------------------------------------------ páginas de aluno/escola e sitemap
+    def _com_sessao(self, funcao):
+        """Roda funcao(sessao) com as mesmas proteções da API do site. None se a consulta foi recusada."""
+        permitido, cabecalhos = limites.limitador.consumir("site", self._ip())
+        if not permitido:
+            self._recusar(cabecalhos)
+            return None
+        if not limites.consultas.acquire(timeout=limites.ESPERA_CONSULTA):
+            self._enviar(b"Servidor ocupado; tente de novo em instantes", "text/plain; charset=utf-8", 503,
+                         {"Retry-After": "5"})
+            return None
+        try:
+            with self.server.leitura.sessao() as sessao:
+                return funcao(sessao)
+        finally:
+            limites.consultas.release()
+
+    # como /api/overview: só muda com a base, então o CDN do Firebase guarda (e cada deploy limpa)
+    _CACHE_PAGINA = {"Cache-Control": f"public, max-age={CACHE_NAVEGADOR}, s-maxage=86400"}
+
+    def _pagina(self, tipo: str, endereco: str) -> None:
+        pagina = self._com_sessao(lambda s: paginas.perfil(s, tipo, endereco, URL_SITE))
+        if pagina is None:
+            return
+        if pagina.destino:
+            self._enviar(b"", "text/plain", 301, {"Location": pagina.destino, **self._CACHE_PAGINA})
+        else:
+            self._enviar(pagina.corpo, "text/html; charset=utf-8", pagina.status,
+                         self._CACHE_PAGINA if pagina.status == 200 else None)
+
+    def _sitemap(self, nome: str) -> None:
+        versao = self.server.leitura.versao()
+        resultado = self._com_sessao(lambda s: [paginas.sitemap(s, nome, URL_SITE, versao)])
+        if resultado is None:   # recusado: a resposta já foi enviada
+            return
+        if resultado[0] is None:
+            self._enviar(b"Not found", "text/plain", 404)
+        else:
+            self._enviar(resultado[0], "application/xml; charset=utf-8", cabecalhos=self._CACHE_PAGINA)
+
     # ------------------------------------------------ site estático
     def _arquivo(self, caminho_url: str) -> None:
         relativo = "index.html" if caminho_url in ("/", "") else unquote(caminho_url.lstrip("/"))
@@ -174,8 +215,13 @@ class Handler(BaseHTTPRequestHandler):
         params = {k: v[0] for k, v in parse_qs(url.query).items()}
         caminho = url.path.rstrip("/") or "/"
         try:
+            partes = caminho.strip("/").split("/")
             if caminho.startswith("/api/"):
                 self._api(caminho, params)
+            elif len(partes) == 2 and partes[0] in TIPOS_DE_PAGINA:
+                self._pagina(partes[0], unquote(partes[1]))
+            elif caminho == "/sitemap.xml" or (len(partes) == 2 and partes[0] == "sitemaps"):
+                self._sitemap(caminho.lstrip("/"))
             else:
                 self._arquivo(url.path)
         except api_v1.NaoEncontrado as e:
@@ -226,6 +272,7 @@ class Servidor(ThreadingHTTPServer):
 def aquecer(leitura: FonteDeLeitura) -> None:
     """Pré-calcula as consultas pesadas para a primeira visita ser instantânea."""
     with leitura.sessao() as s:
+        s.enderecos()
         for metodo in pontuacao.METODOS:
             s.visao_geral({"metodo": metodo})
             for tipo in TIPOS:

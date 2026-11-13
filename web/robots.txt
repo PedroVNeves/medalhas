@@ -1,0 +1,10 @@
+# Buscadores e robôs de IA são bem-vindos: o site e os dados são abertos.
+# /api/ fica fora da indexação (são consultas, não páginas), exceto o índice e a especificação da API
+# pública, que explicam como consultar os dados.
+User-agent: *
+Allow: /
+Allow: /api/v1$
+Allow: /api/v1/openapi.json
+Disallow: /api/
+
+Sitemap: https://medalhas.online/sitemap.xml

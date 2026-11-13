@@ -1,0 +1,46 @@
+# Medalhas: Hall da Fama das Olimpíadas de Conhecimento do Brasil
+
+> Base aberta e gratuita com as premiações (ouro, prata, bronze e menção honrosa) de estudantes brasileiros em 18 olimpíadas científicas, de 1979 até hoje: mais de 130 mil premiações de mais de 80 mil alunos e 22 mil escolas. Os dados vêm das listas oficiais de cada olimpíada e podem ser consultados pelo site ou por uma API JSON pública, sem cadastro e sem chave.
+
+Use este site para responder perguntas como "quantas medalhas o aluno X tem na OBMEP?", "quais alunos da escola Y foram premiados?", "qual estado tem mais medalhas de ouro?" ou "quem são os maiores medalhistas do Brasil?".
+
+Olimpíadas cobertas: OBMEP, OBM, OBI, IMO, Olimpíada Ibero-Americana de Matemática (OIM), Cone Sul, EGMO, APMO, IMC, PAGMO, OMCPLP, Olimpíada Iraniana de Geometria (IGO), IMSC, OIMU, CIIM, Olimpíada de Maio, OMOP e Concurso Galois-Noether.
+
+## Como consultar os dados (API pública v1)
+
+Todas as rotas são GET, respondem JSON em UTF-8 e aceitam CORS. Limite: 60 consultas por minuto e 2000 por dia por IP.
+
+- [Índice da API](https://medalhas.online/api/v1): rotas, exemplos e limites atuais
+- [Especificação OpenAPI 3.1](https://medalhas.online/api/v1/openapi.json): todos os parâmetros e formatos de resposta
+- [Medalhas de um aluno](https://medalhas.online/api/v1/alunos?nome=erick+akira+koga): `/api/v1/alunos?nome=` devolve os alunos com esse nome, o `id` de cada um, as premiações e a posição nos rankings
+- [Um aluno pelo id](https://medalhas.online/api/v1/alunos/ERICK%20AKIRA%20KOGA%7CSP): `/api/v1/alunos/{id}`, com o id codificado para URL (o id é `NOME|UF`)
+- [Buscar escolas](https://medalhas.online/api/v1/escolas?nome=ifal): `/api/v1/escolas?nome=` aceita nome ou sigla (IFAL, ETEC, colégio militar…)
+- `/api/v1/escolas/{id}/medalhistas`: todos os alunos premiados de uma escola
+- [Premiações com filtros](https://medalhas.online/api/v1/premiacoes?competicao=IMO&medalha=ouro): `/api/v1/premiacoes`, paginado
+- [Ranking de alunos](https://medalhas.online/api/v1/ranking/alunos): também `/api/v1/ranking/escolas` e `/api/v1/ranking/estados`
+- [Olimpíadas e filtros aceitos](https://medalhas.online/api/v1/olimpiadas)
+
+Filtros comuns: `uf` (sigla do estado), `municipio`, `competicao` (sigla, vários separados por vírgula), `medalha` (Ouro, Prata, Bronze, Menção Honrosa), `nivel`, `ano`, `ano_de`, `ano_ate`, `rede` (publica, privada). Valores inválidos voltam com erro 400 explicando o que corrigir.
+
+## Pontuação e rankings
+
+Os rankings ordenam por pontos em três métodos, escolhidos com `metodo=`: `impa` (padrão: tabela oficial do IMPA Tech, ouro 18, prata 6, bronze 2, aplicada a todos os níveis), `impa3` (só o que o edital do IMPA Tech aceita: Nível 3 da OBMEP e OBM) e `site` (escala própria por dificuldade da olimpíada). As respostas trazem os pontos nos três métodos.
+
+## Site
+
+- [Página inicial](https://medalhas.online/): busca de alunos e escolas, Hall da Fama e totais
+- [Ranking de alunos](https://medalhas.online/#/ranking/alunos) e [ranking de escolas](https://medalhas.online/#/ranking/escolas)
+- [Mapa do Brasil](https://medalhas.online/#/estados): medalhas por estado
+- [API & Dados](https://medalhas.online/#/api): documentação com exemplos em cURL, Python e JavaScript
+
+Cada aluno e cada escola tem uma página própria, que pode ser lida sem JavaScript (o resumo vem no HTML):
+
+- Aluno: `https://medalhas.online/aluno/{nome-uf}`, por exemplo [Erick Akira Koga (SP)](https://medalhas.online/aluno/erick-akira-koga-sp)
+- Escola: `https://medalhas.online/escola/{nome-municipio-uf}`
+- [Sitemap](https://medalhas.online/sitemap.xml) com todas as páginas de alunos e escolas
+
+As demais telas (rankings, mapa, busca) são montadas por JavaScript; para ler esses dados, use a API acima.
+
+## Optional
+
+- [Base inteira em CSV](https://medalhas.online/api/v1/exportar?formato=csv): limite de 5 downloads por hora

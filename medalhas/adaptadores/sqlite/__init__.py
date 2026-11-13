@@ -34,6 +34,9 @@ class SessaoSqlite:
     def visao_geral(self, params: dict) -> dict:
         return site.visao_geral(self._con, params)
 
+    def enderecos(self):
+        return site.enderecos(self._con)
+
     def ranking_ordenado(self, params: dict):
         return site.ranking_ordenado(self._con, params)
 

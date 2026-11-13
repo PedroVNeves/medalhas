@@ -2,7 +2,9 @@
 
 Não usa a base real nem a internet.
 """
+import http.client
 import json
+import re
 import tempfile
 import threading
 import unittest
@@ -155,6 +157,57 @@ class TestPontaAPonta(unittest.TestCase):
         self.assertNotIn("X-RateLimit-Remaining", cab)   # a cota é de um IP: não pode ir para o cache
         _, cab, _ = self.get("/api/busca?q=maria")
         self.assertEqual(cab["Cache-Control"], "no-cache")
+
+
+    def sem_redirecionar(self, caminho: str) -> tuple[int, dict]:
+        con = http.client.HTTPConnection("127.0.0.1", self.servidor.server_address[1], timeout=10)
+        try:
+            con.request("GET", caminho)
+            r = con.getresponse()
+            return r.status, dict(r.getheaders())
+        finally:
+            con.close()
+
+    def test_pagina_do_aluno_tem_titulo_e_resumo(self):
+        status, cab, corpo = self.get("/aluno/maria-souza-lima-al")
+        self.assertEqual(status, 200)
+        pagina = corpo.decode()
+        self.assertRegex(pagina, r"<title>Maria Souza Lima \(AL\): medalhas na OBMEP e OBM · Medalhas</title>")
+        self.assertIn('<link rel="canonical" href="https://medalhas.online/aluno/maria-souza-lima-al">', pagina)
+        self.assertIn("1 ouro, 1 prata e 1 bronze", re.search(r'name="description" content="([^"]*)"', pagina)[1])
+        self.assertIn("2018 · OBMEP · Ouro", pagina)                # resumo para quem não roda JavaScript
+        self.assertIn('"@type": "BreadcrumbList"', pagina)
+        self.assertNotIn('"@type": "Dataset"', pagina)              # o conjunto de dados é só da página inicial
+        self.assertIn("s-maxage", cab["Cache-Control"])
+
+    def test_pagina_da_escola_redireciona_para_o_endereco_oficial(self):
+        escola = self.json("/api/v1/escolas?nome=etec")["escolas"][0]
+        status, cab = self.sem_redirecionar("/escola/" + re.sub(r"[^a-z0-9]+", "-", escola["id"].lower()).strip("-"))
+        self.assertEqual(status, 301)
+        self.assertTrue(cab["Location"].startswith("/escola/etec-centro-"), cab["Location"])
+        status, _, corpo = self.get(cab["Location"])
+        self.assertEqual(status, 200)
+        self.assertIn("Ana Costa", corpo.decode())
+
+    def test_pagina_inexistente(self):
+        status, _, corpo = self.get("/aluno/ninguem-xx")
+        self.assertEqual(status, 404)
+        self.assertIn('content="noindex"', corpo.decode())
+
+    def test_perfil_pelo_endereco(self):
+        r = self.json("/api/aluno?endereco=maria-souza-lima-al")
+        self.assertEqual(r["id"], "MARIA SOUZA LIMA|AL")
+        self.assertEqual(r["endereco"], "/aluno/maria-souza-lima-al")
+
+    def test_sitemap(self):
+        status, cab, corpo = self.get("/sitemap.xml")
+        self.assertEqual(status, 200)
+        self.assertIn("xml", cab["Content-Type"])
+        arquivos = re.findall(r"<loc>https://medalhas.online/([^<]+)</loc>", corpo.decode())
+        self.assertEqual(arquivos, ["sitemaps/paginas.xml", "sitemaps/alunos-1.xml", "sitemaps/escolas-1.xml"])
+        alunos = self.get("/sitemaps/alunos-1.xml")[2].decode()
+        self.assertIn("<loc>https://medalhas.online/aluno/maria-souza-lima-al</loc>", alunos)
+        self.assertEqual(self.get("/sitemaps/nada.xml")[0], 404)
 
 
 if __name__ == "__main__":

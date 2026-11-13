@@ -63,7 +63,7 @@ async function brazilMap(el, key, estados, metric, onClick, comTooltip = true) {
   if (!brGeo) {
     // contorno dos estados (name = sigla da UF), simplificado a partir do brazil-states.geojson do
     // projeto click_that_hood (Code for Germany): ~150 KB compactado em vez de 3,4 MB de um CDN externo
-    const geo = await fetch("brasil-uf.json").then(r => r.json());
+    const geo = await fetch("/brasil-uf.json").then(r => r.json());
     echarts.registerMap("BR", geo);
     brGeo = geo;
   }

@@ -3,10 +3,11 @@
     "public": "web",
     "ignore": ["**/.*"],
     "rewrites": [
-      {
-        "source": "/api/**",
-        "run": { "serviceId": "medalhas", "region": "southamerica-east1" }
-      }
+      { "source": "/api/**", "run": { "serviceId": "medalhas", "region": "southamerica-east1" } },
+      { "source": "/aluno/**", "run": { "serviceId": "medalhas", "region": "southamerica-east1" } },
+      { "source": "/escola/**", "run": { "serviceId": "medalhas", "region": "southamerica-east1" } },
+      { "source": "/sitemap.xml", "run": { "serviceId": "medalhas", "region": "southamerica-east1" } },
+      { "source": "/sitemaps/**", "run": { "serviceId": "medalhas", "region": "southamerica-east1" } }
     ],
     "headers": [
       {

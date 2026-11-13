@@ -20,6 +20,10 @@ const UF_NOMES = {
 const SMALL = new Set(["DE", "DA", "DO", "DAS", "DOS", "E", "EM", "NA", "NO", "NAS", "NOS"]);
 const KEEP_UPPER = /^(I{1,3}|IV|V|VI{0,3}|IX|X|[A-Z]{1,2}|EE|EM|EMEF|EMEB|EMEIEF|EMEIF|EEEF|EEEFM|EEFM|EEF|EEM|EEEM|EEB|EEEP|EEPSG|ETEC|ETE|CEFET\w*|IF\w{0,10}|CEF|CEM|CED|CIEP|SESI|SENAI|SESC|UNICAMP|USP|UFMG|UFRJ|UFC|UFPE|UTFPR|EFM|EF|EI|LTDA|CMB|CMF|CMRJ|CAP|COC|ETAPA)$/;
 
+// Endereço legível de uma página: "MARIA SOUZA LIMA|AL" -> "maria-souza-lima-al".
+// Cópia de slug() em medalhas/dominio/enderecos.py: as duas precisam dar o mesmo resultado.
+const slug = t => (t || "").normalize("NFKD").replace(/\p{Mn}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
 function prettySchool(name) {
   if (!name) return "";
   let s = name.trim();
