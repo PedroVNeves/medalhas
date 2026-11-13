@@ -4,6 +4,13 @@ const charts = {};
 const VIZ = { ouro: "#b5870c", prata: "#6688d6", bronze: "#b5602b", text: "#a3abc2", muted: "#6b7489", grid: "rgba(255,255,255,.06)", surface: "#0f1424" };
 let brGeo = null;
 
+// Mercator em graus; y cresce para baixo, como na tela (norte em cima)
+const RAD = Math.PI / 180;
+const MERCATOR = {
+  project: ([lon, lat]) => [lon, -Math.log(Math.tan(Math.PI / 4 + lat * RAD / 2)) / RAD],
+  unproject: ([x, y]) => [x, (2 * Math.atan(Math.exp(-y * RAD)) - Math.PI / 2) / RAD],
+};
+
 // O gráfico acompanha o tamanho da própria área, não só o da janela: as seções começam escondidas
 // (x-show), então na criação a largura pode ser 0 e o ECharts desenharia com um tamanho padrão.
 const observador = new ResizeObserver(entradas => {
@@ -76,7 +83,9 @@ async function brazilMap(el, key, estados, metric, onClick, comTooltip = true) {
       inRange: { color: ["#1b2236", "#3a3017", "#6b5212", "#a07810", "#d9a521", "#ffd76e"] } },
     // layoutSize em % é relativo ao menor lado da área: o mapa cabe inteiro na largura e na altura
     // sem esticar (com top/bottom/left/right o ECharts deformaria o mapa para preencher o retângulo)
-    series: [{ type: "map", map: "BR", roam: false, data, layoutCenter: ["50%", "45%"], layoutSize: "86%",
+    // projeção de Mercator (a mesma do Google Maps/OpenStreetMap): sem ela o ECharts desenha lon/lat
+    // cru com aspectScale 0.75, que espreme o Brasil 25% na horizontal e deixa o mapa alto e fino
+    series: [{ type: "map", map: "BR", roam: false, data, layoutCenter: ["50%", "45%"], layoutSize: "86%", projection: MERCATOR,
       itemStyle: { borderColor: "#070a14", borderWidth: 1, areaColor: "#1b2236" },
       emphasis: { label: { show: true, color: "#fff", fontWeight: 700 }, itemStyle: { areaColor: "#ffe08a", shadowBlur: 20, shadowColor: "rgba(245,197,66,.6)" } },
       select: { disabled: true },
