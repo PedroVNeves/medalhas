@@ -39,7 +39,7 @@
 <!-- ================================================================ NAV -->
 <header class="sticky top-0 z-40 border-b hairline bg-ink-900/70 backdrop-blur-xl">
   <div class="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6">
-    <a href="#/" class="group flex items-center gap-2.5">
+    <a href="#/" class="group flex flex-none items-center gap-2.5 whitespace-nowrap">
       <span class="coin lg !text-base">★</span>
       <span class="leading-tight">
         <span class="font-display block text-lg font-bold text-shine">Medalhas</span>
@@ -53,15 +53,16 @@
       <a href="#/sobre" class="nav-link" :class="is('sobre') && 'active'">Como funciona</a>
       <a href="#/api" class="nav-link" :class="is('api') && 'active'">API &amp; Dados</a>
     </nav>
-    <div class="ml-auto hidden md:block"><div class="seg" title="Como os pontos são calculados em todo o site">
-      <span class="hidden self-center px-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 lg:inline">Pontuação</span>
+    <!-- pontuação na mesma linha só a partir de xl: até 1280px, logo + links + estes botões não cabem juntos -->
+    <div class="ml-auto hidden flex-none xl:block"><div class="seg flex-nowrap" title="Como os pontos são calculados em todo o site">
+      <span class="hidden self-center px-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 xl:inline">Pontuação</span>
       <template x-for="m in ov?.metodos || []" :key="m.id">
         <button @click="setMetodo(m.id)" :class="metodo===m.id && 'on'" :title="`${m.nome}: ${m.descricao}`">
           <span x-text="m.curto"></span><i x-show="m.id==='impa3'" x-icon="'badge-check'" class="ml-1 h-3.5 w-3.5 text-emerald-300"></i>
         </button>
       </template>
     </div></div>
-    <div class="hidden w-full max-w-xs xl:block" x-show="!is('home')" x-cloak>
+    <div class="hidden w-full min-w-0 max-w-xs xl:block" x-show="!is('home')" x-cloak>
       <label class="relative block">
         <i x-icon="'search'" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"></i>
         <input x-model="q" @input="typed()" type="search" placeholder="Buscar aluno ou escola…"
@@ -70,15 +71,15 @@
       </label>
     </div>
   </div>
-  <nav class="flex gap-1 overflow-x-auto px-4 pb-2 md:hidden">
+  <!-- no celular: rótulos curtos para os 5 links caberem sem rolar; se ainda faltar espaço, quebram linha -->
+  <nav class="flex flex-wrap gap-0.5 px-4 pb-2 min-[360px]:gap-1 sm:px-6 md:hidden">
     <a href="#/" class="nav-link" :class="is('home') && 'active'">Início</a>
     <a href="#/ranking/alunos" class="nav-link" :class="is('ranking') && 'active'">Rankings</a>
     <a href="#/estados" class="nav-link" :class="is('estados') && 'active'">Estados</a>
-    <a href="#/sobre" class="nav-link" :class="is('sobre') && 'active'">Como funciona</a>
-    <a href="#/api" class="nav-link" :class="is('api') && 'active'">API &amp; Dados</a>
+    <a href="#/sobre" class="nav-link" :class="is('sobre') && 'active'"><span class="sm:hidden">Sobre</span><span class="hidden sm:inline">Como funciona</span></a>
+    <a href="#/api" class="nav-link" :class="is('api') && 'active'"><span class="sm:hidden">API</span><span class="hidden sm:inline">API &amp; Dados</span></a>
   </nav>
-  <div class="overflow-x-auto px-4 pb-2 md:hidden"><div class="seg" title="Como os pontos são calculados em todo o site">
-      <span class="hidden self-center px-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 lg:inline">Pontuação</span>
+  <div class="flex items-center gap-2 px-4 pb-2 sm:px-6 xl:hidden"><span class="hidden text-[11px] font-semibold uppercase tracking-wider text-slate-500 min-[360px]:inline">Pontuação</span><div class="seg" title="Como os pontos são calculados em todo o site">
       <template x-for="m in ov?.metodos || []" :key="m.id">
         <button @click="setMetodo(m.id)" :class="metodo===m.id && 'on'" :title="`${m.nome}: ${m.descricao}`">
           <span x-text="m.curto"></span><i x-show="m.id==='impa3'" x-icon="'badge-check'" class="ml-1 h-3.5 w-3.5 text-emerald-300"></i>
