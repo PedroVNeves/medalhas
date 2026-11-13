@@ -122,21 +122,29 @@ function app() {
     get podio() { return this.ov ? this.ov.top_alunos.slice(0, 3) : []; },
 
     // ------------------------------------------------ busca
+    // Na página de busca os resultados acompanham a digitação. Nas outras (início, rankings, perfis)
+    // digitar não muda de página: a busca só abre com Enter ou com o botão Buscar (buscar()).
     typed() {
       clearTimeout(this._t);
+      if (!this.is("busca")) return;
       this._t = setTimeout(() => {
         const q = this.q.trim();
         if (q.length < 2) return;
-        const query = this.is("busca") ? this.buscaQuery({ q, campo: this.campo }) : { q, campo: this.campo };
-        const target = `#/busca?${new URLSearchParams(query)}`;
-        if (this.is("busca")) { history.replaceState(null, "", target); this.route.query = query; this.runSearch(); }
-        else location.hash = target;
+        const query = this.buscaQuery({ q, campo: this.campo });
+        history.replaceState(null, "", `#/busca?${new URLSearchParams(query)}`);
+        this.route.query = query; this.runSearch();
       }, 220);
+    },
+    buscar() {
+      clearTimeout(this._t);
+      const q = this.q.trim();
+      if (q.length < 2) { this.$refs.q?.focus(); return; }
+      if (this.is("busca")) { this.typed(); return; }
+      location.hash = `#/busca?${new URLSearchParams({ q, campo: this.campo })}`;
     },
     setCampo(c) {
       this.campo = c;
       if (this.is("busca")) this.setBuscaFilter("uf", this.bf.uf);
-      else if (this.q.trim().length >= 2) this.typed();
     },
     // filtros da busca (estado, olimpíada, prêmio, ano, nível, rede) ficam na URL
     buscaQuery(base) {
