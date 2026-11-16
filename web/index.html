@@ -105,6 +105,7 @@
     </a>
     <nav class="ml-2 hidden items-center gap-1 md:flex">
       <a href="/" class="nav-link" :class="is('home') && 'active'">Início</a>
+      <a href="/busca" class="nav-link" :class="is('busca') && 'active'">Busca</a>
       <a href="/ranking/alunos" class="nav-link" :class="is('ranking') && 'active'">Rankings</a>
       <a href="/estados" class="nav-link" :class="is('estados') && 'active'">Estados</a>
       <a href="/sobre" class="nav-link" :class="is('sobre') && 'active'">Sobre</a>
@@ -119,10 +120,10 @@
         </button>
       </template>
     </div></div>
-    <div class="relative hidden w-full min-w-0 max-w-xs xl:block" x-show="!is('home')" x-cloak @click.outside="sug.onde==='nav' && fecharSugestoes()">
+    <div class="relative hidden w-full min-w-0 max-w-xs xl:block" x-show="!is('home') && !is('busca')" x-cloak @click.outside="sug.onde==='nav' && fecharSugestoes()">
       <label class="relative block">
         <i x-icon="'search'" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"></i>
-        <input x-model="q" @input="typed('nav')" @focus="pedirSugestoes('nav')" @keydown="teclaSugestoes($event, 'nav')" type="search" enterkeyhint="search" placeholder="Buscar aluno ou escola…"
+        <input x-ref="qNav" x-model="q" @input="typed('nav')" @focus="pedirSugestoes('nav')" @keydown="teclaSugestoes($event, 'nav')" type="search" enterkeyhint="search" placeholder="Buscar aluno ou escola…"
           autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="sugestoes-nav" :aria-expanded="sugAberta && sug.onde==='nav'"
           class="w-full rounded-xl border hairline bg-white/5 py-2 pl-9 pr-10 text-sm placeholder:text-slate-500 focus:border-gold-400/50 focus:outline-none">
         <span class="kbd absolute right-2.5 top-1/2 -translate-y-1/2">/</span>
@@ -151,9 +152,10 @@
 </div>
     </div>
   </div>
-  <!-- no celular: rótulos curtos para os 5 links caberem sem rolar; se ainda faltar espaço, quebram linha -->
+  <!-- no celular: rótulos curtos para os 6 links caberem sem rolar; se ainda faltar espaço, quebram linha -->
   <nav class="flex flex-wrap gap-0.5 px-4 pb-2 min-[360px]:gap-1 sm:px-6 md:hidden">
     <a href="/" class="nav-link" :class="is('home') && 'active'">Início</a>
+    <a href="/busca" class="nav-link" :class="is('busca') && 'active'">Busca</a>
     <a href="/ranking/alunos" class="nav-link" :class="is('ranking') && 'active'">Rankings</a>
     <a href="/estados" class="nav-link" :class="is('estados') && 'active'">Estados</a>
     <a href="/sobre" class="nav-link" :class="is('sobre') && 'active'">Sobre</a>
@@ -371,41 +373,27 @@
 
 <!-- ================================================================ BUSCA -->
 <section x-show="is('busca')" x-cloak class="fade-in pt-10">
-  <div class="flex flex-wrap items-end justify-between gap-4">
-    <div>
-      <p class="text-sm text-slate-500">Resultados para</p>
-      <h1 class="font-display text-3xl font-bold sm:text-4xl"><span x-show="q.trim()">“<span class="text-gold-grad" x-text="q"></span>”</span><span x-show="!q.trim()" class="text-gold-grad">Filtros</span></h1>
-      <p class="mt-1 text-sm text-slate-400" x-show="!busca.loading">
-        <span x-text="fmt(busca.total)"></span> premiações ·
-        <span x-text="busca.grupos.length"></span> <span x-text="busca.byEscola ? 'escolas' : 'pessoas'"></span>
-        <span x-show="busca.total > busca.limite" class="text-amber-300"> · mostrando as primeiras <span x-text="fmt(busca.limite)"></span>, refine a busca</span>
-      </p>
-    </div>
-    <div class="flex flex-wrap items-center gap-2">
-      <div class="seg">
-        <button @click="setCampo('nome')" :class="campo==='nome' && 'on'">Pessoa</button>
-        <button @click="setCampo('escola')" :class="campo==='escola' && 'on'">Escola</button>
+  <h1 class="font-display text-3xl font-bold sm:text-4xl">Buscar <span class="text-gold-grad">medalhistas</span></h1>
+  <p class="mt-1 text-sm text-slate-400">Digite o nome de um aluno, de uma escola (vale a sigla, como IFAL ou ETEC) ou de uma cidade. Os resultados aparecem enquanto você digita.</p>
+
+  <div class="search-shell mt-5">
+    <div class="flex flex-col gap-2 p-2 sm:flex-row sm:items-center">
+      <div class="relative flex-1">
+        <i x-icon="'search'" class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gold-400"></i>
+        <input x-ref="qBusca" x-model="q" @input="typed()" @keydown.enter.prevent="buscar()" type="search" enterkeyhint="search" autocomplete="off" aria-label="Buscar"
+          :placeholder="campo === 'escola' ? 'Nome da escola, sigla (IFAL, ETEC)…' : campo === 'tudo' ? 'Nome, escola ou cidade…' : 'Nome do aluno…'"
+          class="w-full bg-transparent py-3.5 pl-12 pr-4 text-lg placeholder:text-slate-500 focus:outline-none">
+      </div>
+      <div class="seg self-start sm:self-auto">
+        <button @click="setCampo('nome')" :class="campo==='nome' && 'on'"><i x-icon="'user'" class="mr-1 inline h-3.5 w-3.5"></i>Pessoa</button>
+        <button @click="setCampo('escola')" :class="campo==='escola' && 'on'"><i x-icon="'school'" class="mr-1 inline h-3.5 w-3.5"></i>Escola</button>
         <button @click="setCampo('tudo')" :class="campo==='tudo' && 'on'">Tudo</button>
       </div>
-      <template x-if="busca.total > 0">
-  <div class="relative " x-data="{ aberto: false }" @click.outside="aberto = false" @keydown.escape.window="aberto = false">
-    <button type="button" class="btn" @click="aberto = !aberto" :disabled="exportando" :aria-expanded="aberto" aria-haspopup="menu">
-      <i x-icon="exportando ? 'loader-circle' : 'download'" class="h-4 w-4" :class="exportando && 'animate-spin'"></i><span>Exportar</span><i x-icon="'chevron-down'" class="h-3.5 w-3.5 opacity-60"></i>
-    </button>
-    <div x-show="aberto" x-cloak x-transition.opacity.duration.150ms class="menu" role="menu">
-      <div class="menu-titulo">Todas as premiações desta busca</div>
-      <button class="menu-item" @click="aberto = false; baixar(exportBusca, 'csv')"><i x-icon="'file-spreadsheet'"></i><span>CSV<small>planilhas, Python, R</small></span></button>
-      <button class="menu-item" @click="aberto = false; baixar(exportBusca, 'excel')"><i x-icon="'sheet'"></i><span>Excel<small>CSV com ; para o Excel em português</small></span></button>
-      <button class="menu-item" @click="aberto = false; baixar(exportBusca, 'json')"><i x-icon="'braces'"></i><span>JSON<small>para programas</small></span></button>
-      <a href="/dados" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
-    </div>
-  </div>
-      </template>
     </div>
   </div>
 
   <!-- no celular os filtros começam recolhidos (ocupam muito espaço); o botão "Filtros" abre -->
-  <div class="glass card filtros mt-6 flex flex-wrap items-center gap-2 p-3" x-data="{ abertos: false }" :class="abertos && 'aberto'">
+  <div class="glass card filtros mt-3 flex flex-wrap items-center gap-2 p-3" x-data="{ abertos: false }" :class="abertos && 'aberto'">
     <button type="button" class="filtros-toggle flex w-full items-center gap-2 px-1 py-0.5 text-sm font-medium text-slate-300 md:hidden" @click="abertos = !abertos" :aria-expanded="abertos">
       <i x-icon="'sliders-horizontal'" class="h-4 w-4 text-slate-500"></i>Filtros
       <span x-show="buscaFiltrosAtivos" x-text="buscaFiltrosAtivos" class="rounded-full bg-gold-400/20 px-1.5 text-xs text-gold-300"></span>
@@ -456,6 +444,28 @@
   </div>
 
   <div class="mt-6 space-y-3" x-show="busca.loading"><div class="skeleton h-24"></div><div class="skeleton h-24"></div><div class="skeleton h-24"></div></div>
+  <div class="mt-5 flex flex-wrap items-center justify-between gap-3" x-show="!busca.loading && busca.grupos.length">
+    <p class="text-sm text-slate-400">
+      <span x-text="fmt(busca.total)"></span> premiações ·
+      <span x-text="busca.grupos.length"></span> <span x-text="busca.byEscola ? 'escolas' : 'pessoas'"></span>
+      <span x-show="busca.total > busca.limite" class="text-amber-300"> · mostrando as primeiras <span x-text="fmt(busca.limite)"></span>, refine a busca</span>
+    </p>
+      <template x-if="busca.total > 0">
+  <div class="relative " x-data="{ aberto: false }" @click.outside="aberto = false" @keydown.escape.window="aberto = false">
+    <button type="button" class="btn" @click="aberto = !aberto" :disabled="exportando" :aria-expanded="aberto" aria-haspopup="menu">
+      <i x-icon="exportando ? 'loader-circle' : 'download'" class="h-4 w-4" :class="exportando && 'animate-spin'"></i><span>Exportar</span><i x-icon="'chevron-down'" class="h-3.5 w-3.5 opacity-60"></i>
+    </button>
+    <div x-show="aberto" x-cloak x-transition.opacity.duration.150ms class="menu" role="menu">
+      <div class="menu-titulo">Todas as premiações desta busca</div>
+      <button class="menu-item" @click="aberto = false; baixar(exportBusca, 'csv')"><i x-icon="'file-spreadsheet'"></i><span>CSV<small>planilhas, Python, R</small></span></button>
+      <button class="menu-item" @click="aberto = false; baixar(exportBusca, 'excel')"><i x-icon="'sheet'"></i><span>Excel<small>CSV com ; para o Excel em português</small></span></button>
+      <button class="menu-item" @click="aberto = false; baixar(exportBusca, 'json')"><i x-icon="'braces'"></i><span>JSON<small>para programas</small></span></button>
+      <a href="/dados" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
+    </div>
+  </div>
+      </template>
+  </div>
+
   <div x-show="!busca.loading && !busca.grupos.length" class="glass card mt-6 p-12 text-center text-slate-400">
     <i x-icon="'search-x'" class="mx-auto mb-3 h-10 w-10 text-slate-600"></i><span x-text="q.trim().length < 2 && !bf.uf && !bf.ano ? 'Digite um nome, ou escolha um estado ou ano nos filtros.' : 'Nenhum resultado. Tente outra grafia, só o sobrenome, a sigla da escola ou menos filtros.'"></span>
   </div>

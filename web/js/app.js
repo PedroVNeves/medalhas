@@ -61,7 +61,7 @@ function app() {
         if (ROTA_INTERNA.test(url.pathname)) { e.preventDefault(); this.navegar(url.pathname + url.search + url.hash); }
       });
       window.addEventListener("keydown", e => {
-        if (e.key === "/" && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); this.$refs.q?.focus(); }
+        if (e.key === "/" && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); (this.is("home") ? this.$refs.q : this.is("busca") ? this.$refs.qBusca : this.$refs.qNav)?.focus(); }
       });
       this.onRoute(true);  // a rota não espera a visão geral: perfis e rankings carregam sozinhos
       await this.loadOverview();
@@ -139,6 +139,7 @@ function app() {
         this.q = query.q || ""; this.campo = query.campo || "nome";
         for (const k of Object.keys(this.bf)) this.bf[k] = query[k] || "";
         this.runSearch();
+        if (!this.q) this.$nextTick(() => this.$refs.qBusca?.focus());   // veio pelo menu: já pode digitar
       }
       if (r.name === "ranking" && !r.param) { history.replaceState(null, "", this.rankLink("alunos")); this._rotaAtual = location.pathname + location.search; r.param = "alunos"; }
       if (r.name === "ranking") { this.rk.tipo = r.param || "alunos"; Object.assign(this.rk.f, { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", ordem: "xp" }, Object.fromEntries(Object.entries(query).filter(([k]) => k !== "metodo"))); this.loadRanking(); }
@@ -185,7 +186,7 @@ function app() {
       if (!this.is("busca")) { this.pedirSugestoes(onde); return; }
       this._t = setTimeout(() => {
         const q = this.q.trim();
-        if (q.length < 2) return;
+        if (q.length === 1) return;   // vazio limpa os resultados (ou mostra só os filtros); 2+ letras busca
         const query = this.buscaQuery({ q, campo: this.campo });
         history.replaceState(null, "", `/busca?${new URLSearchParams(query)}`); this._rotaAtual = location.pathname + location.search + location.hash;
         this.route.query = query; this.runSearch();
@@ -195,7 +196,7 @@ function app() {
       clearTimeout(this._t);
       this.fecharSugestoes();
       const q = this.q.trim();
-      if (q.length < 2) { this.$refs.q?.focus(); return; }
+      if (q.length < 2) { (this.is("busca") ? this.$refs.qBusca : this.$refs.q)?.focus(); return; }
       if (this.is("busca")) { this.typed(); return; }
       this.go(`/busca?${new URLSearchParams({ q, campo: this.campo })}`);
     },
