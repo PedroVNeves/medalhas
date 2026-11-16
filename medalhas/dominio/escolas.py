@@ -162,6 +162,28 @@ def indexar_escola(escola: str | None, municipio: str | None, uf: str | None) ->
     return termos, chave
 
 
+def completar_municipios(premiacoes: list[dict]) -> int:
+    """Cidade das escolas que vieram sem ela (a OBQ publica só nome e estado). Altera a lista.
+
+    Se o mesmo nome de escola (as palavras da chave) aparece numa única cidade daquele estado nas outras
+    listas, a premiação adota essa cidade e cai na mesma escola. Com duas ou mais cidades possíveis, ou
+    nenhuma, fica sem cidade. Devolve quantas premiações ganharam cidade.
+    """
+    cidades: dict[tuple[str, str], dict[str, str]] = {}
+    for p in premiacoes:
+        if p.get("escola") and p.get("municipio") and p.get("uf"):
+            palavras = indexar_escola(p["escola"], p["municipio"], p["uf"])[1].split("|")[0]
+            cidades.setdefault((palavras, p["uf"]), {}).setdefault(normalizar(p["municipio"]), p["municipio"])
+    completadas = 0
+    for p in premiacoes:
+        if p.get("escola") and not p.get("municipio") and p.get("uf"):
+            achadas = cidades.get((indexar_escola(p["escola"], None, p["uf"])[1].split("|")[0], p["uf"]), {})
+            if len(achadas) == 1:
+                p["municipio"] = next(iter(achadas.values()))
+                completadas += 1
+    return completadas
+
+
 def palavras_da_busca(texto: str) -> Expansao:
     """O que o usuário digitou, palavra a palavra, com a expansão de cada uma (partículas descartadas)."""
     palavras = [p for p in _juntar_letras_soltas(normalizar(texto).split()) if p not in PARTICULAS]

@@ -3,7 +3,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
 Chave = Callable[[dict], tuple]
-TIPOS = ("alunos", "escolas", "estados")
+TIPOS = ("alunos", "escolas", "estados", "cidades")
 
 # Ordenações oferecidas. "coluna" é a coluna de pontos do método escolhido.
 ORDENACOES: dict[str, Callable[[dict, str], tuple]] = {
@@ -45,8 +45,8 @@ def posicionar(ordenados: list[dict], chave: Chave, offset: int = 0,
 
 @dataclass(frozen=True)
 class RankingOrdenado:
-    """Ranking completo de um recorte, já ordenado. Os itens são agregados de aluno, escola ou estado."""
-    tipo: str               # alunos | escolas | estados
+    """Ranking completo de um recorte, já ordenado. Os itens são agregados de aluno, escola, estado ou cidade."""
+    tipo: str               # alunos | escolas | estados | cidades
     ordem: str              # chave de ORDENACOES
     metodo: str             # método de pontuação
     coluna: str             # coluna de pontos do método

@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from ...aplicacao.portas import FonteDeLeitura
 from ...config import PASTA_WEB, URL_SITE
-from ...dominio.enderecos import ALUNO, TIPOS as TIPOS_DE_PAGINA
+from ...dominio.enderecos import ALUNO, ESCOLA, TIPOS as TIPOS_DE_PAGINA
 from ...dominio import pontuacao
 from ...dominio.ranking import ORDENACOES, TIPOS
 from . import api_v1, imagens, limites, paginas
@@ -196,7 +196,7 @@ class Handler(BaseHTTPRequestHandler):
                 return imagens.site(sessao.visao_geral({}))
             story = len(partes) == 4 and partes[1] == "story"   # /og/story/aluno/x.png: vertical, para o Instagram
             tipo, arquivo = partes[-2:] if story or len(partes) == 3 else (None, "")
-            if tipo not in TIPOS_DE_PAGINA or not arquivo.endswith(".png"):
+            if tipo not in (ALUNO, ESCOLA) or not arquivo.endswith(".png"):   # cidades usam a imagem do site
                 return None
             achado = sessao.enderecos().resolver(tipo, unquote(arquivo[:-4]))
             if not achado:

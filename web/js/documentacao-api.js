@@ -152,7 +152,7 @@ const FILTROS = [
   P("nivel", "lista", "Um ou mais níveis. Ex.: 3 ou 1,2,3,Universitário"),
   P("ano · ano_de · ano_ate", "inteiro", "Ano exato ou intervalo"),
   P("rede", "texto", "publica ou privada (só OBMEP)"),
-  P("sexo", "texto", "F (meninas) ou M (meninos), estimado pelo primeiro nome"),
+  P("sexo", "texto", "F: só alunas premiadas na EGMO, PAGMO ou EGOI (com todas as premiações delas)"),
 ];
 FILTROS.forEach(f => (f.comum = true));  // marcados para a referência mostrar "aceita os filtros comuns"
 const OFFSET = P("offset", "inteiro", "Quantos itens pular (paginação)");
@@ -185,14 +185,14 @@ const ROTAS = [
     params: [P("nome", "texto", "Nome do aluno"), P("escola", "texto", "Nome ou sigla da escola"), P("busca", "texto", "Nome, escola ou município"),
       P("aluno_id · escola_id", "texto", "Só deste aluno / desta escola"), ...FILTROS, P("limite", "inteiro", "1–1000 (padrão 20)"), OFFSET],
     teste: "/api/v1/premiacoes?competicao=IMO&medalha=Ouro&limite=2" },
-  { id: "ranking", path: "/api/v1/ranking/{tipo}", titulo: "Rankings de alunos, escolas ou estados",
+  { id: "ranking", path: "/api/v1/ranking/{tipo}", titulo: "Rankings de alunos, escolas, estados ou cidades",
     desc: "Os mesmos rankings do site. Empates dividem a posição. No método impa3 só contam os níveis aceitos pelo IMPA Tech.",
-    params: [P("tipo", "caminho", "alunos, escolas ou estados", true), METODO_P, P("ordem", "texto", "xp (pontos, padrão), medalhas ou total"),
+    params: [P("tipo", "caminho", "alunos, escolas, estados ou cidades", true), METODO_P, P("ordem", "texto", "xp (pontos, padrão), medalhas ou total"),
       ...FILTROS, P("limite", "inteiro", "1–500 (padrão 20)"), OFFSET],
     teste: "/api/v1/ranking/escolas?metodo=impa3&uf=CE&limite=3" },
   { id: "exportar", path: "/api/v1/exportar", titulo: "Baixar dados (CSV ou JSON)",
-    desc: "Sem filtros, baixa a base inteira de premiações. Com filtros, só o recorte. conjunto=alunos|escolas|estados baixa o ranking completo. O CSV é UTF-8 com BOM; separador=; abre direto no Excel em português. A transferência é compactada (gzip) quando o cliente aceita. Tem limite próprio por IP.",
-    params: [P("formato", "texto", "csv (padrão) ou json"), P("conjunto", "texto", "premiacoes (padrão), alunos, escolas ou estados"),
+    desc: "Sem filtros, baixa a base inteira de premiações. Com filtros, só o recorte. conjunto=alunos|escolas|estados|cidades baixa o ranking completo. O CSV é UTF-8 com BOM; separador=; abre direto no Excel em português. A transferência é compactada (gzip) quando o cliente aceita. Tem limite próprio por IP.",
+    params: [P("formato", "texto", "csv (padrão) ou json"), P("conjunto", "texto", "premiacoes (padrão), alunos, escolas, estados ou cidades"),
       P("separador", "texto", ", (padrão) ou ;"), P("aluno_id · escola_id", "texto", "Só deste aluno / desta escola"),
       P("nome · escola · busca", "texto", "Busca por texto, como em /premiacoes"), METODO_P, ...FILTROS],
     teste: null },

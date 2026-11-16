@@ -5,6 +5,7 @@ const TITULO_SITE = "Medalhas · Medalhistas da OBMEP, OBM, OBI e IMO: busca e r
 const TITULOS = {
   "/ranking/alunos": "Ranking dos maiores medalhistas das olimpíadas do Brasil · Medalhas",
   "/ranking/escolas": "Ranking das escolas com mais medalhas em olimpíadas · Medalhas",
+  "/ranking/cidades": "Ranking das cidades com mais medalhas em olimpíadas · Medalhas",
   "/ranking/estados": "Ranking dos estados em medalhas nas olimpíadas · Medalhas",
   "/estados": "Mapa das medalhas em olimpíadas por estado do Brasil · Medalhas",
   "/dados": "API e dados abertos dos medalhistas das olimpíadas · Medalhas",
@@ -12,9 +13,9 @@ const TITULOS = {
   "/sobre": "Sobre o Medalhas: por que reunimos os medalhistas das olimpíadas",
 };
 // telas do site; outro endereço mostra "página não encontrada"
-const TELAS = ["home", "busca", "ranking", "estados", "sobre", "dados", "aluno", "escola"];
+const TELAS = ["home", "busca", "ranking", "estados", "sobre", "dados", "aluno", "escola", "cidade"];
 // endereços que o site abre sem recarregar a página
-const ROTA_INTERNA = /^\/(busca|ranking(\/(alunos|escolas|estados))?|estados|sobre|dados|(aluno|escola)\/[^/]+)?$/;
+const ROTA_INTERNA = /^\/(busca|ranking(\/(alunos|escolas|estados|cidades))?|estados|sobre|dados|(aluno|escola|cidade)\/[^/]+)?$/;
 
 function app() {
   return {
@@ -35,9 +36,9 @@ function app() {
     sug: { lista: [], onde: "", ativo: -1, q: "" }, _ts: null,
     bf: { uf: "", area: "", competicao: "", medalha: "", ano: "", nivel: "", rede: "", sexo: "" },
     // ranking
-    rk: { tipo: "alunos", itens: [], total: 0, loading: false, f: { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", sexo: "", ordem: "xp" } },
+    rk: { tipo: "alunos", itens: [], total: 0, loading: false, f: { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", sexo: "", municipio: "", ordem: "xp" } },
     // perfis
-    aluno: null, escola: null, loadingPerfil: false,
+    aluno: null, escola: null, cidade: null, loadingPerfil: false,
     // exportação e documentação da API
     exportando: false,
     BASE, ROTAS, FILTROS, CAMPOS_PREMIACAO,
@@ -125,7 +126,7 @@ function app() {
       const parts = (path || "/").split("/").filter(Boolean);
       const query = Object.fromEntries(new URLSearchParams(qs || ""));
       this.route = { name: parts[0] || "home", param: decodeURIComponent(parts.slice(1).join("/")), query };
-      if (!["aluno", "escola"].includes(this.route.name)) document.title = TITULOS[path] || TITULO_SITE;
+      if (!["aluno", "escola", "cidade"].includes(this.route.name)) document.title = TITULOS[path] || TITULO_SITE;
       // links podem fixar o método: /ranking/alunos?metodo=impa3
       if (["impa", "impa3", "site"].includes(query.metodo) && query.metodo !== this.metodo) {
         this.metodo = METODO = query.metodo;
@@ -142,16 +143,19 @@ function app() {
         if (!this.q) this.$nextTick(() => this.$refs.qBusca?.focus());   // veio pelo menu: já pode digitar
       }
       if (r.name === "ranking" && !r.param) { history.replaceState(null, "", this.rankLink("alunos")); this._rotaAtual = location.pathname + location.search; r.param = "alunos"; }
-      if (r.name === "ranking") { this.rk.tipo = r.param || "alunos"; Object.assign(this.rk.f, { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", sexo: "", ordem: "xp" }, Object.fromEntries(Object.entries(query).filter(([k]) => k !== "metodo"))); this.loadRanking(); }
+      if (r.name === "ranking") { this.rk.tipo = r.param || "alunos"; Object.assign(this.rk.f, { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", sexo: "", municipio: "", ordem: "xp" }, Object.fromEntries(Object.entries(query).filter(([k]) => k !== "metodo"))); this.loadRanking(); }
       if (r.name === "estados") { this.mapSel = ""; this.$nextTick(() => this.drawMap()); }
       if (r.name === "dados") this.loadDoc();
       if (r.name === "aluno") this.loadAluno(r.param);
       if (r.name === "escola") this.loadEscola(r.param);
+      if (r.name === "cidade") this.loadCidade(r.param);
     },
     is(name) { return this.route.name === name; },
     get naoEncontrada() { return !TELAS.includes(this.route.name); },
     alunoLink(id) { return "/aluno/" + slug(id); },
     escolaLink(id) { return "/escola/" + slug(id); },
+    // id da cidade = MUNICIPIO|UF sem acento: o slug do id é o endereço (/cidade/sao-paulo-sp)
+    cidadeLink(municipio, uf) { return municipio && uf ? "/cidade/" + slug(`${municipio} ${uf}`) : null; },
     rankLink(tipo, extra = {}) { const p = new URLSearchParams(extra).toString(); return `/ranking/${tipo}${p ? "?" + p : ""}`; },
 
     // ------------------------------------------------ home
@@ -340,9 +344,9 @@ function app() {
       return ls.length > 1 ? ls.slice(0, -1).join(", ") + " e " + ls.at(-1) : ls[0] || "";
     },
     get rkLeader() { return this.rk.itens.length ? Math.max(1, this.rk.itens[0].xp) : 1; },
-    get rkPodio() { return this.rk.tipo !== "estados" ? this.rk.itens.slice(0, 3) : []; },
+    get rkPodio() { return ["alunos", "escolas"].includes(this.rk.tipo) ? this.rk.itens.slice(0, 3) : []; },
     get filtrosAtivos() { return Object.entries(this.rk.f).filter(([k, v]) => v && k !== "ordem").length; },
-    limparFiltros() { Object.assign(this.rk.f, { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", sexo: "" }); this.pushRanking(); },
+    limparFiltros() { Object.assign(this.rk.f, { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", sexo: "", municipio: "" }); this.pushRanking(); },
 
     // ------------------------------------------------ estados
     drawMap() {
@@ -368,7 +372,7 @@ function app() {
         this._rotaAtual = location.pathname + location.search + location.hash;
       }
       if (!d.nome) return;
-      const nome = this.is("aluno") ? d.nome : prettySchool(d.nome);
+      const nome = this.is("escola") ? prettySchool(d.nome) : d.nome;
       document.title = `${d.uf ? `${nome} (${d.uf})` : nome} · Medalhas`;
     },
     async loadAluno(endereco) {
@@ -388,6 +392,15 @@ function app() {
       this.$nextTick(() => {
         if (d.serie) stackedYears(this.$refs.schoolChart, "school", d.serie.map(s => ({ ano: s.ano, ouro: s.Ouro, prata: s.Prata, bronze: s.Bronze })));
         if (d.medalhas?.ouro >= 10 && !sessionStorage.getItem("cf:" + id)) { sessionStorage.setItem("cf:" + id, 1); setTimeout(celebrate, 350); }
+      });
+    },
+    async loadCidade(endereco) {
+      this.loadingPerfil = true; this.cidade = null;
+      const d = await API("cidade", { endereco });
+      this.cidade = d; this.loadingPerfil = false;
+      this.perfilCarregado(d);
+      this.$nextTick(() => {
+        if (d.serie) stackedYears(this.$refs.cityChart, "city", d.serie.map(s => ({ ano: s.ano, ouro: s.Ouro, prata: s.Prata, bronze: s.Bronze })));
       });
     },
     get alunoPorAno() {

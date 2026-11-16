@@ -41,7 +41,7 @@ CREATE TABLE medalhas (
     p_impa3         INTEGER NOT NULL,   -- IMPA oficial, só Nível 3
     p_site          INTEGER NOT NULL,   -- nossa versão
     area            TEXT,
-    sexo            TEXT                -- F, M ou NULL: estimado pelo primeiro nome (dominio.sexo)
+    sexo            TEXT                -- F (premiada em olimpíada só para meninas, dominio.sexo) ou NULL
 );
 CREATE INDEX idx_aluno  ON medalhas(aluno_id);
 CREATE INDEX idx_chave  ON medalhas(escola_chave);

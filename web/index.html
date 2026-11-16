@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Medalhas · Medalhistas da OBMEP, OBM, OBI e IMO: busca e rankings</title>
-<meta name="description" content="Busque qualquer aluno ou escola e veja as medalhas na OBMEP, OBM, OBI, IMO e mais 16 olimpíadas científicas desde 1979. Rankings de alunos, escolas e estados, API e dados abertos.">
+<meta name="description" content="Busque qualquer aluno ou escola e veja as medalhas na OBMEP, OBM, OBI, IMO e mais 17 olimpíadas científicas desde 1979. Rankings de alunos, escolas e estados, API e dados abertos.">
 <link rel="canonical" href="https://medalhas.online/">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="theme-color" content="#070a14">
@@ -16,7 +16,7 @@
 <meta property="og:site_name" content="Medalhas">
 <meta property="og:url" content="https://medalhas.online/">
 <meta property="og:title" content="Medalhas · Hall da Fama das Olimpíadas de Conhecimento do Brasil">
-<meta property="og:description" content="Mais de 130 mil premiações da OBMEP, OBM, OBI, IMO e mais 16 olimpíadas. Busque alunos e escolas e veja os rankings.">
+<meta property="og:description" content="Mais de 130 mil premiações da OBMEP, OBM, OBI, IMO e mais 17 olimpíadas. Busque alunos e escolas e veja os rankings.">
 <!-- imagem do cartão (1200×630, desenhada pelo servidor: adaptadores/http/imagens.py); aluno e escola têm a sua -->
 <meta property="og:image" content="https://medalhas.online/og/site.png">
 <meta property="og:image:width" content="1200">
@@ -198,7 +198,7 @@
       <h1 class="font-display mt-5 text-4xl font-bold leading-[1.02] sm:text-6xl lg:text-7xl">
         Quem <span class="text-gold-grad">brilhou</span><br>nas olimpíadas<br>de conhecimento<br>do Brasil.
       </h1>
-      <p class="mt-5 max-w-xl text-lg text-slate-400">Os medalhistas brasileiros da OBMEP, OBM, OBI, IMO e de mais <span x-text="ov ? ov.olimpiadas.length - 4 : 16">16</span> olimpíadas em um só lugar. Encontre alunos e escolas, confira as premiações nas fontes oficiais e veja quem lidera os rankings.</p>
+      <p class="mt-5 max-w-xl text-lg text-slate-400">Os medalhistas brasileiros da OBMEP, OBM, OBI, IMO e de mais <span x-text="ov ? ov.olimpiadas.length - 4 : 17">17</span> olimpíadas em um só lugar. Encontre alunos e escolas, confira as premiações nas fontes oficiais e veja quem lidera os rankings.</p>
 
       <div class="relative mt-8" @click.outside="sug.onde==='home' && fecharSugestoes()">
       <div class="search-shell">
@@ -431,10 +431,9 @@
         <button @click="toggleMulti('busca', 'nivel', n.id)" :class="[temValor(nivelEfetivo(bf.nivel), n.id) && 'on', impa3 && !niveisAceitos.includes(n.id) && 'opacity-40']" :title="impa3 && !niveisAceitos.includes(n.id) ? 'Fora do edital: travado pela pontuação IMPA N3' : `${fmt(n.n)} premiações · ${n.competicoes.join(', ')}`"><span x-text="nivelCurto(n.id)"></span><i x-show="impa3 && !niveisAceitos.includes(n.id)" x-icon="'lock'" class="ml-1 h-3 w-3"></i></button>
       </template>
     </div>
-    <div class="seg" title="Meninas e meninos estimados pelo primeiro nome (Censo 2010 do IBGE). Nomes ambíguos ficam de fora dos dois.">
+    <div class="seg" title="Só alunas premiadas em olimpíadas para meninas (EGMO, PAGMO, EGOI), com todas as medalhas delas.">
       <button @click="setBuscaFilter('sexo', '')" :class="!bf.sexo && 'on'">Todos</button>
       <button @click="setBuscaFilter('sexo', 'F')" :class="bf.sexo==='F' && 'on'">Meninas</button>
-      <button @click="setBuscaFilter('sexo', 'M')" :class="bf.sexo==='M' && 'on'">Meninos</button>
     </div>
     <select class="select" @change="setBuscaFilter('rede', $event.target.value)">
       <option value="">Pública + privada</option><option value="Pública" :selected="bf.rede==='Pública'">Escola pública</option><option value="Privada" :selected="bf.rede==='Privada'">Escola privada</option>
@@ -526,6 +525,7 @@
     <div class="seg">
       <a :href="rankLink('alunos')" class="rounded-[.6rem] px-4 py-1.5 text-sm" :class="rk.tipo==='alunos' ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.14)]' : 'text-slate-400 hover:text-white'"><i x-icon="'user'" class="mr-1 inline h-4 w-4"></i>Alunos</a>
       <a :href="rankLink('escolas')" class="rounded-[.6rem] px-4 py-1.5 text-sm" :class="rk.tipo==='escolas' ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.14)]' : 'text-slate-400 hover:text-white'"><i x-icon="'school'" class="mr-1 inline h-4 w-4"></i>Escolas</a>
+      <a :href="rankLink('cidades')" class="rounded-[.6rem] px-4 py-1.5 text-sm" :class="rk.tipo==='cidades' ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.14)]' : 'text-slate-400 hover:text-white'"><i x-icon="'building-2'" class="mr-1 inline h-4 w-4"></i>Cidades</a>
       <a :href="rankLink('estados')" class="rounded-[.6rem] px-4 py-1.5 text-sm" :class="rk.tipo==='estados' ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.14)]' : 'text-slate-400 hover:text-white'"><i x-icon="'map'" class="mr-1 inline h-4 w-4"></i>Estados</a>
     </div>
   <div class="relative " x-data="{ aberto: false }" @click.outside="aberto = false" @keydown.escape.window="aberto = false">
@@ -583,10 +583,9 @@
         <button @click="toggleMulti('rk', 'nivel', n.id)" :class="[temValor(nivelEfetivo(rk.f.nivel), n.id) && 'on', impa3 && !niveisAceitos.includes(n.id) && 'opacity-40']" :title="impa3 && !niveisAceitos.includes(n.id) ? 'Fora do edital: travado pela pontuação IMPA N3' : `${fmt(n.n)} premiações · ${n.competicoes.join(', ')}`"><span x-text="nivelCurto(n.id)"></span><i x-show="impa3 && !niveisAceitos.includes(n.id)" x-icon="'lock'" class="ml-1 h-3 w-3"></i></button>
       </template>
     </div>
-    <div class="seg" title="Meninas e meninos estimados pelo primeiro nome (Censo 2010 do IBGE). Nomes ambíguos ficam de fora dos dois.">
+    <div class="seg" title="Só alunas premiadas em olimpíadas para meninas (EGMO, PAGMO, EGOI), com todas as medalhas delas.">
       <button @click="setFilter('sexo', '')" :class="!rk.f.sexo && 'on'">Todos</button>
       <button @click="setFilter('sexo', 'F')" :class="rk.f.sexo==='F' && 'on'">Meninas</button>
-      <button @click="setFilter('sexo', 'M')" :class="rk.f.sexo==='M' && 'on'">Meninos</button>
     </div>
     <select class="select" x-show="rk.tipo!=='estados'" @change="setFilter('rede', $event.target.value)">
       <option value="">Pública + privada</option><option value="Pública" :selected="rk.f.rede==='Pública'">Escola pública</option><option value="Privada" :selected="rk.f.rede==='Privada'">Escola privada</option>
@@ -599,7 +598,7 @@
     </div>
     <div x-show="rk.f.sexo" x-cloak class="filtros-fixo flex w-full items-center gap-2 rounded-xl border border-pink-400/25 bg-pink-400/5 px-3 py-2 text-xs text-pink-100">
       <i x-icon="'info'" class="h-3.5 w-3.5 flex-none"></i>
-      <span class="flex-1">As listas oficiais não informam o sexo: <span x-text="rk.f.sexo==='F' ? 'meninas são estimadas' : 'meninos são estimados'"></span> pelo primeiro nome, com o Censo 2010 do IBGE. Nomes usados pelos dois sexos (Ariel, Darcy…) ficam de fora. <a href="/sobre#como-funciona" class="underline">Como funciona</a> · viu um erro? <a href="/sobre#contato" class="underline">Avise</a></span>
+      <span class="flex-1">As listas oficiais não informam o sexo. Por isso aqui entram só as alunas premiadas em olimpíadas para meninas (EGMO, PAGMO, EGOI), com todas as medalhas delas, inclusive OBMEP, OBM e OBI. Outras meninas medalhistas não aparecem neste filtro. <a href="/sobre#como-funciona" class="underline">Como funciona</a></span>
     </div>
 
     <div x-show="impa3" class="filtros-fixo flex w-full items-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-200">
@@ -609,8 +608,10 @@
     </div>
   </div>
   <p class="mt-2 min-h-[1rem] text-xs text-slate-500" x-show="!rk.loading || rk.itens.length">
-    <span x-text="fmt(rk.total)"></span> <span x-text="{alunos:'alunos', escolas:'escolas', estados:'estados'}[rk.tipo]"></span> no ranking
+    <span x-text="fmt(rk.total)"></span> <span x-text="{alunos:'alunos', escolas:'escolas', estados:'estados', cidades:'cidades'}[rk.tipo]"></span> no ranking
     <span x-show="rk.f.uf" x-text="' · ' + UF_NOMES[rk.f.uf]"></span>
+    <span x-show="rk.f.municipio" x-cloak class="ml-1 inline-flex items-center gap-1 rounded-full border border-sky-400/30 bg-sky-400/10 px-2 py-0.5 text-sky-200">só <span x-text="rk.f.municipio"></span>
+      <button @click="setFilter('municipio', '')" class="hover:text-white" title="Remover"><i x-icon="'x'" class="h-3 w-3"></i></button></span>
     <span x-show="rk.f.competicao" x-text="' · ' + rk.f.competicao.split(',').join(' + ')"></span>
     <span x-show="nivelEfetivo(rk.f.nivel)" x-text="' · contando só ' + descreveNiveis(nivelEfetivo(rk.f.nivel))"></span>
     <span x-text="' · pontuação: ' + (metodoAtual?.nome || '')"></span>
@@ -642,22 +643,23 @@
   <!-- lista -->
   <div class="glass card mt-6 overflow-hidden">
     <div class="hidden grid-cols-[3rem_minmax(0,1fr)_9rem_10rem] items-center gap-4 border-b hairline px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 md:grid">
-      <span class="text-center">#</span><span x-text="{alunos:'Aluno', escolas:'Escola', estados:'Estado'}[rk.tipo]"></span><span class="text-center">Medalhas</span><span class="text-right" x-text="`Pontos · ${metodoAtual?.curto || ''}`"></span>
+      <span class="text-center">#</span><span x-text="{alunos:'Aluno', escolas:'Escola', estados:'Estado', cidades:'Cidade'}[rk.tipo]"></span><span class="text-center">Medalhas</span><span class="text-right" x-text="`Pontos · ${metodoAtual?.curto || ''}`"></span>
     </div>
     <div x-show="rk.loading && !rk.itens.length" class="space-y-2 p-4"><template x-for="i in 8"><div class="skeleton h-12"></div></template></div>
     <ol class="divide-y divide-white/5">
       <template x-for="it in rk.itens" :key="it.id">
         <li>
-          <a :href="rk.tipo==='alunos' ? alunoLink(it.id) : rk.tipo==='escolas' ? escolaLink(it.id) : rankLink('alunos', {uf: it.id})"
+          <a :href="rk.tipo==='alunos' ? alunoLink(it.id) : rk.tipo==='escolas' ? escolaLink(it.id) : rk.tipo==='cidades' ? '/cidade/' + slug(it.id) : rankLink('alunos', {uf: it.id})"
              class="lb-row grid grid-cols-[2.6rem_minmax(0,1fr)_auto] items-center gap-3 px-3 py-3 md:grid-cols-[3rem_minmax(0,1fr)_9rem_10rem] md:gap-4 md:px-4">
             <span class="rank-num tabular" :class="it.pos<=3 && 'rank-'+it.pos" x-text="it.pos"></span>
             <div class="flex min-w-0 items-center gap-3">
               <template x-if="rk.tipo==='alunos'"><div class="avatar h-10 w-10 text-xs" :style="tierStyle(it.tier)" x-text="initials(it.nome)"></div></template>
               <template x-if="rk.tipo==='escolas'"><div class="grid h-10 w-10 flex-none place-items-center rounded-xl border hairline bg-white/5"><i x-icon="'school'" class="h-4 w-4" :style="`color:${it.tier.cor}`"></i></div></template>
               <template x-if="rk.tipo==='estados'"><div class="font-display grid h-10 w-10 flex-none place-items-center rounded-xl border hairline bg-white/5 text-sm font-bold text-gold-300" x-text="it.id"></div></template>
+              <template x-if="rk.tipo==='cidades'"><div class="grid h-10 w-10 flex-none place-items-center rounded-xl border hairline bg-white/5"><i x-icon="'building-2'" class="h-4 w-4 text-sky-300"></i></div></template>
               <div class="min-w-0">
                 <div class="flex items-center gap-2">
-                  <span class="truncate font-semibold" x-text="rk.tipo==='escolas' ? prettySchool(it.nome) : rk.tipo==='estados' ? UF_NOMES[it.id] : it.nome"></span>
+                  <span class="truncate font-semibold" x-text="rk.tipo==='escolas' ? prettySchool(it.nome) : rk.tipo==='estados' ? UF_NOMES[it.id] : rk.tipo==='cidades' ? `${it.nome} (${it.uf})` : it.nome"></span>
                   <span x-show="it.tier" class="tier-chip hidden sm:inline-flex" :style="tierStyle(it.tier)" x-text="it.tier?.nome"></span>
                 </div>
                 <div class="truncate text-xs text-slate-500" x-text="
@@ -920,6 +922,106 @@
   </template>
 </section>
 
+<!-- ================================================================ CIDADE -->
+<section x-show="is('cidade')" x-cloak class="fade-in pt-10">
+  <div x-show="loadingPerfil" class="space-y-4"><div class="skeleton h-56"></div><div class="skeleton h-80"></div></div>
+  <div x-show="cidade?.erro" class="glass card p-12 text-center text-slate-400" x-text="cidade?.erro"></div>
+  <template x-if="cidade && !cidade.erro">
+    <div>
+      <div class="mb-3 flex justify-end gap-2">
+        <a class="btn" :href="rankLink('cidades', { uf: cidade.uf })"><i x-icon="'building-2'" class="h-4 w-4"></i><span x-text="`Cidades de ${cidade.uf}`"></span></a>
+        <button type="button" class="btn" :disabled="exportando" @click="baixar({ municipio: cidade.nome, uf: cidade.uf }, 'csv')"><i x-icon="exportando ? 'loader-circle' : 'download'" class="h-4 w-4" :class="exportando && 'animate-spin'"></i><span>Exportar CSV</span></button>
+      </div>
+      <div class="glass card relative overflow-hidden p-6 sm:p-8">
+        <div class="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-sky-400/10 blur-3xl"></div>
+        <div class="relative flex flex-col gap-6 md:flex-row md:items-center">
+          <div class="grid h-28 w-28 flex-none place-items-center self-start rounded-full border hairline bg-ink-800"><i x-icon="'building-2'" class="h-12 w-12 text-sky-300"></i></div>
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-medium uppercase tracking-[.18em] text-sky-300">Cidade</p>
+            <h1 class="font-display mt-1 text-3xl font-bold sm:text-4xl" x-text="cidade.nome"></h1>
+            <div class="mt-1 text-sm text-slate-400"><i x-icon="'map-pin'" class="mr-1 inline h-3.5 w-3.5"></i><a :href="rankLink('alunos', { uf: cidade.uf })" class="hover:text-gold-300 hover:underline" x-text="UF_NOMES[cidade.uf]"></a></div>
+            <p class="mt-4 max-w-xl text-sm text-slate-400">Medalhas de alunos de escolas da cidade (ou que informaram a cidade, nas olimpíadas que não publicam a escola), de <span x-text="cidade.anos[0]"></span> a <span x-text="cidade.anos.at(-1)"></span>.</p>
+            <div class="mt-3 text-sm font-semibold text-gold-300"><span class="tabular" x-text="fmt(cidade.xp)"></span> pontos <span class="font-normal text-slate-500" x-text="`· ${metodoAtual?.nome || ''}`"></span></div>
+          </div>
+          <div class="grid grid-cols-2 gap-3 md:w-80">
+            <div class="rounded-2xl border hairline bg-white/5 p-3 text-center md:text-left">
+              <div class="text-[11px] uppercase tracking-wider text-slate-500">Brasil</div>
+              <div class="font-display tabular text-2xl font-bold" x-text="cidade.rank ? '#' + fmt(cidade.rank) : '—'"></div>
+              <div class="text-xs text-slate-500" x-text="cidade.rank ? `de ${fmt(cidade.rank_total)} cidades` : 'sem pontos neste método'"></div>
+            </div>
+            <div class="rounded-2xl border hairline bg-white/5 p-3 text-center md:text-left">
+              <div class="text-[11px] uppercase tracking-wider text-slate-500" x-text="cidade.uf"></div>
+              <div class="font-display tabular text-2xl font-bold" x-text="cidade.rank_uf ? '#' + fmt(cidade.rank_uf) : '—'"></div>
+              <div class="text-xs text-slate-500">de <span x-text="fmt(cidade.rank_uf_total)"></span></div>
+            </div>
+            <div class="rounded-2xl border hairline bg-white/5 p-3 text-center md:text-left">
+              <div class="text-[11px] uppercase tracking-wider text-slate-500">Medalhistas</div>
+              <div class="font-display tabular text-2xl font-bold" x-text="fmt(cidade.alunos)"></div>
+            </div>
+            <div class="rounded-2xl border hairline bg-white/5 p-3 text-center md:text-left">
+              <div class="text-[11px] uppercase tracking-wider text-slate-500">Escolas</div>
+              <div class="font-display tabular text-2xl font-bold" x-text="fmt(cidade.escolas)"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-6 grid grid-cols-3 gap-4">
+        <template x-for="m in [['ouro','Ouro',''],['prata','Prata','prata'],['bronze','Bronze','bronze']]" :key="m[0]">
+          <div class="glass card flex items-center gap-4 p-4">
+            <span class="coin xl" :class="m[2]" x-text="fmt(cidade.medalhas[m[0]])"></span>
+            <div class="hidden sm:block"><div class="font-display text-lg font-semibold" x-text="m[1]"></div><div class="text-xs text-slate-500">medalhas</div></div>
+          </div>
+        </template>
+      </div>
+
+      <div class="glass card mt-6 p-5">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h3 class="font-display text-lg font-semibold">Medalhas por ano</h3>
+          <div class="flex flex-wrap gap-1.5 text-xs">
+            <template x-for="o in cidade.olimpiadas" :key="o.sigla">
+              <span class="rounded-full border hairline bg-white/5 px-2 py-0.5 text-slate-300"><b x-text="o.sigla"></b> <span class="text-slate-500" x-text="fmt(o.total)"></span></span>
+            </template>
+          </div>
+        </div>
+        <div x-ref="cityChart" class="chart h-72"></div>
+      </div>
+
+      <div class="mt-6 grid gap-6 lg:grid-cols-2">
+        <div class="glass card p-5">
+          <h3 class="font-display mb-3 flex items-center gap-2 text-lg font-semibold"><i x-icon="'school'" class="h-5 w-5 text-indigo-300"></i>Escolas com mais medalhas</h3>
+          <ol class="divide-y divide-white/5">
+            <template x-for="(e, i) in cidade.top_escolas" :key="e.id">
+              <li><a :href="escolaLink(e.id)" class="lb-row -mx-2 flex items-center gap-3 rounded-xl px-2 py-2">
+                <span class="rank-num tabular !w-8" :class="i<3 && 'rank-'+(i+1)" x-text="e.pos"></span>
+                <div class="min-w-0 flex-1"><div class="truncate font-medium" x-text="prettySchool(e.nome)"></div><div class="text-xs text-slate-500" x-text="[e.rede, fmt(e.alunos) + ' medalhistas'].filter(Boolean).join(' · ')"></div></div>
+                <span class="flex gap-1"><span class="coin !h-6 !w-6 !text-[10px]" :class="!e.ouro && 'zero'" x-text="e.ouro"></span><span class="coin prata !h-6 !w-6 !text-[10px]" :class="!e.prata && 'zero'" x-text="e.prata"></span><span class="coin bronze !h-6 !w-6 !text-[10px]" :class="!e.bronze && 'zero'" x-text="e.bronze"></span></span>
+                <span class="tabular w-12 text-right text-sm font-semibold text-gold-300" x-text="fmt(e.xp)"></span>
+              </a></li>
+            </template>
+          </ol>
+          <a :href="rankLink('escolas', { uf: cidade.uf, municipio: cidade.nome })" class="mt-3 block text-xs text-gold-300">ranking completo das escolas da cidade →</a>
+        </div>
+        <div class="glass card p-5">
+          <h3 class="font-display mb-3 flex items-center gap-2 text-lg font-semibold"><i x-icon="'flame'" class="h-5 w-5 text-orange-400"></i>Alunos com mais medalhas</h3>
+          <ol class="divide-y divide-white/5">
+            <template x-for="(a, i) in cidade.top_alunos" :key="a.id">
+              <li><a :href="alunoLink(a.id)" class="lb-row -mx-2 flex items-center gap-3 rounded-xl px-2 py-2">
+                <span class="rank-num tabular !w-8" :class="i<3 && 'rank-'+(i+1)" x-text="a.pos"></span>
+                <div class="min-w-0 flex-1"><div class="truncate font-medium" x-text="a.nome"></div><div class="truncate text-xs text-slate-500" x-text="a.escola ? prettySchool(a.escola) : ''"></div></div>
+                <span class="flex gap-1"><span class="coin !h-6 !w-6 !text-[10px]" :class="!a.ouro && 'zero'" x-text="a.ouro"></span><span class="coin prata !h-6 !w-6 !text-[10px]" :class="!a.prata && 'zero'" x-text="a.prata"></span><span class="coin bronze !h-6 !w-6 !text-[10px]" :class="!a.bronze && 'zero'" x-text="a.bronze"></span></span>
+                <span class="tabular w-12 text-right text-sm font-semibold text-gold-300" x-text="fmt(a.xp)"></span>
+              </a></li>
+            </template>
+          </ol>
+          <a :href="rankLink('alunos', { uf: cidade.uf, municipio: cidade.nome })" class="mt-3 block text-xs text-gold-300">ranking completo dos alunos da cidade →</a>
+          <p class="mt-2 text-xs text-slate-500">Contam só as medalhas ganhas enquanto o aluno estudava (ou morava) na cidade.</p>
+        </div>
+      </div>
+    </div>
+  </template>
+</section>
+
 <!-- ================================================================ ESCOLA -->
 <section x-show="is('escola')" x-cloak class="fade-in pt-10">
   <div x-show="loadingPerfil" class="space-y-4"><div class="skeleton h-56"></div><div class="skeleton h-80"></div></div>
@@ -953,7 +1055,7 @@
               <span class="rounded-full border hairline px-2 py-0.5 text-xs text-slate-400" x-text="[escola.rede, escola.esfera].filter(Boolean).join(' · ')"></span>
             </div>
             <h1 class="font-display mt-2 text-3xl font-bold sm:text-4xl" x-text="prettySchool(escola.nome)"></h1>
-            <div class="mt-1 text-sm text-slate-400"><i x-icon="'map-pin'" class="mr-1 inline h-3.5 w-3.5"></i><span x-text="`${prettySchool(escola.municipio)} · ${UF_NOMES[escola.uf]}`"></span></div>
+            <div class="mt-1 text-sm text-slate-400"><i x-icon="'map-pin'" class="mr-1 inline h-3.5 w-3.5"></i><template x-if="escola.municipio"><span><a :href="cidadeLink(escola.municipio, escola.uf)" class="hover:text-gold-300 hover:underline" x-text="prettySchool(escola.municipio)" title="Ver todas as medalhas da cidade"></a> · </span></template><span x-text="UF_NOMES[escola.uf]"></span></div>
             <div x-show="escola.variantes.length" class="mt-1 text-xs text-slate-500">também escrita como: <span x-text="escola.variantes.map(prettySchool).join('; ')"></span></div>
             <div class="mt-5 max-w-xl">
               <div class="mb-1.5 flex justify-between text-xs">
@@ -1230,8 +1332,9 @@
         <li>IMO: resultados do Brasil em <a class="link" href="https://www.imo-official.org/" target="_blank" rel="noopener">imo-official.org</a> (não informa o estado: ele é deduzido pelo nome nas outras olimpíadas).</li>
         <li>Ibero, Cone Sul, EGMO, APMO e as demais competições internacionais: resultados publicados em <a class="link" href="https://www.obm.org.br/" target="_blank" rel="noopener">obm.org.br</a> (cidade e estado, sem escola).</li>
         <li>EGOI (meninas, informática) e IOAI (inteligência artificial): resultados do Brasil em <a class="link" href="https://stats.egoi.org/countries/BRA/results/" target="_blank" rel="noopener">stats.egoi.org</a> e <a class="link" href="https://ioai-official.org/" target="_blank" rel="noopener">ioai-official.org</a> (sem estado: deduzido pelo nome, como na IMO).</li>
+        <li>OBQ (química): resultado final em PDF em <a class="link" href="https://obquimica.org/" target="_blank" rel="noopener">obquimica.org</a>, modalidades A e B, de 2025 em diante (os resultados de anos anteriores não estão mais publicados).</li>
         <li>Alunos são identificados por nome + estado. Nomes abreviados de forma diferente entre as listas podem aparecer separados.</li>
-        <li>Filtro meninas/meninos: nenhuma lista oficial informa o sexo. Ele é estimado pelo primeiro nome, com a proporção de mulheres e homens com aquele nome no Censo 2010 do <a class="link" href="https://censo2010.ibge.gov.br/nomes/" target="_blank" rel="noopener">IBGE</a>: só entra em um dos filtros quem tem um nome usado por pelo menos 90% de um sexo. Nomes usados pelos dois (Ariel, Darcy, Elis…) ou desconhecidos ficam de fora dos dois filtros, e quem tem premiação em olimpíada só para meninas (EGMO, PAGMO, EGOI) conta como menina. O sexo estimado serve só para filtrar: não aparece nos perfis, na API nem nos dados exportados.</li>
+        <li>Filtro meninas: nenhuma lista oficial informa o sexo, e adivinhar pelo nome erraria. Por isso o filtro inclui só as alunas premiadas em olimpíadas exclusivas para meninas (EGMO, PAGMO e EGOI), com todas as medalhas delas (OBMEP, OBM, OBI…). Outras meninas medalhistas ficam de fora do filtro, mas aparecem normalmente no ranking geral.</li>
         <li>Toda premiação tem o link da página oficial para conferência.</li>
       </ul>
       <p class="mt-3 text-xs text-slate-500" x-show="ov?.atualizado_em">Base atualizada em <span x-text="ov?.atualizado_em"></span>.</p>

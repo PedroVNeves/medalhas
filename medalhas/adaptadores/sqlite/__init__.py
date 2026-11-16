@@ -34,6 +34,9 @@ class SessaoSqlite:
     def perfil_escola(self, escola_id: str, params: dict) -> dict:
         return site.perfil_escola(self._con, escola_id, params)
 
+    def perfil_cidade(self, cidade_id: str, params: dict) -> dict:
+        return site.perfil_cidade(self._con, cidade_id, params)
+
     def visao_geral(self, params: dict) -> dict:
         return site.visao_geral(self._con, params)
 

@@ -131,10 +131,13 @@ def item_ranking(r: dict, tipo: str, links: Links) -> dict:
     elif tipo == "escolas":
         item.update({"municipio": r.get("municipio"), "uf": r.get("uf"), "rede": r.get("rede"),
                      "alunos_premiados": r.get("alunos")})
+    elif tipo == "cidades":
+        item.update({"uf": r.get("uf"), "alunos_premiados": r.get("alunos"), "escolas": r.get("escolas"),
+                     "perfil": links.site("cidade", r["id"])})
     else:
         item.update({"alunos_premiados": r.get("alunos"), "escolas": r.get("escolas")})
     item.update({"medalhas": medalhas(r), "pontos": r["xp"], "pontos_metodos": pontos(r),
                  "anos": {"de": r.get("de"), "ate": r.get("ate")}})
-    if tipo != "estados":
+    if tipo in ("alunos", "escolas"):
         item["api"] = links.api(tipo, r["id"])
     return item

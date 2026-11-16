@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from ..dominio import escolas, identidade, olimpiadas, pontuacao, sexo
 from ..dominio.premiacao import Premiacao
 from ..dominio.texto import capitalizar_nome, normalizar
-from .portas import Coletor, NomesPorSexo, RepositorioPremiacoes
+from .portas import Coletor, RepositorioPremiacoes
 
 Log = Callable[[str], None]
 
@@ -30,10 +30,7 @@ def indexar(p: Premiacao) -> dict:
     }
 
 
-def gerar_base(coletores: Iterable[Coletor], repositorio: RepositorioPremiacoes, log: Log = print,
-               nomes: NomesPorSexo | None = None) -> Relatorio:
-    """nomes: fonte da fração de mulheres por primeiro nome; sem ela, só as olimpíadas só para meninas
-    definem o sexo estimado."""
+def gerar_base(coletores: Iterable[Coletor], repositorio: RepositorioPremiacoes, log: Log = print) -> Relatorio:
     relatorio = Relatorio()
     premiacoes: list[Premiacao] = []
     for coletor in coletores:
@@ -42,17 +39,16 @@ def gerar_base(coletores: Iterable[Coletor], repositorio: RepositorioPremiacoes,
         except Exception as e:  # noqa: BLE001 — uma fonte fora do ar não pode derrubar as outras
             relatorio.falhas.append(f"{coletor.sigla}: {type(e).__name__}: {e}")
 
+    com_cidade = escolas.completar_municipios(premiacoes)
+    log(f"Escolas: {com_cidade} premiações sem cidade ganharam a da escola de mesmo nome no estado")
     corrigidas = identidade.corrigir_grafias(premiacoes)
     log(f"Identidades: {corrigidas} premiações com a grafia do nome corrigida à mão")
     exatos, abreviados = identidade.completar_identidades(premiacoes)
     log(f"Identidades: UF inferida pelo nome em {exatos} registros; {abreviados} nomes abreviados completados")
     unidos = identidade.atribuir_alunos(premiacoes)
     log(f"Identidades: {unidos} pessoas reunidas entre estados diferentes")
-    primeiros = {sexo.primeiro_nome(p["aluno_id"]) for p in premiacoes}
-    fracao = nomes.fracao_feminina(primeiros, log) if nomes else {}
-    contagem = sexo.estimar(premiacoes, fracao)
-    log(f"Sexo estimado: {contagem.get('F', 0)} meninas, {contagem.get('M', 0)} meninos, "
-        f"{contagem.get(None, 0)} sem classificação (nome ambíguo ou desconhecido)")
+    meninas = sexo.marcar_meninas(premiacoes)
+    log(f"Meninas: {meninas} alunas premiadas em olimpíadas só para meninas (EGMO, PAGMO, EGOI)")
 
     registros = [indexar(p) for p in premiacoes]
     repositorio.substituir(registros, atualizado_em=time.strftime("%Y-%m-%d %H:%M"))

@@ -1,12 +1,12 @@
 # Medalhas: Hall da Fama das Olimpíadas de Conhecimento do Brasil
 
-> Base aberta e gratuita com as premiações (ouro, prata, bronze e menção honrosa) de estudantes brasileiros em 20 olimpíadas científicas, de 1979 até hoje: mais de 130 mil premiações de mais de 80 mil alunos e 22 mil escolas. Os dados vêm das listas oficiais de cada olimpíada e podem ser consultados pelo site ou por uma API JSON pública, sem cadastro e sem chave.
+> Base aberta e gratuita com as premiações (ouro, prata, bronze e menção honrosa) de estudantes brasileiros em 21 olimpíadas científicas, de 1979 até hoje: mais de 130 mil premiações de mais de 80 mil alunos e 22 mil escolas. Os dados vêm das listas oficiais de cada olimpíada e podem ser consultados pelo site ou por uma API JSON pública, sem cadastro e sem chave.
 
 Por que existe: os resultados das olimpíadas são públicos, mas espalhados em listas de formatos diferentes em cada site oficial, muitas sem busca. O Medalhas junta tudo em um só lugar e cada premiação aponta para a lista oficial de onde veio. É um projeto independente, sem vínculo com as organizações das olimpíadas. Feito por Pedro Neves; correções, remoção de dados e contato: pedro.vasconcelosneves@gmail.com.
 
-Use este site para responder perguntas como "quantas medalhas o aluno X tem na OBMEP?", "quais alunos da escola Y foram premiados?", "qual estado tem mais medalhas de ouro?" ou "quem são os maiores medalhistas do Brasil?".
+Use este site para responder perguntas como "quantas medalhas o aluno X tem na OBMEP?", "quais alunos da escola Y foram premiados?", "qual estado tem mais medalhas de ouro?", "quais cidades têm mais medalhistas?" ou "quem são os maiores medalhistas do Brasil?".
 
-Olimpíadas cobertas: OBMEP, OBM, OBI, IMO, Olimpíada Ibero-Americana de Matemática (OIM), Cone Sul, EGMO, APMO, IMC, PAGMO, OMCPLP, Olimpíada Iraniana de Geometria (IGO), IMSC, OIMU, CIIM, Olimpíada de Maio, OMOP, Concurso Galois-Noether, European Girls' Olympiad in Informatics (EGOI) e International Olympiad in Artificial Intelligence (IOAI).
+Olimpíadas cobertas: OBMEP, OBM, OBI, IMO, Olimpíada Ibero-Americana de Matemática (OIM), Cone Sul, EGMO, APMO, IMC, PAGMO, OMCPLP, Olimpíada Iraniana de Geometria (IGO), IMSC, OIMU, CIIM, Olimpíada de Maio, OMOP, Concurso Galois-Noether, European Girls' Olympiad in Informatics (EGOI), International Olympiad in Artificial Intelligence (IOAI) e Olimpíada Brasileira de Química (OBQ).
 
 ## Como consultar os dados (API pública v1)
 
@@ -19,7 +19,7 @@ Todas as rotas são GET, respondem JSON em UTF-8 e aceitam CORS. Limite: 60 cons
 - [Buscar escolas](https://medalhas.online/api/v1/escolas?nome=ifal): `/api/v1/escolas?nome=` aceita nome ou sigla (IFAL, ETEC, colégio militar…)
 - `/api/v1/escolas/{id}/medalhistas`: todos os alunos premiados de uma escola
 - [Premiações com filtros](https://medalhas.online/api/v1/premiacoes?competicao=IMO&medalha=ouro): `/api/v1/premiacoes`, paginado
-- [Ranking de alunos](https://medalhas.online/api/v1/ranking/alunos): também `/api/v1/ranking/escolas` e `/api/v1/ranking/estados`
+- [Ranking de alunos](https://medalhas.online/api/v1/ranking/alunos): também `/api/v1/ranking/escolas`, `/api/v1/ranking/estados` e `/api/v1/ranking/cidades`; cada cidade tem página em `/cidade/<cidade>-<uf>` (ex.: https://medalhas.online/cidade/sao-paulo-sp)
 - [Olimpíadas e filtros aceitos](https://medalhas.online/api/v1/olimpiadas)
 
 Filtros comuns: `uf` (sigla do estado), `municipio`, `competicao` (sigla, vários separados por vírgula), `medalha` (Ouro, Prata, Bronze, Menção Honrosa), `nivel`, `ano`, `ano_de`, `ano_ate`, `rede` (publica, privada). Valores inválidos voltam com erro 400 explicando o que corrigir.

@@ -1,4 +1,4 @@
-"""Páginas com endereço próprio (/aluno/..., /escola/..., /ranking/..., /sobre...) e o sitemap, para buscadores e IAs.
+"""Páginas com endereço próprio (/aluno/..., /escola/..., /cidade/..., /ranking/..., /sobre...) e o sitemap, para buscadores e IAs.
 
 O site é montado no navegador (Alpine), a partir do mesmo index.html. Aqui o servidor entrega esse
 index.html já com título, descrição, endereço canônico e um resumo em texto do aluno ou da escola:
@@ -14,7 +14,7 @@ from xml.sax.saxutils import escape as escape_xml
 
 from ...aplicacao.portas import SessaoDeLeitura
 from ...config import PASTA_WEB, URL_SITE
-from ...dominio.enderecos import ALUNO, ESCOLA
+from ...dominio.enderecos import ALUNO, CIDADE, ESCOLA
 from ...dominio.escolas import nome_de_exibicao
 from ...dominio.texto import capitalizar_nome
 
@@ -169,6 +169,10 @@ TELAS = {
         "Ranking das escolas com mais medalhas em olimpíadas · Medalhas",
         "As escolas brasileiras com mais alunos premiados na OBMEP, OBI e outras olimpíadas científicas. "
         "Filtre por estado, olimpíada, ano e escola pública ou privada."),
+    "/ranking/cidades": Tela(
+        "Ranking das cidades com mais medalhas em olimpíadas · Medalhas",
+        "As cidades do Brasil com mais medalhas na OBMEP, OBM, OBI e outras olimpíadas científicas, com alunos "
+        "e escolas premiados em cada uma. Filtre por estado, olimpíada, ano e nível."),
     "/ranking/estados": Tela(
         "Ranking dos estados em medalhas nas olimpíadas · Medalhas",
         "Quais estados do Brasil têm mais medalhas na OBMEP, OBM, OBI, IMO e outras olimpíadas científicas, "
@@ -235,6 +239,9 @@ def _resumo_ranking(sessao: SessaoDeLeitura, tipo: str, t: Tela) -> str:
         elif tipo == "escolas":
             nome = f'<a href="/escola/{enderecos.de(ESCOLA, it["id"])}">{e(nome_de_exibicao(it["nome"]))}</a>'
             lugar = ", ".join(p for p in (it.get("municipio") and capitalizar_nome(it["municipio"]), it.get("uf")) if p)
+        elif tipo == "cidades":
+            nome = f'<a href="/cidade/{enderecos.de(CIDADE, it["id"])}">{e(it["nome"])}</a>'
+            lugar = f"{it['uf']}, {it['alunos']} alunos, {it['escolas']} escolas"
         else:
             nome, lugar = e(UF_NOMES.get(it["id"], it["id"])), f"{it['alunos']} alunos, {it['escolas']} escolas"
         linhas.append(f"<li>{nome}{' (' + e(lugar) + ')' if lugar else ''}: {e(_medalhas(it))}, "
@@ -246,7 +253,7 @@ def _resumo_ranking(sessao: SessaoDeLeitura, tipo: str, t: Tela) -> str:
 
 
 def perfil(sessao: SessaoDeLeitura, tipo: str, endereco: str, base: str) -> Pagina:
-    """Página de um aluno ou escola. base: URL pública do site, sem barra no fim."""
+    """Página de um aluno, escola ou cidade. base: URL pública do site, sem barra no fim."""
     achado = sessao.enderecos().resolver(tipo, endereco)
     if not achado:
         return Pagina(404, _montar("Página não encontrada · Medalhas", "Este endereço não existe no Medalhas.",
@@ -257,6 +264,8 @@ def perfil(sessao: SessaoDeLeitura, tipo: str, endereco: str, base: str) -> Pagi
     url = f"{base}/{tipo}/{oficial}"
     if tipo == ALUNO:
         return Pagina(200, _aluno(sessao.perfil_aluno(ident, {}), base, url))
+    if tipo == CIDADE:
+        return Pagina(200, _cidade(sessao.perfil_cidade(ident, {}), sessao, base, url))
     return Pagina(200, _escola(sessao.perfil_escola(ident, {}), sessao, base, url))
 
 
@@ -314,6 +323,34 @@ def _escola(d: dict, sessao: SessaoDeLeitura, base: str, url: str) -> bytes:
                    imagem=imagem_de(base, url), imagem_alt=f"{nome_lugar}: {medalhas}")
 
 
+def _cidade(d: dict, sessao: SessaoDeLeitura, base: str, url: str) -> bytes:
+    e = html.escape
+    enderecos = sessao.enderecos()
+    nome_uf = f"{d['nome']} ({d['uf']})"
+    medalhas = _medalhas(d["medalhas"])
+    siglas = [o["sigla"] for o in d["olimpiadas"]]
+    anos = d["anos"]
+    periodo = f"em {anos[0]}" if len(anos) == 1 else f"de {anos[0]} a {anos[-1]}"
+    plural = "aluno premiado" if d["alunos"] == 1 else "alunos premiados"
+
+    titulo = f"Medalhistas de {nome_uf} em olimpíadas · Medalhas"
+    descricao = (f"{d['nome']} ({UF_NOMES.get(d['uf'], d['uf'])}) em olimpíadas científicas {periodo}: "
+                 f"{d['alunos']} {plural} de {d['escolas']} escolas, {medalhas}"
+                 + (f" na {_lista(siglas[:4])}" if siglas else "") + "."
+                 + (f" {d['rank']}ª cidade no ranking nacional." if d.get("rank") else ""))
+    escolas = "".join(
+        f'<li><a href="/escola/{enderecos.de(ESCOLA, x["id"])}">{e(nome_de_exibicao(x["nome"]))}</a> · {e(_medalhas(x))}</li>'
+        for x in d["top_escolas"] if enderecos.de(ESCOLA, x["id"]))
+    alunos = "".join(
+        f'<li><a href="/aluno/{enderecos.de(ALUNO, a["id"])}">{e(a["nome"])}</a> · {e(_medalhas(a))}</li>'
+        for a in d["top_alunos"] if enderecos.de(ALUNO, a["id"]))
+    resumo = (f"<h1>{e(nome_uf)}</h1><p>{e(descricao)}</p>"
+              + (f"<h2>Escolas com mais medalhas</h2><ol>{escolas}</ol>" if escolas else "")
+              + (f"<h2>Alunos com mais medalhas</h2><ol>{alunos}</ol>" if alunos else "")
+              + _rodape(base, f"{base}/api/v1/ranking/cidades?uf={d['uf']}"))
+    return _montar(titulo, descricao, url, _migalhas(base, nome_uf, url), resumo)
+
+
 def imagem_de(base: str, url: str) -> str:
     """https://site/aluno/x -> https://site/og/aluno/x.png"""
     return base + "/og" + url[len(base):] + ".png"
@@ -349,7 +386,7 @@ def _gerar_sitemaps(sessao: SessaoDeLeitura, base: str) -> dict[str, bytes]:
 
     telas = [base + c for c, t in TELAS.items() if t.indexar]
     arquivos = {"sitemaps/paginas.xml": urlset([base + "/", *telas])}
-    for tipo, plural in ((ALUNO, "alunos"), (ESCOLA, "escolas")):
+    for tipo, plural in ((ALUNO, "alunos"), (ESCOLA, "escolas"), (CIDADE, "cidades")):
         urls = [f"{base}/{tipo}/{e}" for e in enderecos.todos(tipo)]
         for i in range(0, len(urls), URLS_POR_SITEMAP):
             arquivos[f"sitemaps/{plural}-{i // URLS_POR_SITEMAP + 1}.xml"] = urlset(urls[i:i + URLS_POR_SITEMAP])

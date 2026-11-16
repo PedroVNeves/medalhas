@@ -27,7 +27,7 @@ from . import parametros
 from .apresentacao import consulta, nomes_das_olimpiadas
 from .erros import ParametroInvalido
 
-CONJUNTOS = ("premiacoes", "alunos", "escolas", "estados")
+CONJUNTOS = ("premiacoes", "alunos", "escolas", "estados", "cidades")
 CAMPOS_PREMIACAO = ["id", "olimpiada", "olimpiada_nome", "area", "ano", "nivel", "medalha", "premio", "nome",
                     "aluno_id", "escola", "escola_id", "municipio", "uf", "rede", "esfera", "nota",
                     "pontos_impa", "pontos_impa_n3", "pontos_nossa", "fonte"]
@@ -35,6 +35,7 @@ CAMPOS_RANKING = {
     "alunos": ["posicao", "id", "nome", "uf", "escola", "municipio"],
     "escolas": ["posicao", "id", "nome", "municipio", "uf", "rede", "alunos_premiados"],
     "estados": ["posicao", "uf", "alunos_premiados", "escolas"],
+    "cidades": ["posicao", "id", "nome", "uf", "alunos_premiados", "escolas"],
 }
 CAMPOS_RANKING_FIM = ["ouro", "prata", "bronze", "mencao_honrosa", "total", "pontos", "pontos_impa",
                       "pontos_impa_n3", "pontos_nossa", "de", "ate"]
@@ -181,7 +182,7 @@ def exportar(s: SessaoDeLeitura, pedido: Pedido) -> Download:
     separador = ";" if params.get("separador") in (";", "ponto-e-virgula", "excel") else ","
     conjunto = (params.get("conjunto") or "premiacoes").lower()
     if conjunto not in CONJUNTOS:
-        raise ParametroInvalido("conjunto deve ser premiacoes, alunos, escolas ou estados")
+        raise ParametroInvalido("conjunto deve ser premiacoes, alunos, escolas, estados ou cidades")
     parametros.criterios(params, s)   # valida tudo antes de começar a gerar o arquivo
 
     nome = _nome_do_arquivo(params, conjunto, formato)

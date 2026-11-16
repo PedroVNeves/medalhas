@@ -1,9 +1,10 @@
-"""Endereços legíveis das páginas de aluno e escola, como /aluno/maria-souza-lima-al.
+"""Endereços legíveis das páginas de aluno, escola e cidade, como /aluno/maria-souza-lima-al.
 
 Cada página tem um endereço oficial (o que vai para o Google e para o sitemap):
 - aluno: o próprio id (NOME|UF) em forma de slug, então o site monta o link sozinho a partir do id;
 - escola: nome de exibição + município + UF. O id da escola tem as palavras em ordem alfabética
-  ("BENEDITA BRAGA COBRA ESCOLA MUNICIPAL|...") e daria endereços embaralhados.
+  ("BENEDITA BRAGA COBRA ESCOLA MUNICIPAL|...") e daria endereços embaralhados;
+- cidade: o id (MUNICIPIO|UF, sem acento) em forma de slug, como o aluno: /cidade/sao-paulo-sp.
 
 O slug do id (slug(id)) também é aceito para escolas: é o que o site usa nos links, porque nem toda tela
 tem o nome de exibição. O servidor redireciona esse endereço para o oficial.
@@ -12,8 +13,8 @@ import re
 import unicodedata
 from collections.abc import Iterable
 
-ALUNO, ESCOLA = "aluno", "escola"
-TIPOS = (ALUNO, ESCOLA)
+ALUNO, ESCOLA, CIDADE = "aluno", "escola", "cidade"
+TIPOS = (ALUNO, ESCOLA, CIDADE)
 
 
 def slug(texto: str | None) -> str:
@@ -37,11 +38,12 @@ def texto_escola(nome: str | None, municipio: str | None, uf: str | None) -> str
 class Enderecos:
     """Endereços oficiais de todas as páginas, nos dois sentidos (id -> endereço e endereço -> id)."""
 
-    def __init__(self, alunos: Iterable[tuple[str, str]], escolas: Iterable[tuple[str, str]]):
-        """alunos e escolas: pares (id, texto de onde sai o endereço)."""
+    def __init__(self, alunos: Iterable[tuple[str, str]], escolas: Iterable[tuple[str, str]],
+                 cidades: Iterable[tuple[str, str]] = ()):
+        """alunos, escolas e cidades: pares (id, texto de onde sai o endereço)."""
         self._oficial: dict[str, dict[str, str]] = {}
         self._ids: dict[str, dict[str, str]] = {}
-        for tipo, pares in ((ALUNO, alunos), (ESCOLA, escolas)):
+        for tipo, pares in ((ALUNO, alunos), (ESCOLA, escolas), (CIDADE, cidades)):
             oficial, ids = self._oficial.setdefault(tipo, {}), self._ids.setdefault(tipo, {})
             # ordem fixa: quando dois textos dão o mesmo slug, o id menor fica com ele e o outro ganha -2
             for ident, texto in sorted(pares):

@@ -34,8 +34,8 @@ FILTROS = [
     _parametro("ano_de", "A partir do ano", "integer"),
     _parametro("ano_ate", "Até o ano", "integer"),
     _parametro("rede", "publica ou privada"),
-    _parametro("sexo", "F (meninas) ou M (meninos), estimado pelo primeiro nome (Censo 2010 do IBGE); "
-                       "nomes ambíguos ficam de fora dos dois"),
+    _parametro("sexo", "F: só alunas premiadas em olimpíadas só para meninas (EGMO, PAGMO, EGOI), com todas as "
+                       "premiações delas"),
 ]
 PAGINA = [_parametro("limite", "Itens por página", "integer"),
           _parametro("offset", "Quantos itens pular", "integer")]
@@ -91,19 +91,19 @@ ROTAS = {
          _parametro("busca", "Texto em nome, escola ou município"), ALUNO_ID, ESCOLA_ID, *FILTROS, *PAGINA],
         tag="Dados completos"),
     "/api/v1/ranking/{tipo}": _get(
-        "Ranking de alunos, escolas ou estados",
+        "Ranking de alunos, escolas, estados ou cidades",
         "Mesmos critérios do site; empates dividem a posição.",
-        [_parametro("tipo", "alunos, escolas ou estados", onde="path"), METODO,
+        [_parametro("tipo", "alunos, escolas, estados ou cidades", onde="path"), METODO,
          _parametro("ordem", "xp (pontos, padrão), medalhas (quadro) ou total"), *FILTROS, *PAGINA],
         tag="Dados completos"),
     "/api/v1/exportar": _get(
         "Baixar dados em CSV ou JSON",
         "Sem filtros, baixa a base inteira de premiações. Com filtros, só o que passar neles. "
-        "conjunto=alunos|escolas|estados baixa o ranking completo. CSV em UTF-8 com BOM; "
+        "conjunto=alunos|escolas|estados|cidades baixa o ranking completo. CSV em UTF-8 com BOM; "
         "separador=; para abrir direto no Excel em português. Respostas são compactadas (gzip) "
         "quando o cliente aceita. Limite próprio por IP (ver /api/v1).",
         [_parametro("formato", "csv (padrão) ou json"),
-         _parametro("conjunto", "premiacoes (padrão), alunos, escolas ou estados"),
+         _parametro("conjunto", "premiacoes (padrão), alunos, escolas, estados ou cidades"),
          _parametro("separador", "',' (padrão) ou ';'"), ALUNO_ID, ESCOLA_ID, _parametro("nome", "Nome do aluno"),
          _parametro("escola", "Nome ou sigla da escola"), METODO, *FILTROS],
         tag="Dados completos",

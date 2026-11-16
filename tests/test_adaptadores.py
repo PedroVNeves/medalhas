@@ -3,7 +3,7 @@ import unittest
 from unittest import mock
 
 from medalhas.adaptadores import coletores
-from medalhas.adaptadores.coletores import egoi, ioai, obm, obmep
+from medalhas.adaptadores.coletores import egoi, ioai, obm, obmep, obq
 from medalhas.adaptadores.http import limites
 from medalhas.adaptadores.http.api_v1 import ParametroInvalido, parametros
 from medalhas.dominio.olimpiadas import CATALOGO
@@ -42,6 +42,17 @@ class TestColetores(unittest.TestCase):
         self.assertEqual(egoi.ler_resultados(pagina), [   # Bia não tem cor: sem medalha
             {"ano": 2025, "nome": "Ana Lima", "medalha": "Ouro", "pontos": "596"},
             {"ano": 2024, "nome": "Ana Lima", "medalha": "Bronze", "pontos": "300"}])
+
+    def test_linha_da_obq_em_colunas_e_num_trecho_so(self):
+        colunas = [(60, "MATO GROSSO DO SUL"), (143, "ANA LIMA(1)"), (354, "2º ANO EM"), (395, "COLÉGIO X"),
+                   (701, "64,60"), (749, "77,83")]
+        self.assertEqual(obq._registro(colunas), {"uf": "MS", "nome": "ANA LIMA(1)", "serie": "2º ANO EM",
+                                                  "escola": "COLÉGIO X", "nota": "64,60"})
+        junto = [(60, "MATO GROSSO DO SUL BIA REIS (PCD) 3º ANO EM INSTITUTO FEDERAL CAMPUS"), (701, "61,40 72,28")]
+        r = obq._registro(junto)
+        self.assertEqual((r["uf"], obq._limpar_nome(r["nome"]), r["escola"], r["nota"]),
+                         ("MS", "BIA REIS", "INSTITUTO FEDERAL CAMPUS", "61,40"))
+        self.assertIsNone(obq._registro([(395, "NILOPOLIS")]))   # resto do nome da escola, linha de baixo
 
     def test_resultados_da_ioai_so_do_brasil(self):
         pagina = """<table><tr><th>rank</th><th>name</th><th>team</th><th>total</th><th>award</th></tr>

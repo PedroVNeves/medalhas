@@ -47,7 +47,7 @@ def indice(s: SessaoDeLeitura, pedido: Pedido) -> dict:
             "GET /api/v1/escolas/{id}": "resumo de uma escola",
             "GET /api/v1/escolas/{id}/medalhistas": "todos os alunos premiados de uma escola",
             "GET /api/v1/premiacoes": "todas as premiações, com filtros e paginação",
-            "GET /api/v1/ranking/{alunos|escolas|estados}": "rankings com filtros",
+            "GET /api/v1/ranking/{alunos|escolas|estados|cidades}": "rankings com filtros",
             "GET /api/v1/exportar": "baixa premiações ou rankings em CSV/JSON (base inteira ou filtrada)",
             "GET /api/v1/olimpiadas": "olimpíadas, níveis e valores aceitos nos filtros",
         },

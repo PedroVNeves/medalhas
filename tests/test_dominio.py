@@ -75,6 +75,16 @@ class TestEscolas(unittest.TestCase):
         # o CEFET de outra cidade continua separado
         self.assertNotEqual(escolas.indexar_escola("CEFETES CARIACICA", "CARIACICA", "ES")[1], atual)
 
+    def test_escola_sem_cidade_adota_a_unica_cidade_do_mesmo_nome_no_estado(self):
+        ps = [{"escola": "LICEU JARDIM", "municipio": "Santo André", "uf": "SP"},
+              {"escola": "COLEGIO ETAPA", "municipio": "São Paulo", "uf": "SP"},
+              {"escola": "COLEGIO ETAPA", "municipio": "Valinhos", "uf": "SP"},
+              {"escola": "Liceu Jardim", "municipio": None, "uf": "SP"},     # OBQ: só nome e estado
+              {"escola": "ETAPA COLÉGIO", "municipio": None, "uf": "SP"},    # duas cidades possíveis
+              {"escola": "LICEU JARDIM", "municipio": None, "uf": "RJ"}]     # outro estado
+        self.assertEqual(escolas.completar_municipios(ps), 1)
+        self.assertEqual([p["municipio"] for p in ps[3:]], ["Santo André", None, None])
+
     def test_busca_expande_sigla(self):
         self.assertEqual(escolas.palavras_da_busca("etec de sp"),
                          [("ETEC", ["ESCOLA", "TECNICA", "ESTADUAL"]), ("SP", ["SP"])])
@@ -121,20 +131,13 @@ class TestIdentidade(unittest.TestCase):
 
 
 class TestSexo(unittest.TestCase):
-    def test_so_classifica_nomes_quase_exclusivos(self):
-        self.assertEqual(sexo.classificar(0.99), "F")
-        self.assertEqual(sexo.classificar(0.02), "M")
-        self.assertIsNone(sexo.classificar(0.5))    # Ariel, Darcy…
-        self.assertIsNone(sexo.classificar(None))   # nome fora do Censo
-
-    def test_estima_por_aluno_e_olimpiada_so_de_meninas_decide(self):
+    def test_so_quem_foi_premiada_em_olimpiada_para_meninas(self):
         ps = [premiacao("Maria Souza", "SP"), premiacao("Ariel Lima", "RJ"), premiacao("Ariel Lima", "RJ", "EGMO", 2021),
-              premiacao("Joao Reis", "CE"), premiacao("Zuleica Neri", "PI")]
+              premiacao("Joao Reis", "CE")]
         for p in ps:
             p["aluno_id"] = normalizar(p["nome"]) + "|" + p["uf"]
-        contagem = sexo.estimar(ps, {"MARIA": 0.995, "ARIEL": 0.4, "JOAO": 0.003})
-        self.assertEqual([p["sexo"] for p in ps], ["F", "F", "F", "M", None])
-        self.assertEqual(contagem, {"F": 2, "M": 1, None: 1})
+        self.assertEqual(sexo.marcar_meninas(ps), 1)
+        self.assertEqual([p["sexo"] for p in ps], [None, "F", "F", None])   # Maria: não há como saber
 
 
 class TestRanking(unittest.TestCase):

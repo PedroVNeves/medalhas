@@ -45,18 +45,13 @@ class ColetorFalso:
         return [dict(x) for x in self._premiacoes]
 
 
-class NomesFalsos:
-    def fracao_feminina(self, nomes, log):
-        return {"MARIA": 0.99, "ANA": 0.98, "JOAO": 0.01}
-
-
 class TestPontaAPonta(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.pasta = tempfile.TemporaryDirectory()
         caminho = Path(cls.pasta.name) / "medalhas.db"
         cls.relatorio = gerar_base([ColetorFalso("OBMEP", PREMIACOES), ColetorFalso("OBI", [], falhar=True)],
-                                   RepositorioSqlite(caminho), log=lambda _: None, nomes=NomesFalsos())
+                                   RepositorioSqlite(caminho), log=lambda _: None)
         cls.servidor = Servidor(("127.0.0.1", 0), LeituraSqlite(caminho))
         cls.base = f"http://127.0.0.1:{cls.servidor.server_address[1]}"
         threading.Thread(target=cls.servidor.serve_forever, daemon=True).start()
@@ -125,12 +120,11 @@ class TestPontaAPonta(unittest.TestCase):
         self.assertIn("s-maxage", cab["Cache-Control"])   # o CDN guarda: sem consulta a cada letra repetida
 
     def test_filtro_de_meninas(self):
-        r = self.json("/api/v1/ranking/alunos?sexo=F&metodo=site")
-        self.assertEqual(sorted(i["nome"] for i in r["itens"]), ["Ana Costa", "Maria Souza Lima"])
-        self.assertEqual([i["nome"] for i in self.json("/api/ranking?tipo=alunos&sexo=M")["itens"]], ["Joao Pereira"])
-        self.assertIn("sexo", self.json("/api/v1/ranking/alunos?sexo=x", 400)["erro"])
+        # na base de teste ninguém fez EGMO, PAGMO ou EGOI: o filtro fica vazio em vez de adivinhar pelo nome
+        self.assertEqual(self.json("/api/v1/ranking/alunos?sexo=F")["total"], 0)
+        self.assertIn("sexo", self.json("/api/v1/ranking/alunos?sexo=M", 400)["erro"])
         aluno = self.json("/api/v1/alunos?nome=maria+lima")["alunos"][0]
-        self.assertNotIn("sexo", json.dumps(aluno))   # só filtra: não é publicado por pessoa
+        self.assertNotIn("sexo", json.dumps(aluno))
 
     def test_exportacao_filtrada_em_csv(self):
         status, cab, corpo = self.get("/api/v1/exportar?aluno_id=" + quote("MARIA SOUZA LIMA|AL", safe=""))
@@ -232,11 +226,32 @@ class TestPontaAPonta(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn("xml", cab["Content-Type"])
         arquivos = re.findall(r"<loc>https://medalhas.online/([^<]+)</loc>", corpo.decode())
-        self.assertEqual(arquivos, ["sitemaps/paginas.xml", "sitemaps/alunos-1.xml", "sitemaps/escolas-1.xml"])
+        self.assertEqual(arquivos, ["sitemaps/paginas.xml", "sitemaps/alunos-1.xml", "sitemaps/escolas-1.xml",
+                                    "sitemaps/cidades-1.xml"])
+        self.assertIn("<loc>https://medalhas.online/cidade/maceio-al</loc>", self.get("/sitemaps/cidades-1.xml")[2].decode())
         alunos = self.get("/sitemaps/alunos-1.xml")[2].decode()
         self.assertIn("<loc>https://medalhas.online/aluno/maria-souza-lima-al</loc>", alunos)
         self.assertEqual(self.get("/sitemaps/nada.xml")[0], 404)
         self.assertIn("<loc>https://medalhas.online/sobre</loc>", self.get("/sitemaps/paginas.xml")[2].decode())
+
+    def test_ranking_e_pagina_de_cidade(self):
+        r = self.json("/api/v1/ranking/cidades?metodo=site")
+        self.assertEqual([(i["nome"], i["uf"]) for i in r["itens"]], [("Maceió", "AL"), ("São Paulo", "SP")])
+        self.assertEqual(r["itens"][0]["alunos_premiados"], 2)   # Maria e João (a OBM de Maria não tem cidade)
+        self.assertTrue(r["itens"][0]["perfil"].endswith("/cidade/maceio-al"))
+        cidade = self.json("/api/cidade?endereco=maceio-al")
+        self.assertEqual((cidade["nome"], cidade["rank"], cidade["rank_uf"], cidade["escolas"]), ("Maceió", 1, 1, 1))
+        self.assertEqual([a["nome"] for a in cidade["top_alunos"]], ["Maria Souza Lima", "Joao Pereira"])
+        self.assertEqual(self.json("/api/cidade?endereco=nao-existe-xx")["erro"], "Cidade não encontrada")
+        status, _, corpo = self.get("/cidade/maceio-al")
+        self.assertEqual(status, 200)
+        pagina = corpo.decode()
+        self.assertIn("<title>Medalhistas de Maceió (AL) em olimpíadas · Medalhas</title>", pagina)
+        self.assertIn('href="/aluno/maria-souza-lima-al"', pagina)
+        self.assertEqual(self.get("/cidade/nada-xx")[0], 404)
+        self.assertEqual(self.get("/og/cidade/maceio-al.png")[0], 404)   # cidades usam a imagem do site
+        csv = self.get("/api/v1/exportar?conjunto=cidades")
+        self.assertEqual(csv[0], 200)
 
     def test_pagina_sobre(self):
         status, cab, corpo = self.get("/sobre")

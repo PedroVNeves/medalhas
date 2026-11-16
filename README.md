@@ -30,7 +30,7 @@ python server.py     # abre a busca em http://localhost:8000
 | Internacionais (OBM) | `www.obm.org.br/resultados-…/` | nome, cidade/UF, prêmio: Ibero (OIM), Cone Sul, EGMO, APMO, IMC, PAGMO, OMCPLP, IGO, IMSC, OIMU, CIIM, Olimpíada de Maio, OMOP, Galois-Noether |
 | EGOI | `stats.egoi.org/countries/BRA/results/` (2021–2026) | nome, pontos, medalha (pela cor da linha); UF inferida pelo nome |
 | IOAI | `ioai-official.org/…/results-<ano>/` (2025–2026; 2024 só por equipe) | nome, pontos, medalha, menção honrosa; UF inferida pelo nome |
-| Nomes (IBGE) | `servicodados.ibge.gov.br/api/v2/censos/nomes/<nomes>?sexo=F\|M` | frequência de cada primeiro nome por sexo no Censo 2010, para o filtro meninas/meninos |
+| OBQ | `obquimica.org/noticias/resultado[-final]-obq-<ano>` → PDF por modalidade (2025–2026) | estado, nome, série, escola, nota, faixa (ouro…menção); lido com `pypdf` (`pip install pypdf`, só para gerar a base) |
 
 As edições são descobertas automaticamente nas páginas de índice de cada fonte, então anos novos entram
 sem mudar código. Uma fonte fora do ar não derruba a geração da base: ela avisa no fim e as outras entram.
@@ -63,10 +63,12 @@ npm run css:watch    # regera a cada mudança enquanto você edita
 
 
 - **Busca** por pessoa, escola (com siglas) ou tudo, com link para a fonte oficial de cada premiação.
-- **Rankings** de alunos, escolas e estados, filtráveis por UF, olimpíada, período, nível, rede e meninas/meninos, ordenados
+- **Rankings** de alunos, escolas e estados, filtráveis por UF, olimpíada, período, nível, rede e meninas, ordenados
   por pontos, quadro de medalhas (ouro → prata → bronze) ou total de medalhas.
 - **Mapa do Brasil** por pontos, ouros, premiações ou alunos.
 - **Perfis** de aluno e escola com posição nacional/estadual, nível, conquistas, trajetória e gráfico por ano.
+- **Cidades** (`/cidade/sao-paulo-sp`): medalhas, posição no Brasil e no estado, gráfico por ano e as escolas e
+  alunos com mais medalhas ganhas na cidade; ranking de cidades em `/ranking/cidades`.
 - **Exportar** na busca, nos rankings e nos perfis: baixa o que está na tela em CSV, CSV para Excel ou JSON.
 - **API & Dados**: documentação da API com exemplos, teste ao vivo e download da base inteira.
 
@@ -153,6 +155,7 @@ Pode mudar sem aviso; para integrações use a [API pública](#api-pública-v1).
 | `/api/busca?q=&campo=nome\|escola\|tudo&uf=&competicao=&area=&medalha=&ano=&nivel=&rede=&escola_chave=` | premiações que casam com a busca |
 | `/api/ranking?tipo=alunos\|escolas\|estados&ordem=xp\|medalhas\|total\|impa&uf=&competicao=&area=&ano_de=&ano_ate=&nivel=&rede=&offset=` | ranking paginado |
 | `/api/aluno?id=` / `/api/escola?id=` | perfil completo com conquistas (ou `?endereco=` com o slug da página) |
+| `/api/cidade?endereco=` | resumo da cidade (`sao-paulo-sp`): totais, posições, série por ano, top escolas e alunos |
 | `/api/overview` | totais, série histórica, top 10, estados, catálogo de olimpíadas e níveis |
 
 Todas as rotas aceitam `metodo=impa|impa3|site`; o campo `xp` das respostas é sempre a pontuação no
@@ -188,9 +191,9 @@ Python): o aluno `ERICK AKIRA KOGA|SP` vira `/api/v1/alunos/ERICK%20AKIRA%20KOGA
 
 **Filtros comuns** (valem em todas as consultas e na exportação): `uf`, `municipio`, `competicao`,
 `area`, `medalha`, `nivel`, `ano`, `ano_de`, `ano_ate`, `rede`, `sexo`. `competicao` e `nivel` aceitam vários
-valores separados por vírgula. `sexo` (`F` ou `M`) é estimado pelo primeiro nome com o Censo 2010 do IBGE
-(dominio/sexo.py): só nomes usados por 90% ou mais de um sexo; os ambíguos ficam fora dos dois filtros. Ele só
-filtra: não aparece nas respostas nem nos arquivos exportados. Valores inválidos voltam com erro 400 explicando o que corrigir.
+valores separados por vírgula. `sexo=F` traz só as alunas premiadas em olimpíadas
+para meninas (EGMO, PAGMO, EGOI), com todas as premiações delas (dominio/sexo.py): as listas oficiais não
+informam o sexo, e o site não tenta adivinhar pelo nome. Valores inválidos voltam com erro 400 explicando o que corrigir.
 `metodo` (`impa`, `impa3`, `site`) muda a ordem dos resultados; os pontos dos três métodos vêm sempre.
 
 ### Medalhas de um aluno específico

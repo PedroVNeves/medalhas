@@ -4,8 +4,12 @@ Recebem os parâmetros da URL como vieram (a API interna é tolerante: valor des
 """
 from ...dominio import gamificacao, pontuacao
 from ...dominio.enderecos import Enderecos, texto_escola
+import re
+
 from ...dominio.escolas import palavras_da_busca
-from ...dominio.ranking import ORDEM_PADRAO, ORDENACOES, TIPOS, RankingOrdenado, com_pontos, com_posicoes, ordenar
+from ...dominio.texto import capitalizar_nome
+from ...dominio.ranking import (ORDEM_PADRAO, ORDENACOES, TIPOS, RankingOrdenado, com_pontos, com_posicoes, ordenar,
+                              posicionar)
 from .conexao import Conexao, marcadores
 from .filtros import AGREGADOS, CHAVES_FILTRO, condicoes, condicoes_de_texto
 
@@ -176,6 +180,17 @@ def agregar(con: Conexao, tipo: str, params: dict) -> list[dict]:
                 f"""SELECT uf AS id, uf AS nome, COUNT(DISTINCT aluno_id) AS alunos,
                            COUNT(DISTINCT NULLIF(escola_chave, '')) AS escolas, {AGREGADOS}
                     FROM medalhas WHERE {' AND '.join(where)} GROUP BY uf || ''""", args)
+        if tipo == "cidades":   # id = MUNICIPIO|UF (sem acento); MAX(municipio) prefere a grafia com acento
+            where += ["municipio_busca != ''", "uf IS NOT NULL"]
+            linhas = con.linhas(
+                f"""SELECT municipio_busca || '|' || uf AS id, uf,
+                           COUNT(DISTINCT aluno_id) AS alunos, COUNT(DISTINCT NULLIF(escola_chave, '')) AS escolas,
+                           {AGREGADOS}
+                    FROM medalhas WHERE {' AND '.join(where)} GROUP BY municipio_busca, uf""", args)
+            nomes = _nomes_das_cidades(con)
+            for r in linhas:
+                r["nome"] = nomes.get(r["id"], r["id"].split("|")[0])
+            return linhas
         if tipo == "escolas":
             where.append("escola_chave != ''")
             return con.linhas(
@@ -207,7 +222,12 @@ def ranking(con: Conexao, params: dict) -> dict:
     r = ranking_ordenado(con, params)
     pagina = list(com_posicoes(r, offset, limite))
 
-    if r.tipo != "estados":
+    if r.tipo == "escolas" and pagina:   # rankings filtrados trazem uma grafia qualquer: usa o nome da escola
+        ids = [it["id"] for it in pagina]
+        nomes = dict(con.execute(f"SELECT id, nome FROM escolas WHERE id IN ({marcadores(len(ids))})", ids).fetchall())
+        for it in pagina:
+            it["nome"] = nomes.get(it["id"], it["nome"])
+    if r.tipo in ("alunos", "escolas"):
         ids = [it["id"] for it in pagina]
         carreira = _pontos_da_carreira(con, r.tipo, ids, r.coluna)
         escolas = _ultima_escola(con, ids) if r.tipo == "alunos" else {}
@@ -324,13 +344,99 @@ def perfil_escola(con: Conexao, escola_id: str, params: dict) -> dict:
     }
 
 
+# ---------------------------------------------------------------- cidades
+
+def _posicao(r: RankingOrdenado, ident: str) -> tuple[dict | None, int | None]:
+    """(item, posição) de um id no ranking; (None, None) se ele não está (sem pontos no método)."""
+    for posicao, item in posicionar(r.itens, r.chave):
+        if item["id"] == ident:
+            return item, posicao
+    return None, None
+
+
+def nome_da_cidade(grafias: dict[str, int]) -> str:
+    """Nome de exibição a partir das grafias vistas nas listas e quantas vezes cada uma apareceu.
+
+    Prefere a grafia com acento mais comum ("São Paulo", não "SAO PAULO"), tira pontuação solta ('São Paulo"')
+    e padroniza as maiúsculas ("Rio de janeiro" -> "Rio de Janeiro").
+
+    >>> nome_da_cidade({"SAO PAULO": 90, 'São Paulo"': 3, "São Paulo": 2})
+    'São Paulo'
+    >>> nome_da_cidade({'SANTA BÁRBARA D"OESTE': 4})
+    "Santa Bárbara d'Oeste"
+    """
+    limpas: dict[str, int] = {}
+    for g, n in grafias.items():
+        g = re.sub(r"[\"´`’]", "'", g or "")   # aspas e acentos soltos no lugar do apóstrofo
+        g = re.sub(r"\s+", " ", re.sub(r"^[^\w]+|[^\w]+$", "", g)).strip()
+        if g:
+            limpas[g.upper()] = limpas.get(g.upper(), 0) + n
+    if not limpas:
+        return ""
+    com_acento = {g: n for g, n in limpas.items() if not g.isascii()} or limpas
+    nome = capitalizar_nome(max(com_acento, key=lambda g: (com_acento[g], g)))
+    return re.sub(r"\bD'(\w)", lambda m: "d'" + m.group(1).upper(), nome)   # Santa Bárbara d'Oeste
+
+
+def _nomes_das_cidades(con: Conexao) -> dict[str, str]:
+    """id (MUNICIPIO|UF) -> nome de exibição, de todas as cidades (uma vez por versão da base)."""
+    def montar() -> dict[str, str]:
+        grafias: dict[str, dict[str, int]] = {}
+        for ident, municipio, n in con.execute(
+                """SELECT municipio_busca || '|' || uf, municipio, COUNT(*) FROM medalhas
+                   WHERE municipio_busca != '' AND uf IS NOT NULL GROUP BY 1, 2"""):
+            grafias.setdefault(ident, {})[municipio] = n
+        return {ident: nome_da_cidade(g) for ident, g in grafias.items()}
+    return con.fixo("nomes_das_cidades", montar)
+
+
+def perfil_cidade(con: Conexao, cidade_id: str, params: dict) -> dict:
+    """Resumo de uma cidade (id MUNICIPIO|UF): premiações conquistadas por alunos de escolas de lá."""
+    metodo, coluna = pontuacao.resolver_metodo(params.get("metodo"))
+    municipio, _, uf = cidade_id.rpartition("|")
+    premiacoes = con.linhas(
+        """SELECT competicao, ano, nivel, nome, escola, escola_chave, municipio, uf, medalha, aluno_id, fonte,
+                  p_impa, p_impa3, p_site
+           FROM medalhas WHERE municipio_busca = ? AND uf = ? ORDER BY ano DESC, nome""", (municipio, uf))
+    if not municipio or not premiacoes:
+        return {"erro": "Cidade não encontrada"}
+    nacional = ranking_ordenado(con, {"tipo": "cidades", "metodo": metodo})
+    estadual = ranking_ordenado(con, {"tipo": "cidades", "metodo": metodo, "uf": uf})
+    _, posicao = _posicao(nacional, cidade_id)
+    _, posicao_uf = _posicao(estadual, cidade_id)
+
+    por_ano: dict[int, dict] = {}
+    por_olimpiada: dict[str, int] = {}
+    for r in premiacoes:
+        s = por_ano.setdefault(r["ano"], {"ano": r["ano"], "Ouro": 0, "Prata": 0, "Bronze": 0})
+        if r["medalha"] in s:
+            s[r["medalha"]] += 1
+        por_olimpiada[r["competicao"]] = por_olimpiada.get(r["competicao"], 0) + 1
+    recorte = {"municipio": municipio, "uf": uf, "metodo": metodo, "limite": 10}
+    return {
+        "id": cidade_id, "nome": _nomes_das_cidades(con).get(cidade_id, municipio), "uf": uf, "metodo": metodo,
+        "xp": sum(r[coluna] or 0 for r in premiacoes),
+        "pontuacoes": {m: sum(r[c["coluna"]] or 0 for r in premiacoes) for m, c in pontuacao.METODOS.items()},
+        "rank": posicao, "rank_total": len(nacional.itens), "rank_uf": posicao_uf, "rank_uf_total": len(estadual.itens),
+        "medalhas": gamificacao.contar_medalhas(premiacoes), "total": len(premiacoes),
+        "alunos": len({r["aluno_id"] for r in premiacoes}),
+        "escolas": len({r["escola_chave"] for r in premiacoes if r["escola_chave"]}),
+        "anos": sorted({r["ano"] for r in premiacoes if r["ano"]}), "serie": [por_ano[a] for a in sorted(por_ano)],
+        "olimpiadas": sorted(({"sigla": k, "total": v} for k, v in por_olimpiada.items()), key=lambda o: -o["total"]),
+        "top_escolas": ranking(con, {**recorte, "tipo": "escolas"})["itens"],
+        "top_alunos": ranking(con, {**recorte, "tipo": "alunos"})["itens"],
+    }
+
+
 # ---------------------------------------------------------------- endereços das páginas
 
 def enderecos(con: Conexao) -> Enderecos:
     def montar() -> Enderecos:
         alunos = [(r[0], r[0]) for r in con.execute("SELECT id FROM alunos")]
         escolas = [(r[0], texto_escola(r[1], r[2], r[3])) for r in con.execute("SELECT id, nome, municipio, uf FROM escolas")]
-        return Enderecos(alunos, escolas)
+        cidades = [(r[0], r[0]) for r in con.execute(
+            "SELECT DISTINCT municipio_busca || '|' || uf FROM medalhas WHERE municipio_busca != '' AND uf IS NOT NULL")]
+        return Enderecos(alunos, escolas, cidades)
     return con.fixo("enderecos", montar)
 
 

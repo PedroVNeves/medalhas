@@ -44,3 +44,29 @@ def baixar(url: str) -> str | None:
                 raise
         time.sleep(2 ** (tentativa + 1))
     return None
+
+
+def baixar_bytes(url: str) -> bytes | None:
+    """Como baixar, mas sem decodificar: para PDFs. Cache em PASTA_CACHE com extensão .bin."""
+    PASTA_CACHE.mkdir(exist_ok=True)
+    arquivo = PASTA_CACHE / f"{hashlib.sha1(url.encode()).hexdigest()[:16]}.bin"
+    if arquivo.exists():
+        return arquivo.read_bytes()
+    for tentativa in range(TENTATIVAS):
+        try:
+            pedido = urllib.request.Request(url, headers={"User-Agent": AGENTE})
+            with urllib.request.urlopen(pedido, timeout=TEMPO_LIMITE) as resposta:
+                bruto = resposta.read()
+            arquivo.write_bytes(bruto)
+            time.sleep(PAUSA_ENTRE_DOWNLOADS)
+            return bruto
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return None
+            if tentativa == TENTATIVAS - 1:
+                raise
+        except (urllib.error.URLError, TimeoutError, ConnectionError):
+            if tentativa == TENTATIVAS - 1:
+                raise
+        time.sleep(2 ** (tentativa + 1))
+    return None

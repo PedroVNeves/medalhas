@@ -71,6 +71,9 @@ CATALOGO: dict[str, Olimpiada] = {o.sigla: o for o in [
                "https://stats.egoi.org/countries/BRA/results/", escala="IBERO", internacional=True),
     Olimpiada("IOAI", "International Olympiad in Artificial Intelligence", "Informática",
                "https://ioai-official.org", escala="IBERO", internacional=True),
+    # aceita pelo IMPA Tech (tabela das "outras": OBFEP, OBQ, OBI); modalidades A e B são a fase nacional
+    Olimpiada("OBQ", "Olimpíada Brasileira de Química", "Química", "https://obquimica.org", escala="OBMEP",
+              tabela_impa="outras", niveis_impa=frozenset({"Modalidade A", "Modalidade B"})),
 ]}
 
 
