@@ -696,7 +696,8 @@
   <div x-show="aluno?.erro" class="glass card p-12 text-center text-slate-400" x-text="aluno?.erro"></div>
   <template x-if="aluno && !aluno.erro">
     <div>
-      <div class="mb-3 flex justify-end">
+      <div class="mb-3 flex justify-end gap-2">
+        <button type="button" class="btn" @click="abrirStory()" title="Imagem para o story do Instagram"><i x-icon="'instagram'" class="h-4 w-4"></i><span>Story</span></button>
   <div class="relative " x-data="{ aberto: false }" @click.outside="aberto = false" @keydown.escape.window="aberto = false">
     <button type="button" class="btn" @click="aberto = !aberto" :disabled="exportando" :aria-expanded="aberto" aria-haspopup="menu">
       <i x-icon="exportando ? 'loader-circle' : 'download'" class="h-4 w-4" :class="exportando && 'animate-spin'"></i><span>Exportar</span><i x-icon="'chevron-down'" class="h-3.5 w-3.5 opacity-60"></i>
@@ -851,7 +852,8 @@
   <div x-show="escola?.erro" class="glass card p-12 text-center text-slate-400" x-text="escola?.erro"></div>
   <template x-if="escola && !escola.erro">
     <div>
-      <div class="mb-3 flex justify-end">
+      <div class="mb-3 flex justify-end gap-2">
+        <button type="button" class="btn" @click="abrirStory()" title="Imagem para o story do Instagram"><i x-icon="'instagram'" class="h-4 w-4"></i><span>Story</span></button>
   <div class="relative " x-data="{ aberto: false }" @click.outside="aberto = false" @keydown.escape.window="aberto = false">
     <button type="button" class="btn" @click="aberto = !aberto" :disabled="exportando" :aria-expanded="aberto" aria-haspopup="menu">
       <i x-icon="exportando ? 'loader-circle' : 'download'" class="h-4 w-4" :class="exportando && 'animate-spin'"></i><span>Exportar</span><i x-icon="'chevron-down'" class="h-3.5 w-3.5 opacity-60"></i>
@@ -1396,6 +1398,40 @@
     <a href="/sobre#contato" class="link">Contato e correções</a></p>
   <p class="mt-1">Projeto independente, sem vínculo com as organizações das olimpíadas.</p>
 </footer>
+
+<!-- story do Instagram: prévia da imagem vertical, compartilhar/baixar e o passo a passo do adesivo de link -->
+<div x-show="story.aberto" x-cloak x-transition.opacity.duration.150ms class="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center"
+     @click.self="story.aberto = false" @keydown.escape.window="story.aberto = false" role="dialog" aria-modal="true" aria-label="Compartilhar no story">
+  <div class="glass card flex max-h-full w-full max-w-3xl flex-col gap-5 overflow-y-auto !rounded-2xl bg-ink-800/95 p-5 sm:flex-row sm:p-6">
+    <div class="mx-auto w-44 flex-none sm:w-60">
+      <div class="relative aspect-[9/16] overflow-hidden rounded-xl border hairline bg-ink-900">
+        <div x-show="story.carregando" class="skeleton absolute inset-0"></div>
+        <img x-show="story.src && !story.erro" :src="story.src" @load="story.carregando = false" @error="story.erro = true; story.carregando = false"
+             alt="Imagem do story" class="h-full w-full object-cover">
+        <div x-show="story.erro" class="absolute inset-0 grid place-items-center p-4 text-center text-xs text-slate-400">Não deu para gerar a imagem agora. Tente de novo em instantes.</div>
+      </div>
+    </div>
+    <div class="min-w-0 flex-1">
+      <div class="flex items-start justify-between gap-3">
+        <h2 class="font-display text-xl font-bold">Compartilhar no story</h2>
+        <button @click="story.aberto = false" class="text-slate-500 hover:text-white" title="Fechar"><i x-icon="'x'" class="h-5 w-5"></i></button>
+      </div>
+      <ol class="mt-4 space-y-3 text-sm text-slate-300">
+        <li class="flex gap-3"><span class="coin flex-none !h-6 !w-6 !text-xs">1</span><span><b class="text-white">Salve ou compartilhe a imagem.</b> No celular, toque em Compartilhar e escolha o Instagram; no computador, baixe e mande para o celular.</span></li>
+        <li class="flex gap-3"><span class="coin flex-none !h-6 !w-6 !text-xs">2</span><span><b class="text-white">No story, toque no ícone de adesivos</b> <i x-icon="'sticker'" class="inline h-4 w-4 text-slate-400"></i> e escolha <b class="text-white">Link</b>.</span></li>
+        <li class="flex gap-3"><span class="coin flex-none !h-6 !w-6 !text-xs">3</span><span><b class="text-white">Cole o endereço</b> (já fica copiado ao compartilhar ou baixar) e ponha o adesivo embaixo, onde está escrito medalhas.online.</span></li>
+      </ol>
+      <div class="mt-4 flex items-center gap-2 rounded-xl border hairline bg-white/5 p-1.5 pl-3 text-sm">
+        <span class="min-w-0 flex-1 truncate text-slate-300" x-text="story.link.replace(/^https?:\/\//, '')"></span>
+        <button class="btn !py-1 !text-xs" @click="copiarLinkStory()"><i x-icon="story.copiado ? 'check' : 'copy'" class="h-3.5 w-3.5"></i><span x-text="story.copiado ? 'copiado' : 'copiar'"></span></button>
+      </div>
+      <div class="mt-5 flex flex-wrap gap-2">
+        <button x-show="story.podeCompartilhar" class="btn btn-gold" @click="compartilharStory()" :disabled="!story.arquivo"><i x-icon="'share-2'" class="h-4 w-4"></i>Compartilhar</button>
+        <a class="btn" :class="!story.podeCompartilhar && 'btn-gold'" :href="story.src" :download="story.nomeArquivo" @click="copiarLinkStory()"><i x-icon="'download'" class="h-4 w-4"></i>Baixar imagem</a>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- aviso flutuante -->
 <div x-show="aviso" x-cloak x-transition.opacity.duration.200ms class="fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">

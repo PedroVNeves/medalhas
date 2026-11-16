@@ -1,5 +1,7 @@
-"""Imagens de compartilhamento (og:image, 1200×630): o cartão que aparece ao mandar um link no WhatsApp,
-Telegram, X, LinkedIn ou Discord.
+"""Imagens de compartilhamento:
+- og:image (1200×630): o cartão que aparece ao mandar um link no WhatsApp, Telegram, X, LinkedIn ou Discord;
+- story (1080×1920): imagem vertical para postar no story do Instagram (botão "Compartilhar no story" dos
+  perfis), com espaço embaixo para o adesivo de link.
 
 Cada aluno e cada escola tem a sua, desenhada na hora com o nome e as medalhas; as demais páginas usam
 a do site. O CDN do Firebase Hosting guarda cada imagem (como as páginas), então cada uma é desenhada
@@ -100,19 +102,19 @@ def numero(n: int) -> str:
 
 # ---------------------------------------------------------------- desenho
 
-def _fundo() -> "Image.Image":
-    img = Image.new("RGB", (LARGURA, ALTURA), FUNDO)
-    brilho = Image.new("RGBA", (LARGURA, ALTURA), (0, 0, 0, 0))
+def _fundo(largura: int = LARGURA, altura: int = ALTURA) -> "Image.Image":
+    img = Image.new("RGB", (largura, altura), FUNDO)
+    brilho = Image.new("RGBA", (largura, altura), (0, 0, 0, 0))
     d = ImageDraw.Draw(brilho)
-    d.ellipse((760, -260, 1460, 360), fill=(*OURO, 70))          # dourado no canto de cima
-    d.ellipse((-300, 330, 420, 900), fill=(99, 102, 241, 60))    # índigo no canto de baixo
+    d.ellipse((largura - 440, -260, largura + 260, 360), fill=(*OURO, 70))     # dourado no canto de cima
+    d.ellipse((-300, altura - 300, 420, altura + 270), fill=(99, 102, 241, 60))   # índigo no canto de baixo
     brilho = brilho.filter(ImageFilter.GaussianBlur(130))
     img.paste(brilho, (0, 0), brilho)
     grade = ImageDraw.Draw(img, "RGBA")   # a grade discreta do fundo do site
-    for x in range(0, LARGURA, 60):
-        grade.line((x, 0, x, ALTURA), fill=(255, 255, 255, 7))
-    for y in range(0, ALTURA, 60):
-        grade.line((0, y, LARGURA, y), fill=(255, 255, 255, 7))
+    for x in range(0, largura, 60):
+        grade.line((x, 0, x, altura), fill=(255, 255, 255, 7))
+    for y in range(0, altura, 60):
+        grade.line((0, y, largura, y), fill=(255, 255, 255, 7))
     return img
 
 
@@ -266,3 +268,145 @@ def site(visao: dict) -> bytes:
     with _trava:
         return _cartao("Olimpíadas de conhecimento · Brasil", "Quem brilhou nas olimpíadas do Brasil", subtitulo,
                        t, rodape, None)
+
+
+# ---------------------------------------------------------------- story do Instagram (1080×1920)
+
+STORY_L, STORY_A = 1080, 1920
+# o Instagram cobre ~250 px no topo (barra de progresso, perfil) e ~300 px embaixo (resposta): o conteúdo
+# fica no meio, e a faixa de baixo é o lugar do adesivo de link
+_STORY_M = 96
+
+
+def _etiquetas_numa_linha(etiquetas: list[str], fonte, largura: float) -> list[str]:
+    """As etiquetas que cabem numa linha, na ordem (as do fim saem)."""
+    fila: list[str] = []
+    for et in etiquetas:
+        if sum(_largura(e, fonte) + 56 for e in fila + [et]) - 16 > largura:
+            break
+        fila.append(et)
+    return fila
+
+
+def _story(rotulo: str, titulo: str, subtitulo: str | None, medalhas: dict, etiquetas: list[str],
+           destaque: str | None) -> bytes:
+    img = _fundo(STORY_L, STORY_A)
+    d = ImageDraw.Draw(img)
+    largura = STORY_L - 2 * _STORY_M
+    centro = STORY_L // 2
+
+    _medalha(d, centro - 56, 236, 112)
+    d.text((centro, 400), "Medalhas", font=_fonte("display", 700, 50), fill=OURO_CLARO, anchor="mm")
+
+    # o conteúdo do meio é medido antes de desenhar: o maior título (e as maiores moedas) que caibam na
+    # área visível, e o bloco centralizado nela
+    topo, base = 500, 1530
+    tipos = _tipos(medalhas)
+    sub = _fonte("inter", 500, 40)
+    linhas_sub = (_quebrar(subtitulo, sub, largura, 2) or [_cortar(subtitulo, sub, largura)]) if subtitulo else []
+    fonte_et = _fonte("inter", 600, 34)
+    fila = _etiquetas_numa_linha(etiquetas, fonte_et, largura)
+
+    def altura(linhas_titulo: int, tam_titulo: int, escala: float) -> float:
+        return (50 + linhas_titulo * tam_titulo * 1.08 + (24 + 52 * len(linhas_sub) if linhas_sub else 0)
+                + 80 + len(tipos) * 150 * escala + (40 + 60 if fila else 0) + (110 if destaque else 0))
+
+    opcoes = [(tam, 1.0) for tam in range(112, 87, -6)] + [(tam, 0.8) for tam in range(112, 57, -6)]
+    escolha = None
+    for tam, escala in opcoes:
+        linhas = _quebrar(titulo, _fonte("display", 700, tam), largura, 3)
+        if linhas and altura(len(linhas), tam, escala) <= base - topo:
+            escolha = (tam, escala, linhas)
+            break
+    if not escolha:   # nome enorme: o menor tamanho, cortado
+        tam, escala = 58, 0.8
+        fonte = _fonte("display", 700, tam)
+        todas = _quebrar(titulo, fonte, largura, 99) or [titulo]
+        escolha = (tam, escala, [*todas[:2], _cortar(" ".join(todas[2:]), fonte, largura)][: len(todas)])
+    tam, escala, linhas = escolha
+    fonte = _fonte("display", 700, tam)
+    y = topo + (base - topo - altura(len(linhas), tam, escala)) / 2
+
+    d.text((centro, y + 18), rotulo.upper(), font=_fonte("inter", 700, 32), fill=OURO, anchor="mm")
+    y += 50
+    for linha in linhas:
+        d.text((centro, y), linha, font=fonte, fill=TEXTO, anchor="ma")
+        y += tam * 1.08
+    if linhas_sub:
+        y += 24
+        for linha in linhas_sub:
+            d.text((centro, y), linha, font=sub, fill=TEXTO_2, anchor="ma")
+            y += 52
+    y += 80
+
+    # medalhas: uma por linha, moeda + número + nome, o bloco centralizado
+    num, rot = _fonte("display", 700, int(120 * escala)), _fonte("inter", 500, int(46 * escala))
+    raio, passo = 60 * escala, 150 * escala
+    larguras = [2 * raio + 30 + _largura(numero(q), num) + 24 + _largura(um if q == 1 else varios, rot)
+                for q, _, um, varios in tipos]
+    x0 = centro - max(larguras, default=0) / 2
+    y += passo / 2
+    for qtd, cor, um, varios in tipos:
+        escura = tuple(int(c * 0.7) for c in cor)
+        d.ellipse((x0, y - raio, x0 + 2 * raio, y + raio), fill=escura)
+        d.ellipse((x0 + raio * 0.18, y - raio * 0.82, x0 + raio * 1.82, y + raio * 0.82), fill=cor)
+        _estrela(d, x0 + raio, y, raio * 0.43, tuple(min(255, int(c * 1.15) + 25) for c in cor))
+        texto = numero(qtd)
+        xt = x0 + 2 * raio + 30
+        d.text((xt, y + 4 * escala), texto, font=num, fill=TEXTO, anchor="lm")
+        d.text((xt + _largura(texto, num) + 24, y + 22 * escala), um if qtd == 1 else varios, font=rot,
+               fill=TEXTO_3, anchor="lm")
+        y += passo
+    y -= passo / 2
+
+    if fila:   # olimpíadas e período, em etiquetas
+        y += 40 + 30
+        total = sum(_largura(e, fonte_et) + 56 for e in fila) - 16
+        x = centro - total / 2
+        for e in fila:
+            w = _largura(e, fonte_et) + 40
+            d.rounded_rectangle((x, y - 30, x + w, y + 30), radius=30, fill=(21, 27, 47), outline=(45, 52, 75), width=2)
+            d.text((x + w / 2, y), e, font=fonte_et, fill=TEXTO_2, anchor="mm")
+            x += w + 16
+        y += 30
+
+    if destaque:   # posição no ranking
+        forte = _fonte("inter", 700, 40)
+        w = _largura(destaque, forte) + 64
+        y += 34 + 38
+        d.rounded_rectangle((centro - w / 2, y - 38, centro + w / 2, y + 38), radius=38, fill=(58, 46, 12),
+                            outline=OURO, width=2)
+        d.text((centro, y), destaque, font=forte, fill=OURO_CLARO, anchor="mm")
+
+    # embaixo fica o adesivo de link (o Instagram não deixa pôr link clicável na imagem)
+    d.text((centro, 1610), "Veja todas as premiações em", font=_fonte("inter", 500, 36), fill=TEXTO_3, anchor="mm")
+    d.text((centro, 1662), "medalhas.online", font=_fonte("display", 700, 48), fill=OURO_CLARO, anchor="mm")
+
+    saida = io.BytesIO()
+    img.save(saida, "PNG", optimize=True)
+    return saida.getvalue()
+
+
+def story_aluno(d: dict) -> bytes:
+    m = d["medalhas"]
+    anos = d.get("anos") or []
+    periodo = (str(anos[0]) if len(anos) == 1 else f"{anos[0]}–{anos[-1]}") if anos else None
+    escola = d["escolas"][0] if d.get("escolas") else None
+    subtitulo = None
+    if escola:
+        lugar = capitalizar_nome(escola["municipio"]) if escola.get("municipio") else None
+        subtitulo = nome_de_exibicao(escola["escola"]) + (f" · {lugar}" if lugar else "")
+    etiquetas = [*([periodo] if periodo else []), *_siglas(d.get("premiacoes") or [])]
+    rotulo = "Medalhista" + (f" · {d['uf']}" if d.get("uf") else "")
+    with _trava:
+        return _story(rotulo, d["nome"], subtitulo, m, etiquetas, _posicao(d.get("rank"), "º no ranking nacional"))
+
+
+def story_escola(d: dict) -> bytes:
+    lugar = ", ".join(p for p in (capitalizar_nome(d["municipio"]) if d.get("municipio") else None, d.get("uf")) if p)
+    plural = "aluno premiado" if d["alunos"] == 1 else "alunos premiados"
+    etiquetas = _siglas(d.get("recentes") or [])
+    with _trava:
+        return _story("Escola" + (f" · {lugar}" if lugar else ""), nome_de_exibicao(d["nome"]),
+                      f"{numero(d['alunos'])} {plural}", d["medalhas"], etiquetas,
+                      _posicao(d.get("rank"), "ª no ranking de escolas"))

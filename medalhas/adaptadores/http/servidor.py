@@ -185,7 +185,8 @@ class Handler(BaseHTTPRequestHandler):
             self._enviar(pagina.corpo, "text/html; charset=utf-8", cabecalhos=self._CACHE_PAGINA)
 
     def _imagem(self, partes: list[str]) -> None:
-        """/og/site.png e /og/{aluno|escola}/{endereço}.png: o cartão de compartilhamento."""
+        """/og/site.png, /og/{aluno|escola}/{endereço}.png (cartão do link) e /og/story/{aluno|escola}/{endereço}.png
+        (story do Instagram)."""
         if not imagens.DISPONIVEL:   # Pillow não instalado (só no computador; a imagem do Docker tem)
             self._nao_encontrado()
             return
@@ -193,14 +194,18 @@ class Handler(BaseHTTPRequestHandler):
         def desenhar(sessao):
             if partes == ["og", "site.png"]:
                 return imagens.site(sessao.visao_geral({}))
-            if len(partes) != 3 or partes[1] not in TIPOS_DE_PAGINA or not partes[2].endswith(".png"):
+            story = len(partes) == 4 and partes[1] == "story"   # /og/story/aluno/x.png: vertical, para o Instagram
+            tipo, arquivo = partes[-2:] if story or len(partes) == 3 else (None, "")
+            if tipo not in TIPOS_DE_PAGINA or not arquivo.endswith(".png"):
                 return None
-            achado = sessao.enderecos().resolver(partes[1], unquote(partes[2][:-4]))
+            achado = sessao.enderecos().resolver(tipo, unquote(arquivo[:-4]))
             if not achado:
                 return None
-            if partes[1] == ALUNO:
-                return imagens.aluno(sessao.perfil_aluno(achado[0], {}))
-            return imagens.escola(sessao.perfil_escola(achado[0], {}))
+            if tipo == ALUNO:
+                dados = sessao.perfil_aluno(achado[0], {})
+                return imagens.story_aluno(dados) if story else imagens.aluno(dados)
+            dados = sessao.perfil_escola(achado[0], {})
+            return imagens.story_escola(dados) if story else imagens.escola(dados)
 
         resultado = self._com_sessao(lambda s: [desenhar(s)])
         if resultado is None:   # recusado: a resposta já foi enviada

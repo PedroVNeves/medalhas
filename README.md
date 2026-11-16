@@ -87,6 +87,9 @@ troca pelo endereço novo.
   (`adaptadores/http/imagens.py`, com Pillow) com o nome, as medalhas e a posição no ranking (só entre os
   1.000 primeiros); as demais páginas usam `/og/site.png`. Ficam no CDN como as páginas. As fontes (Inter
   e Space Grotesk, licença OFL) estão em `adaptadores/http/fontes/`.
+- Story do Instagram: o botão **Story** dos perfis abre a imagem vertical (1080×1920)
+  `/og/story/{aluno|escola}/{endereço}.png`, com Compartilhar (menu do celular), Baixar e o passo a passo do
+  adesivo de link, cujo endereço é copiado sozinho.
 - O site monta os links de escola pelo id (`slug()` em `web/js/util.js`, cópia do Python); o servidor
   redireciona esse endereço para o oficial, e o site troca o da barra quando o perfil carrega.
 - `/sitemap.xml` lista todas as páginas (um arquivo a cada 40 mil endereços em `/sitemaps/`).

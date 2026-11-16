@@ -279,6 +279,11 @@ class TestPontaAPonta(unittest.TestCase):
         self.assertEqual(self.get("/og/escola/" + re.sub(r"[^a-z0-9]+", "-", escola["id"].lower()).strip("-") + ".png")[0],
                          200)
         self.assertEqual(self.get("/og/aluno/ninguem-xx.png")[0], 404)
+        # story do Instagram: vertical, 1080×1920
+        corpo = self.get("/og/story/aluno/maria-souza-lima-al.png")[2]
+        self.assertEqual((int.from_bytes(corpo[16:20], "big"), int.from_bytes(corpo[20:24], "big")), (1080, 1920))
+        self.assertEqual(self.get("/og/story/aluno/ninguem-xx.png")[0], 404)
+        self.assertEqual(self.get("/og/story/planeta/x.png")[0], 404)
         self.assertEqual(self.get("/og/planeta/x.png")[0], 404)
 
     def test_css_gerado_no_build(self):

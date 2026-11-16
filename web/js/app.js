@@ -40,6 +40,9 @@ function app() {
     exportando: false,
     BASE, ROTAS, FILTROS, CAMPOS_PREMIACAO,
     doc: { lang: "curl", resp: {}, carregando: {}, limites: null, copiado: "" },
+    // story do Instagram (perfis): imagem vertical desenhada pelo servidor em /og/story/...
+    story: { aberto: false, src: "", link: "", nomeArquivo: "", arquivo: null, carregando: false, erro: false,
+             copiado: false, podeCompartilhar: false },
 
     async init() {
       // voltar/avançar do navegador (popstate) e endereço com # editado à mão (hashchange)
@@ -337,6 +340,42 @@ function app() {
       for (const r of this.aluno.premiacoes) { if (!m.has(r.ano)) m.set(r.ano, []); m.get(r.ano).push(r); }
       return [...m.entries()].map(([ano, itens]) => ({ ano, itens }));
     },
+    // ------------------------------------------------ story do Instagram
+    // A imagem é baixada assim que a janela abre: no celular, o navigator.share precisa ser chamado direto no
+    // toque em "Compartilhar" (sem esperar download), senão o Safari recusa.
+    async abrirStory() {
+      const caminho = location.pathname;   // endereço oficial do perfil, ex. /aluno/maria-souza-lima-al
+      const nome = caminho.split("/").pop();
+      Object.assign(this.story, { aberto: true, src: `/og/story${caminho}.png`, link: location.origin + caminho,
+        nomeArquivo: `medalhas-${nome}-story.png`, arquivo: null, carregando: true, erro: false, copiado: false,
+        podeCompartilhar: false });
+      try {
+        const r = await fetch(this.story.src);
+        if (!r.ok) throw new Error(r.status);
+        const arquivo = new File([await r.blob()], this.story.nomeArquivo, { type: "image/png" });
+        if (this.story.src !== `/og/story${caminho}.png`) return;   // a janela foi reaberta em outro perfil
+        this.story.arquivo = arquivo;
+        this.story.podeCompartilhar = !!navigator.canShare?.({ files: [arquivo] });
+      } catch { /* a prévia mostra o erro pelo <img>; "Baixar" continua tentando pelo link */ }
+    },
+    async compartilharStory() {
+      if (!this.story.arquivo) return;
+      this.copiarLinkStory();
+      try {
+        // só o arquivo: com texto ou link junto, alguns apps (o Instagram entre eles) descartam a imagem
+        await navigator.share({ files: [this.story.arquivo] });
+      } catch (e) {
+        if (e.name !== "AbortError") this.avisar("Não deu para compartilhar daqui. Use Baixar imagem.");
+      }
+    },
+    async copiarLinkStory() {
+      try {
+        await navigator.clipboard.writeText(this.story.link);
+        this.story.copiado = true;
+        setTimeout(() => (this.story.copiado = false), 2500);
+      } catch { /* sem permissão de copiar: o endereço está na tela */ }
+    },
+
     // ------------------------------------------------ exportação
     // baixa /api/v1/exportar com os parâmetros dados; formato: csv | excel | json
     async baixar(params, formato = "csv") {
