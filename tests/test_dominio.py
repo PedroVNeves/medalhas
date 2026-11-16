@@ -95,6 +95,15 @@ class TestIdentidade(unittest.TestCase):
         self.assertEqual(identidade.completar_identidades(ps), (0, 1))
         self.assertEqual(ps[1]["nome"], "Enzo Holanda Sampaio")
 
+    def test_grafia_corrigida_a_mao_une_os_perfis(self):
+        ps = [premiacao("ISAIAS GOUVEIA GONCALVES", "DF", ano=2018), premiacao("Isaias Gouveia Gonçalves", "DF", "OBM", 2019),
+              premiacao("Isaías Gouvêa Gonçalves", "PR", "OBM", 2020), premiacao("ISAIAS GOUVEIA GONCALVES", "SP")]
+        self.assertEqual(identidade.corrigir_grafias(ps), 2)   # só a grafia errada de DF; a de SP é outra pessoa
+        self.assertEqual(ps[0]["nome"], "Isaías Gouvêa Gonçalves")
+        ps += [premiacao(f"Pessoa {i} Silva", "SP") for i in range(50)]
+        identidade.atribuir_alunos(ps)
+        self.assertEqual({p["aluno_id"] for p in ps[:3]}, {"ISAIAS GOUVEA GONCALVES|PR"})
+
 
 class TestRanking(unittest.TestCase):
     def itens(self):

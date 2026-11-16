@@ -39,6 +39,8 @@ def gerar_base(coletores: Iterable[Coletor], repositorio: RepositorioPremiacoes,
         except Exception as e:  # noqa: BLE001 — uma fonte fora do ar não pode derrubar as outras
             relatorio.falhas.append(f"{coletor.sigla}: {type(e).__name__}: {e}")
 
+    corrigidas = identidade.corrigir_grafias(premiacoes)
+    log(f"Identidades: {corrigidas} premiações com a grafia do nome corrigida à mão")
     exatos, abreviados = identidade.completar_identidades(premiacoes)
     log(f"Identidades: UF inferida pelo nome em {exatos} registros; {abreviados} nomes abreviados completados")
     unidos = identidade.atribuir_alunos(premiacoes)

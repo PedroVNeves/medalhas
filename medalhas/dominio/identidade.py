@@ -16,6 +16,25 @@ LIMITE_HOMONIMOS = 0.3              # nº esperado de pessoas com o nome, abaixo
 LIMITE_HOMONIMOS_ALTO_NIVEL = 3.0   # mais tolerante quando há OBM/internacional em 2+ UFs
 
 
+# Grafias erradas nas listas oficiais que partem uma pessoa em dois perfis, corrigidas à mão a pedido
+# (correções chegam pelo contato do site). Chave: (nome sem acento, UF) como veio na fonte.
+GRAFIAS_CORRIGIDAS: dict[tuple[str, str], str] = {
+    # OBMEP 2018 e OBM 2019 escreveram "Gouveia"; nas outras listas, e no nome dele, é Gouvêa
+    ("ISAIAS GOUVEIA GONCALVES", "DF"): "Isaías Gouvêa Gonçalves",
+}
+
+
+def corrigir_grafias(premiacoes: list[Premiacao]) -> int:
+    """Troca o nome das premiações listadas em GRAFIAS_CORRIGIDAS. Altera a lista; devolve quantas mudaram."""
+    corrigidas = 0
+    for p in premiacoes:
+        certo = GRAFIAS_CORRIGIDAS.get((normalizar(p["nome"]), p.get("uf") or ""))
+        if certo:
+            p["nome"] = certo
+            corrigidas += 1
+    return corrigidas
+
+
 def _subsequencia(curto: list[str], longo: list[str]) -> bool:
     """'ENZO HOLANDA' é subsequência de 'ENZO HOLANDA SAMPAIO': mesma ordem e mesmo primeiro nome."""
     if not curto or curto[0] != longo[0]:
