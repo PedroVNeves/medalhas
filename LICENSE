@@ -1,0 +1,47 @@
+Medalhas (medalhas.online)
+Copyright (c) 2026 Pedro Neves. Todos os direitos reservados.
+
+O código-fonte deste repositório está disponível publicamente para leitura e para contribuições, mas NÃO
+é software livre nem de código aberto. Este documento diz o que é permitido sem pedir autorização.
+
+1. O QUE É PERMITIDO
+
+   a) Ler e estudar o código-fonte.
+   b) Fazer um fork deste repositório no GitHub com o único objetivo de propor mudanças por pull request.
+   c) Executar o código no seu próprio computador somente para desenvolver, testar ou revisar uma
+      contribuição a este repositório.
+   d) Baixar e usar os dados publicados pelo site e pela API (as premiações). Esses dados vêm das listas
+      oficiais divulgadas por cada olimpíada; ao usá-los, cite a fonte (o Medalhas e a lista oficial de
+      cada premiação, que acompanha cada registro).
+
+2. O QUE NÃO É PERMITIDO SEM AUTORIZAÇÃO PRÉVIA E POR ESCRITO DO AUTOR
+
+   a) Hospedar, publicar ou disponibilizar a terceiros o site, a API ou qualquer serviço baseado neste
+      código, no todo ou em parte, com ou sem modificações, gratuitamente ou não.
+   b) Copiar, redistribuir, sublicenciar ou vender o código, no todo ou em parte, fora do fork usado
+      para contribuir.
+   c) Usar o código, no todo ou em parte, em outro produto, site ou serviço.
+   d) Usar o nome "Medalhas", o domínio medalhas.online ou a identidade visual do site para outro projeto.
+
+3. CONTRIBUIÇÕES
+
+   Ao enviar um pull request, issue, correção de dados ou qualquer outra contribuição, você declara que
+   tem o direito de enviá-la e concorda que o autor pode usá-la, modificá-la e distribuí-la como parte
+   deste projeto, sob estes termos ou sob quaisquer outros que vier a adotar.
+
+4. COMPONENTES DE TERCEIROS
+
+   Arquivos de terceiros incluídos no repositório continuam sob as próprias licenças, por exemplo as
+   fontes Inter e Space Grotesk (SIL Open Font License, ver medalhas/adaptadores/http/fontes/) e os
+   contornos dos estados em web/brasil-uf.json, derivados do brazil-states.geojson do projeto Click That
+   'Hood (github.com/codeforgermany/click_that_hood, licença MIT). As bibliotecas carregadas pelo site
+   (Alpine.js, ECharts, Lucide, canvas-confetti) e usadas no desenvolvimento (Tailwind CSS, Pillow, pypdf)
+   seguem as licenças dos seus autores.
+
+5. AUSÊNCIA DE GARANTIA
+
+   O código e os dados são fornecidos "no estado em que se encontram", sem garantia de qualquer tipo.
+   Os dados reproduzem listas oficiais de terceiros e podem conter erros dessas listas ou da coleta; em
+   caso de dúvida, vale a lista oficial indicada em cada premiação.
+
+Pedidos de autorização, correções e contato: pedro.vasconcelosneves@gmail.com
