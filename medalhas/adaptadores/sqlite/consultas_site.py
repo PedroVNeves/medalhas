@@ -66,7 +66,8 @@ def _indice_de_sugestoes(con: Conexao) -> dict[tuple[str, int], list[tuple[str, 
     """Por (tipo, método), (texto pesquisável, id) de todos os alunos e escolas, do mais ao menos pontuado.
 
     Montado uma vez por versão da base. O texto segue as colunas da busca (palavras entre espaços), para que
-    "% PALAVRA%" do SQL vire um simples ' PALAVRA' in texto. Alunos com mais de uma grafia guardam todas.
+    "% PALAVRA%" do SQL vire um simples ' PALAVRA' in texto. Alunos e escolas com mais de uma grafia (ou
+    escolas que mudaram de nome, como CEFET-ES -> Ifes) guardam todas.
     Já em ordem de pontos, a busca para nas primeiras que casam: nomes comuns respondem sem varrer tudo.
     """
     def montar() -> dict[tuple[str, int], list[tuple[str, str]]]:
@@ -77,8 +78,8 @@ def _indice_de_sugestoes(con: Conexao) -> dict[tuple[str, int], list[tuple[str, 
                     JOIN (SELECT aluno_id, GROUP_CONCAT(DISTINCT nome_busca) AS texto
                           FROM medalhas GROUP BY aluno_id) t ON t.aluno_id = r.id""").fetchall(),
             "escolas": con.execute(
-                f"""SELECT t.texto, r.id, {pontos} FROM escolas r
-                    JOIN (SELECT escola_chave, MAX(escola_termos) AS texto FROM medalhas
+                f"""SELECT ' ' || REPLACE(t.texto, ',', ' '), r.id, {pontos} FROM escolas r
+                    JOIN (SELECT escola_chave, GROUP_CONCAT(DISTINCT escola_termos) AS texto FROM medalhas
                           WHERE escola_chave != '' GROUP BY escola_chave) t ON t.escola_chave = r.id""").fetchall(),
         }
         return {(tipo, i): [(r[0], r[1]) for r in sorted(rs, key=lambda r: r[2 + i] or 0, reverse=True)]
@@ -311,7 +312,7 @@ def perfil_escola(con: Conexao, escola_id: str, params: dict) -> dict:
         a["anos"] = sorted(a["anos"])
 
     return {
-        "id": escola_id, "nome": nomes[0], "variantes": nomes[1:], "municipio": premiacoes[0]["municipio"], "uf": uf,
+        "id": escola_id, "nome": resumo["nome"], "variantes": [n for n in nomes if n != resumo["nome"]], "municipio": premiacoes[0]["municipio"], "uf": uf,
         "rede": premiacoes[0]["rede"], "esfera": premiacoes[0]["esfera"], "xp": xp, "metodo": metodo,
         "tier": gamificacao.tier(xp, escola=True, metodo=metodo),
         "rank": posicao, "rank_total": total, "rank_uf": posicao_uf, "rank_uf_total": total_uf,

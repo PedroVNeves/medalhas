@@ -21,6 +21,8 @@ LIMITE_HOMONIMOS_ALTO_NIVEL = 3.0   # mais tolerante quando há OBM/internaciona
 GRAFIAS_CORRIGIDAS: dict[tuple[str, str], str] = {
     # OBMEP 2018 e OBM 2019 escreveram "Gouveia"; nas outras listas, e no nome dele, é Gouvêa
     ("ISAIAS GOUVEIA GONCALVES", "DF"): "Isaías Gouvêa Gonçalves",
+    # OBMEP 2018 escreveu "Edigard"; 2019, 2021 e 2022 trazem Edgard (mesma escola, em Cocal dos Alves)
+    ("EDIGARD JUNIO DA SILVA VIANA", "PI"): "Edgard Junio da Silva Viana",
 }
 
 

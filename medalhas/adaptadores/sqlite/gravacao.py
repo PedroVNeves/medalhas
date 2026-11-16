@@ -2,6 +2,7 @@
 import sqlite3
 from pathlib import Path
 
+from ...dominio.escolas import ESCOLAS_RENOMEADAS
 from ...dominio.premiacao import BRONZE, MENCAO, OURO, PRATA
 from ...dominio.ranking import preencher_posicoes
 from .esquema import (CAMPOS_ALUNO, CAMPOS_ESCOLA, CAMPOS_PREMIACAO, PONTOS, PREMIACOES, RESUMOS, insert)
@@ -98,7 +99,10 @@ def gravar_resumos(con: sqlite3.Connection) -> None:
     for a in alunos.values():
         a["competicoes"] = ",".join(sorted(a["comps"], reverse=True))
     for e in escolas.values():
-        e["nome"] = max(e["nomes"], key=e["nomes"].get)   # a grafia mais frequente
+        # a grafia mais frequente; na escola que mudou de nome, a mais recente (as premiações vêm da mais nova
+        # para a mais antiga): o nome antigo pode ser mais frequente, mas a página mostra o atual
+        renomeada = e["id"] in ESCOLAS_RENOMEADAS.values()
+        e["nome"] = next(iter(e["nomes"])) if renomeada else max(e["nomes"], key=e["nomes"].get)
         e["alunos"] = len(e["alunos_set"])
     con.executemany(insert("alunos", CAMPOS_ALUNO), ([a[c] for c in CAMPOS_ALUNO] for a in alunos.values()))
     con.executemany(insert("escolas", CAMPOS_ESCOLA), ([e[c] for c in CAMPOS_ESCOLA] for e in escolas.values()))
