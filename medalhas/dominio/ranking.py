@@ -50,7 +50,7 @@ class RankingOrdenado:
     ordem: str              # chave de ORDENACOES
     metodo: str             # método de pontuação
     coluna: str             # coluna de pontos do método
-    niveis: str | None      # níveis considerados (o método IMPA N3 restringe)
+    niveis: str | None      # níveis considerados (o método IMPA edital restringe)
     itens: list[dict]
 
     @property

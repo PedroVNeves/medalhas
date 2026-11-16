@@ -191,8 +191,9 @@ def completar_municipios(premiacoes: list[dict]) -> int:
     for p in premiacoes:
         if p.get("escola") and not p.get("municipio") and p.get("uf"):
             achadas = cidades.get((indexar_escola(p["escola"], None, p["uf"])[1].split("|")[0], p["uf"]), {})
-            campus = re.search(r"(?:CAMPUS|UNED|UNIDADE)\s+(?:AVANCADO\s+)?(.+)$|\s-\s+([^-]+)$", normalizar(p["escola"]))
-            cidade_do_campus = (campus.group(1) or campus.group(2)).strip() if campus else ""
+            # normalizar tira hífens: "IFES - CAMPUS VITORIA" vira "IFES CAMPUS VITORIA"
+            campus = re.search(r"(?:CAMPUS|UNED|UNIDADE)\s+(?:AVANCADO\s+)?(.+)$", normalizar(p["escola"]))
+            cidade_do_campus = campus.group(1).strip() if campus else ""
             if len(achadas) == 1:
                 p["municipio"] = next(iter(achadas.values()))
             elif cidade_do_campus in do_estado.get(p["uf"], {}):

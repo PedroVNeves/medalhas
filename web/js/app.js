@@ -74,9 +74,9 @@ function app() {
       if (this.is("estados")) this.$nextTick(() => this.drawMap());
     },
     get impa3() { return this.metodo === "impa3"; },
-    // no IMPA N3 o filtro de nível é travado nos níveis aceitos pelo edital (o servidor também força)
+    // no IMPA edital o filtro de nível é travado nos níveis aceitos pelo edital (o servidor também força)
     get niveisAceitos() { return (this.ov?.niveis_impa || "3").split(","); },
-    // no IMPA N3 vale a escolha do usuário dentro dos níveis aceitos; sem escolha válida, todos os aceitos
+    // no IMPA edital vale a escolha do usuário dentro dos níveis aceitos; sem escolha válida, todos os aceitos
     nivelEfetivo(v) {
       if (!this.impa3) return v;
       const sel = (v || "").split(",").filter(n => this.niveisAceitos.includes(n));
@@ -93,7 +93,7 @@ function app() {
       if (m === this.metodo) return;
       this.metodo = METODO = m;
       localStorage.setItem("metodo", m);
-      if (m === "impa3") this.avisar(`Pontuação IMPA N3 ativada: o filtro de níveis foi aplicado automaticamente (${descreveImpa(this.ov?.niveis_impa)}), como no edital do IMPA Tech.`);
+      if (m === "impa3") this.avisar(`Pontuação IMPA edital ativada: o filtro de níveis foi aplicado automaticamente (${descreveImpa(this.ov?.niveis_impa)}), como no edital do IMPA Tech.`);
       const y = window.scrollY;
       this.onRoute(true);
       await this.loadOverview();
@@ -323,7 +323,7 @@ function app() {
     temValor(valor, v) { return (valor || "").split(",").includes(v); },
     toggleMulti(escopo, campo, v) {
       if (campo === "nivel" && this.impa3 && !this.niveisAceitos.includes(v)) {
-        this.avisar(`Está filtrado pela pontuação IMPA N3, que só considera os níveis aceitos pelo edital (${descreveImpa(this.ov?.niveis_impa)}). Para ver outros níveis, troque o método de pontuação.`,
+        this.avisar(`Está filtrado pela pontuação IMPA edital, que só considera os níveis aceitos pelo edital (${descreveImpa(this.ov?.niveis_impa)}). Para ver outros níveis, troque o método de pontuação.`,
           { label: "Usar IMPA · todos os níveis", fn: () => this.setMetodo("impa") });
         return;
       }

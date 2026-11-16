@@ -113,7 +113,7 @@ curl --compressed -OJ "{B}/api/v1/exportar?formato=json"
 # Só um recorte: ouros da OBM em SP desde 2015
 curl --compressed -OJ "{B}/api/v1/exportar?competicao=OBM&uf=SP&medalha=Ouro&ano_de=2015"
 
-# Ranking completo das escolas pelo método IMPA N3
+# Ranking completo das escolas pelo método IMPA edital
 curl --compressed -OJ "{B}/api/v1/exportar?conjunto=escolas&metodo=impa3"`,
     python: `import pandas as pd
 

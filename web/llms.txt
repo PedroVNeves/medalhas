@@ -26,7 +26,7 @@ Filtros comuns: `uf` (sigla do estado), `municipio`, `competicao` (sigla, vário
 
 ## Pontuação e rankings
 
-Os rankings ordenam por pontos em três métodos, escolhidos com `metodo=`: `impa` (padrão: tabela oficial do IMPA Tech, ouro 18, prata 6, bronze 2, aplicada a todos os níveis), `impa3` (só o que o edital do IMPA Tech aceita: Nível 3 da OBMEP e OBM) e `site` (escala própria por dificuldade da olimpíada). As respostas trazem os pontos nos três métodos.
+Os rankings ordenam por pontos em três métodos, escolhidos com `metodo=`: `impa` (padrão: tabela oficial do IMPA Tech, ouro 18, prata 6, bronze 2, aplicada a todos os níveis), `impa3` (só o que o edital do IMPA Tech aceita: OBMEP e OBM no Nível 3, OBI programação níveis 1 e 2, OBQ modalidades A e B) e `site` (escala própria por dificuldade da olimpíada). As respostas trazem os pontos nos três métodos.
 
 ## Site
 

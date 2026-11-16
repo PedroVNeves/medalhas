@@ -38,7 +38,7 @@ CREATE TABLE medalhas (
     municipio_busca TEXT,
     aluno_id        TEXT NOT NULL,      -- identidade do aluno (dominio.identidade.atribuir_alunos)
     p_impa          INTEGER NOT NULL,   -- IMPA, todos os níveis
-    p_impa3         INTEGER NOT NULL,   -- IMPA oficial, só Nível 3
+    p_impa3         INTEGER NOT NULL,   -- IMPA oficial: só o que o edital aceita
     p_site          INTEGER NOT NULL,   -- nossa versão
     area            TEXT,
     sexo            TEXT                -- F (premiada em olimpíada só para meninas, dominio.sexo) ou NULL

@@ -46,17 +46,18 @@ METODOS = {
         "coluna": "p_impa",
     },
     "impa3": {
-        "nome": "IMPA oficial · só Nível 3",
-        "curto": "IMPA N3",
-        "descricao": "Exatamente o que o edital do IMPA Tech aceita: medalhas do Nível 3 da OBMEP (premiação "
-                     "nacional) e da OBM.",
+        "nome": "IMPA oficial · edital",
+        "curto": "IMPA edital",
+        "descricao": "Exatamente o que o edital do IMPA Tech aceita: OBMEP (premiação nacional) e OBM no Nível 3, "
+                     "OBI programação níveis 1 e 2, OBQ modalidades A e B.",
         "coluna": "p_impa3",
     },
     "site": {
         "nome": "Medalhas (nossa versão)",
         "curto": "Nossa",
         "descricao": "Escala por dificuldade: ouro OBMEP 100, bronze OBM 110, ouro OBM 200; Ibero e IMO acima; "
-                     "olimpíadas de entrada bem abaixo. Menções e prêmios antigos da OBM pontuam.",
+                     "regionais um pouco abaixo da OBMEP e olimpíadas de entrada bem abaixo. Menções e prêmios "
+                     "antigos da OBM pontuam.",
         "coluna": "p_site",
     },
 }
@@ -127,7 +128,7 @@ def niveis_impa() -> str:
 
 
 def restringir_niveis(metodo: str, niveis: str | None) -> str | None:
-    """No método IMPA N3 só contam os níveis do edital: o filtro de nível fica limitado a eles.
+    """No método IMPA edital só contam os níveis do edital: o filtro de nível fica limitado a eles.
 
     Se o usuário já escolheu níveis aceitos (ex.: só "Programação Nível 2"), a escolha é respeitada.
     """

@@ -5,15 +5,13 @@ abaixo equilibram dois erros: separar a mesma pessoa (perde medalhas do perfil) 
 (atribui medalhas a quem não ganhou).
 """
 from collections.abc import Iterable
-
 from functools import lru_cache
 
-from .escolas import palavras_da_chave
+from .escolas import PARTICULAS, palavras_da_chave
 from .olimpiadas import area, e_alto_nivel
 from .premiacao import Premiacao
 from .texto import normalizar
 
-PARTICULAS = {"DE", "DA", "DO", "DAS", "DOS", "E", "D"}
 MAX_ANOS_CARREIRA = 12              # do 6º ano do fundamental ao fim da faculdade
 LIMITE_HOMONIMOS = 0.3              # nº esperado de pessoas com o nome, abaixo do qual o nome é "raro"
 LIMITE_HOMONIMOS_ALTO_NIVEL = 3.0   # mais tolerante quando há OBM/internacional em 2+ UFs
