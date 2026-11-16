@@ -65,6 +65,12 @@ CATALOGO: dict[str, Olimpiada] = {o.sigla: o for o in [
     # brasileira, fora do edital do IMPA: escala de entrada
     _internacional("GALOIS", "Concurso Galois-Noether", "ENTRADA", "resultados-concurso-galois-noether",
                    internacional=False),
+    # informática e IA, resultados nos sites oficiais; mesmo degrau da EGMO (internacional para meninas).
+    # No fim da lista: entraram depois, e a ordem de coleta define o id das premiações
+    Olimpiada("EGOI", "European Girls' Olympiad in Informatics", "Informática",
+               "https://stats.egoi.org/countries/BRA/results/", escala="IBERO", internacional=True),
+    Olimpiada("IOAI", "International Olympiad in Artificial Intelligence", "Informática",
+               "https://ioai-official.org", escala="IBERO", internacional=True),
 ]}
 
 

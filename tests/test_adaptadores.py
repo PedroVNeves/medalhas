@@ -3,7 +3,7 @@ import unittest
 from unittest import mock
 
 from medalhas.adaptadores import coletores
-from medalhas.adaptadores.coletores import obm, obmep
+from medalhas.adaptadores.coletores import egoi, ioai, obm, obmep
 from medalhas.adaptadores.http import limites
 from medalhas.adaptadores.http.api_v1 import ParametroInvalido, parametros
 from medalhas.dominio.olimpiadas import CATALOGO
@@ -32,6 +32,26 @@ class TestColetores(unittest.TestCase):
         self.assertEqual(obm.categoria_do_premio("Medalha de Ouro"), "Ouro")
         self.assertEqual(obm.categoria_do_premio("Menção Honrosa"), "Menção Honrosa")
         self.assertEqual(obm.categoria_do_premio("1º Prêmio"), "1º Prêmio")
+
+    def test_resultados_da_egoi_pela_cor_da_linha(self):
+        pagina = """<table><tr><th>Year</th><th>Name</th><th>Score</th><th>Rank</th></tr>
+            <tr><td rowspan="2">2025</td><td style="background: #fee101"><a>Ana Lima</a></td>
+                <td style="background: #fee101">596</td><td>3</td></tr>
+            <tr><td><a>Bia Souza</a></td><td>120</td><td>140</td></tr>
+            <tr><td>2024</td><td style="background: #D28140">Ana Lima</td><td>300</td><td>80</td></tr></table>"""
+        self.assertEqual(egoi.ler_resultados(pagina), [   # Bia não tem cor: sem medalha
+            {"ano": 2025, "nome": "Ana Lima", "medalha": "Ouro", "pontos": "596"},
+            {"ano": 2024, "nome": "Ana Lima", "medalha": "Bronze", "pontos": "300"}])
+
+    def test_resultados_da_ioai_so_do_brasil(self):
+        pagina = """<table><tr><th>rank</th><th>name</th><th>team</th><th>total</th><th>award</th></tr>
+            <tr><td>1</td><td>Artem G</td><td>Russia 1</td><td>428</td><td>Gold + 1st Place</td></tr>
+            <tr><td>56</td><td>Miguel Vale</td><td>Brazil 1 🇧🇷</td><td>171,1</td><td>Silver</td></tr>
+            <tr><td>90</td><td>Rafa Lima</td><td>Brazil</td><td>18</td><td>Honourable Mention</td></tr>
+            <tr><td>99</td><td>Caio Reis</td><td>Brazil</td><td>10</td><td></td></tr></table>"""
+        self.assertEqual(ioai.ler_resultados(pagina), [
+            {"nome": "Miguel Vale", "medalha": "Prata", "pontos": "171,1"},
+            {"nome": "Rafa Lima", "medalha": "Menção Honrosa", "pontos": "18"}])
 
 
 class TestLimites(unittest.TestCase):

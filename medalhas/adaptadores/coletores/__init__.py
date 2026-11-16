@@ -8,12 +8,13 @@ from functools import partial
 
 from ...dominio.olimpiadas import CATALOGO
 from ...dominio.premiacao import Premiacao
-from . import imo, obi, obm, obm_internacional, obmep
+from . import egoi, imo, ioai, obi, obm, obm_internacional, obmep
 
 Log = Callable[[str], None]
 
 _ESPECIFICOS: dict[str, Callable[[Log], list[Premiacao]]] = {
     "OBMEP": obmep.coletar, "OBM": obm.coletar, "OBI": obi.coletar, "IMO": imo.coletar,
+    "EGOI": egoi.coletar, "IOAI": ioai.coletar,
 }
 
 

@@ -6,7 +6,7 @@ abaixo equilibram dois erros: separar a mesma pessoa (perde medalhas do perfil) 
 """
 from collections.abc import Iterable
 
-from .olimpiadas import e_alto_nivel
+from .olimpiadas import area, e_alto_nivel
 from .premiacao import Premiacao
 from .texto import normalizar
 
@@ -54,7 +54,8 @@ def completar_identidades(premiacoes: list[Premiacao]) -> tuple[int, int]:
 
     1. nome idêntico (sem acento) com uma única UF conhecida -> usa essa UF;
     2. nome abreviado ('Enzo Holanda') que é subsequência de um único nome completo de medalhista de
-       alto nível (OBM ou internacionais) -> adota o nome completo (a UF sai em atribuir_alunos).
+       alto nível (OBM ou internacionais) -> adota o nome completo (a UF sai em atribuir_alunos). Nas
+       internacionais de informática (EGOI, IOAI), os medalhistas da OBI também contam: é de lá que vêm.
 
     Devolve (UFs inferidas pelo nome exato, nomes abreviados completados).
     """
@@ -67,6 +68,11 @@ def completar_identidades(premiacoes: list[Premiacao]) -> tuple[int, int]:
         if p.get("uf") and e_alto_nivel(p["competicao"]):
             alto_nivel.setdefault(normalizar(p["nome"]), p["nome"])
     candidatos = [(normalizado.split(), nome) for normalizado, nome in alto_nivel.items()]
+    obi: dict[str, str] = {}
+    for p in premiacoes:
+        if p.get("uf") and p["competicao"] == "OBI":
+            obi.setdefault(normalizar(p["nome"]), p["nome"])
+    candidatos_informatica = candidatos + [(n.split(), nome) for n, nome in obi.items() if n not in alto_nivel]
 
     exatos = abreviados = 0
     for p in premiacoes:
@@ -80,7 +86,8 @@ def completar_identidades(premiacoes: list[Premiacao]) -> tuple[int, int]:
         palavras = chave.split()
         if len(palavras) < 2:
             continue
-        achados = {nome for c, nome in candidatos if len(c) > len(palavras) and _subsequencia(palavras, c)}
+        lista = candidatos_informatica if area(p["competicao"]) == "Informática" else candidatos
+        achados = {nome for c, nome in lista if len(c) > len(palavras) and _subsequencia(palavras, c)}
         if len(achados) == 1:
             p["nome"] = next(iter(achados))
             abreviados += 1

@@ -28,6 +28,8 @@ python server.py     # abre a busca em http://localhost:8000
 | OBI | `olimpiada.ic.unicamp.br/passadas/OBI<ano>/qmerito/<modalidade>/` (2005–2025) | nome, escola, cidade, UF, modalidade/nível, medalha, honra ao mérito |
 | IMO | `imo-official.org/results/team/year/<ano>/country/BRA/` (1981–2026) | nome, pontos, medalha, menção honrosa |
 | Internacionais (OBM) | `www.obm.org.br/resultados-…/` | nome, cidade/UF, prêmio: Ibero (OIM), Cone Sul, EGMO, APMO, IMC, PAGMO, OMCPLP, IGO, IMSC, OIMU, CIIM, Olimpíada de Maio, OMOP, Galois-Noether |
+| EGOI | `stats.egoi.org/countries/BRA/results/` (2021–2026) | nome, pontos, medalha (pela cor da linha); UF inferida pelo nome |
+| IOAI | `ioai-official.org/…/results-<ano>/` (2025–2026; 2024 só por equipe) | nome, pontos, medalha, menção honrosa; UF inferida pelo nome |
 
 As edições são descobertas automaticamente nas páginas de índice de cada fonte, então anos novos entram
 sem mudar código. Uma fonte fora do ar não derruba a geração da base: ela avisa no fim e as outras entram.

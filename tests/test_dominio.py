@@ -103,6 +103,13 @@ class TestIdentidade(unittest.TestCase):
         self.assertEqual(identidade.completar_identidades(ps), (0, 1))
         self.assertEqual(ps[1]["nome"], "Enzo Holanda Sampaio")
 
+    def test_nome_abreviado_na_informatica_internacional_busca_na_obi(self):
+        ps = [premiacao("Talita Ribeiro de Rezende", "SP", competicao="OBI"), premiacao("Talita Rezende", None, "EGOI"),
+              premiacao("Talita Ribeiro de Rezende", "SP"), premiacao("Ana Rezende", None, "IMO")]
+        self.assertEqual(identidade.completar_identidades(ps), (0, 1))
+        self.assertEqual(ps[1]["nome"], "Talita Ribeiro de Rezende")
+        self.assertEqual(ps[3]["nome"], "Ana Rezende")   # matemática não procura na OBI
+
     def test_grafia_corrigida_a_mao_une_os_perfis(self):
         ps = [premiacao("ISAIAS GOUVEIA GONCALVES", "DF", ano=2018), premiacao("Isaias Gouveia Gonçalves", "DF", "OBM", 2019),
               premiacao("Isaías Gouvêa Gonçalves", "PR", "OBM", 2020), premiacao("ISAIAS GOUVEIA GONCALVES", "SP")]
