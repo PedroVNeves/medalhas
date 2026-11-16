@@ -1,0 +1,3 @@
+# Só para as imagens de compartilhamento (adaptadores/http/imagens.py). O resto roda com a biblioteca
+# padrão; sem o Pillow o site funciona e os cartões de link ficam sem imagem.
+Pillow==13.0.0

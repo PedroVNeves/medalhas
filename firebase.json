@@ -8,6 +8,7 @@
       { "source": "/aluno/**", "run": { "serviceId": "medalhas", "region": "southamerica-east1" } },
       { "source": "/escola/**", "run": { "serviceId": "medalhas", "region": "southamerica-east1" } },
       { "regex": "^/(ranking(/[a-z]+)?|estados|busca|dados|sobre)/?$", "run": { "serviceId": "medalhas", "region": "southamerica-east1" } },
+      { "source": "/og/**", "run": { "serviceId": "medalhas", "region": "southamerica-east1" } },
       { "source": "/sitemap.xml", "run": { "serviceId": "medalhas", "region": "southamerica-east1" } },
       { "source": "/sitemaps/**", "run": { "serviceId": "medalhas", "region": "southamerica-east1" } }
     ],

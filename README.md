@@ -6,7 +6,8 @@ Base de pesquisa e rankings dos medalhistas brasileiros em olimpíadas: **OBMEP*
 
 ## Como usar
 
-Requer apenas Python 3.10+ (sem dependências externas).
+Requer apenas Python 3.10+. A única dependência é opcional: o Pillow (`pip install -r requirements.txt`),
+que desenha as imagens dos cartões de compartilhamento; sem ele, todo o resto funciona.
 
 ```bash
 python build_db.py   # baixa as listas oficiais e gera data/medalhas.db (alguns minutos na 1ª vez)
@@ -81,6 +82,11 @@ troca pelo endereço novo.
   entre `sobre:inicio` e `sobre:fim` do `index.html`). No site, a troca de página acontece sem recarregar.
   Os títulos de cada tela estão em `paginas.py` (`TELAS`) e em `web/js/app.js` (`TITULOS`).
 - Endereço que não existe mostra `web/404.html` (o Firebase Hosting e o servidor Python, com status 404).
+- Imagens de compartilhamento (`og:image`, 1200×630, o cartão que aparece ao mandar o link no WhatsApp,
+  X, LinkedIn...): `/og/aluno/{endereço}.png` e `/og/escola/{endereço}.png` são desenhadas na hora
+  (`adaptadores/http/imagens.py`, com Pillow) com o nome, as medalhas e a posição no ranking (só entre os
+  1.000 primeiros); as demais páginas usam `/og/site.png`. Ficam no CDN como as páginas. As fontes (Inter
+  e Space Grotesk, licença OFL) estão em `adaptadores/http/fontes/`.
 - O site monta os links de escola pelo id (`slug()` em `web/js/util.js`, cópia do Python); o servidor
   redireciona esse endereço para o oficial, e o site troca o da barra quando o perfil carrega.
 - `/sitemap.xml` lista todas as páginas (um arquivo a cada 40 mil endereços em `/sitemaps/`).
@@ -266,7 +272,7 @@ por IP:
 ```
 visitante -> medalhas.online (Firebase Hosting: HTTPS, CDN, arquivos de web/)
                  └── /api/**, /aluno/**, /escola/**, /ranking/**, /estados, /dados, /busca, /sobre,
-                     /sitemap.xml, /sitemaps/**
+                     /og/**, /sitemap.xml, /sitemaps/**
                        ->  Cloud Run "medalhas" (server.py + data/medalhas.db dentro da imagem)
 ```
 
@@ -351,6 +357,7 @@ medalhas/
     sqlite/                    esquema, gravação, tabelas-resumo e consultas (site e API)
     http/                      servidor, site estático, API do site, limites por IP
       paginas.py               páginas de aluno/escola e das telas com título e resumo, e o sitemap
+      imagens.py, fontes/      imagens de compartilhamento (og:image) de cada aluno, escola e do site
       api_v1/                  API pública: parâmetros, rotas, apresentação JSON, exportação, OpenAPI
 web/
   index.html, styles.css       página única (Alpine.js, ECharts via CDN) e estilos próprios

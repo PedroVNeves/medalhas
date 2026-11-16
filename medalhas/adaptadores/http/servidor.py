@@ -12,10 +12,10 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from ...aplicacao.portas import FonteDeLeitura
 from ...config import PASTA_WEB, URL_SITE
-from ...dominio.enderecos import TIPOS as TIPOS_DE_PAGINA
+from ...dominio.enderecos import ALUNO, TIPOS as TIPOS_DE_PAGINA
 from ...dominio import pontuacao
 from ...dominio.ranking import ORDENACOES, TIPOS
-from . import api_v1, limites, paginas
+from . import api_v1, imagens, limites, paginas
 from .pedido import Pedido
 from .rotas_site import ROTAS
 
@@ -184,6 +184,32 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._enviar(pagina.corpo, "text/html; charset=utf-8", cabecalhos=self._CACHE_PAGINA)
 
+    def _imagem(self, partes: list[str]) -> None:
+        """/og/site.png e /og/{aluno|escola}/{endereço}.png: o cartão de compartilhamento."""
+        if not imagens.DISPONIVEL:   # Pillow não instalado (só no computador; a imagem do Docker tem)
+            self._nao_encontrado()
+            return
+
+        def desenhar(sessao):
+            if partes == ["og", "site.png"]:
+                return imagens.site(sessao.visao_geral({}))
+            if len(partes) != 3 or partes[1] not in TIPOS_DE_PAGINA or not partes[2].endswith(".png"):
+                return None
+            achado = sessao.enderecos().resolver(partes[1], unquote(partes[2][:-4]))
+            if not achado:
+                return None
+            if partes[1] == ALUNO:
+                return imagens.aluno(sessao.perfil_aluno(achado[0], {}))
+            return imagens.escola(sessao.perfil_escola(achado[0], {}))
+
+        resultado = self._com_sessao(lambda s: [desenhar(s)])
+        if resultado is None:   # recusado: a resposta já foi enviada
+            return
+        if resultado[0] is None:
+            self._nao_encontrado()
+        else:
+            self._enviar(resultado[0], "image/png", cabecalhos=self._CACHE_PAGINA)
+
     def _nao_encontrado(self) -> None:
         """A mesma página 404 que o Firebase Hosting mostra para endereços que não existem."""
         self._enviar((PASTA_WEB / "404.html").read_bytes(), "text/html; charset=utf-8", 404)
@@ -231,6 +257,8 @@ class Handler(BaseHTTPRequestHandler):
             partes = caminho.strip("/").split("/")
             if caminho.startswith("/api/"):
                 self._api(caminho, params)
+            elif partes[0] == "og":
+                self._imagem(partes)
             elif caminho in paginas.TELAS or caminho == "/ranking":
                 self._tela(caminho)
             elif len(partes) == 2 and partes[0] in TIPOS_DE_PAGINA:

@@ -13,11 +13,12 @@ from urllib.parse import quote
 from xml.sax.saxutils import escape as escape_xml
 
 from ...aplicacao.portas import SessaoDeLeitura
-from ...config import PASTA_WEB
+from ...config import PASTA_WEB, URL_SITE
 from ...dominio.enderecos import ALUNO, ESCOLA
 from ...dominio.escolas import nome_de_exibicao
 from ...dominio.texto import capitalizar_nome
 
+IMAGEM_SITE = "/og/site.png"
 URLS_POR_SITEMAP = 40_000   # o limite do protocolo é 50 mil por arquivo
 MAX_PREMIACOES_NO_RESUMO = 60
 MAX_ALUNOS_NO_RESUMO = 30
@@ -55,13 +56,18 @@ _TROCAS = {
     "og_url": re.compile(r'<meta property="og:url" content="[^"]*">'),
     "og_titulo": re.compile(r'<meta property="og:title" content="[^"]*">'),
     "og_descricao": re.compile(r'<meta property="og:description" content="[^"]*">'),
+    "og_imagem": re.compile(r'<meta property="og:image" content="[^"]*">'),
+    "og_imagem_alt": re.compile(r'<meta property="og:image:alt" content="[^"]*">'),
     "dados": re.compile(r'<script type="application/ld\+json">.*?</script>', re.S),
     "resumo": re.compile(r"<noscript><main.*?</main></noscript>", re.S),
 }
 
 
-def _montar(titulo: str, descricao: str, url: str, dados: dict | None, resumo: str, indexar: bool = True) -> bytes:
+def _montar(titulo: str, descricao: str, url: str, dados: dict | None, resumo: str, indexar: bool = True,
+            imagem: str | None = None, imagem_alt: str | None = None) -> bytes:
+    """imagem: endereço da imagem do cartão de compartilhamento (padrão: a do site)."""
     a = lambda t: html.escape(t, quote=True)   # noqa: E731
+    imagem = imagem or URL_SITE + IMAGEM_SITE
     novos = {
         "titulo": f"<title>{a(titulo)}</title>",
         "descricao": f'<meta name="description" content="{a(descricao)}">',
@@ -70,6 +76,8 @@ def _montar(titulo: str, descricao: str, url: str, dados: dict | None, resumo: s
         "og_url": f'<meta property="og:url" content="{a(url)}">',
         "og_titulo": f'<meta property="og:title" content="{a(titulo)}">',
         "og_descricao": f'<meta property="og:description" content="{a(descricao)}">',
+        "og_imagem": f'<meta property="og:image" content="{a(imagem)}">',
+        "og_imagem_alt": f'<meta property="og:image:alt" content="{a(imagem_alt or titulo)}">',
         # </ dentro do JSON fecharia o <script> antes da hora
         "dados": ('<script type="application/ld+json">' + json.dumps(dados, ensure_ascii=False).replace("</", "<\\/")
                   + "</script>") if dados else "",
@@ -275,7 +283,8 @@ def _aluno(d: dict, base: str, url: str) -> bytes:
               f"<h2>Premiações</h2><ul>{linhas}</ul>"
               + (f"<h2>Escolas</h2><ul>{escolas}</ul>" if escolas else "")
               + _rodape(base, f"{base}/api/v1/alunos/{_quote(d['id'])}"))
-    return _montar(titulo, descricao, url, _migalhas(base, d["nome"], url), resumo)
+    return _montar(titulo, descricao, url, _migalhas(base, d["nome"], url), resumo,
+                   imagem=imagem_de(base, url), imagem_alt=f"{nome_uf}: {medalhas}")
 
 
 def _escola(d: dict, sessao: SessaoDeLeitura, base: str, url: str) -> bytes:
@@ -301,7 +310,13 @@ def _escola(d: dict, sessao: SessaoDeLeitura, base: str, url: str) -> bytes:
               + (f"<h2>Destaques</h2><ul>{alunos}</ul>" if alunos else "")
               + f"<h2>Premiações recentes</h2><ul>{recentes}</ul>"
               + _rodape(base, f"{base}/api/v1/escolas/{_quote(d['id'])}/medalhistas"))
-    return _montar(titulo, descricao, url, _migalhas(base, nome, url), resumo)
+    return _montar(titulo, descricao, url, _migalhas(base, nome, url), resumo,
+                   imagem=imagem_de(base, url), imagem_alt=f"{nome_lugar}: {medalhas}")
+
+
+def imagem_de(base: str, url: str) -> str:
+    """https://site/aluno/x -> https://site/og/aluno/x.png"""
+    return base + "/og" + url[len(base):] + ".png"
 
 
 def _quote(ident: str) -> str:

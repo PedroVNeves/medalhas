@@ -13,6 +13,7 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import quote
 
+from medalhas.adaptadores.http import imagens
 from medalhas.adaptadores.http.servidor import Servidor
 from medalhas.adaptadores.sqlite import LeituraSqlite, RepositorioSqlite
 from medalhas.aplicacao.gerar_base import gerar_base
@@ -256,6 +257,29 @@ class TestPontaAPonta(unittest.TestCase):
         self.assertIn("Página não encontrada", corpo.decode())
         self.assertIn('content="noindex"', corpo.decode())
         self.assertEqual(self.get("/ranking/planetas")[0], 404)
+
+    def test_paginas_apontam_para_a_imagem_de_compartilhamento(self):
+        aluno = self.get("/aluno/maria-souza-lima-al")[2].decode()
+        self.assertIn('<meta property="og:image" content="https://medalhas.online/og/aluno/maria-souza-lima-al.png">',
+                      aluno)
+        self.assertIn('<meta name="twitter:card" content="summary_large_image">', aluno)
+        self.assertIn('content="https://medalhas.online/og/site.png"', self.get("/sobre")[2].decode())
+
+    @unittest.skipUnless(imagens.DISPONIVEL, "Pillow não instalado")
+    def test_imagens_de_compartilhamento(self):
+        for caminho in ("/og/aluno/maria-souza-lima-al.png", "/og/site.png"):
+            status, cab, corpo = self.get(caminho)
+            self.assertEqual(status, 200, caminho)
+            self.assertEqual(cab["Content-Type"], "image/png")
+            self.assertTrue(corpo.startswith(b"\x89PNG"))
+            largura, altura = int.from_bytes(corpo[16:20], "big"), int.from_bytes(corpo[20:24], "big")
+            self.assertEqual((largura, altura), (1200, 630))
+            self.assertIn("s-maxage", cab["Cache-Control"])
+        escola = self.json("/api/v1/escolas?nome=etec")["escolas"][0]
+        self.assertEqual(self.get("/og/escola/" + re.sub(r"[^a-z0-9]+", "-", escola["id"].lower()).strip("-") + ".png")[0],
+                         200)
+        self.assertEqual(self.get("/og/aluno/ninguem-xx.png")[0], 404)
+        self.assertEqual(self.get("/og/planeta/x.png")[0], 404)
 
     def test_css_gerado_no_build(self):
         web = Path(__file__).parent.parent / "web"
