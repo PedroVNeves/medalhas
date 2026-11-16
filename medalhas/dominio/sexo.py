@@ -10,6 +10,8 @@ from .premiacao import Premiacao
 FEMININO = "F"
 COMPETICOES_SO_MENINAS = frozenset({"EGMO", "PAGMO", "EGOI"})
 PREMIOS_SO_MENINAS = frozenset({"Elas em Destaque"})   # etapa feminina da Olimpíada Itabirana
+# Alunas que pediram para entrar no filtro (pelo contato do site): ids "NOME|UF", como em dominio.identidade
+MENINAS_CONFIRMADAS: frozenset[str] = frozenset()
 
 
 def marcar_meninas(premiacoes: list[Premiacao]) -> int:
@@ -18,7 +20,8 @@ def marcar_meninas(premiacoes: list[Premiacao]) -> int:
     Devolve quantas alunas foram reconhecidas.
     """
     meninas = {p["aluno_id"] for p in premiacoes
-               if p["competicao"] in COMPETICOES_SO_MENINAS or p.get("premio") in PREMIOS_SO_MENINAS}
+               if p["competicao"] in COMPETICOES_SO_MENINAS or p.get("premio") in PREMIOS_SO_MENINAS
+               or p["aluno_id"] in MENINAS_CONFIRMADAS}
     for p in premiacoes:
         p["sexo"] = FEMININO if p["aluno_id"] in meninas else None
     return len(meninas)
