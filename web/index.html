@@ -119,13 +119,36 @@
         </button>
       </template>
     </div></div>
-    <div class="hidden w-full min-w-0 max-w-xs xl:block" x-show="!is('home')" x-cloak>
+    <div class="relative hidden w-full min-w-0 max-w-xs xl:block" x-show="!is('home')" x-cloak @click.outside="sug.onde==='nav' && fecharSugestoes()">
       <label class="relative block">
         <i x-icon="'search'" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"></i>
-        <input x-model="q" @input="typed()" @keydown.enter="buscar()" type="search" enterkeyhint="search" placeholder="Buscar aluno ou escola…"
+        <input x-model="q" @input="typed('nav')" @focus="pedirSugestoes('nav')" @keydown="teclaSugestoes($event, 'nav')" type="search" enterkeyhint="search" placeholder="Buscar aluno ou escola…"
+          autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="sugestoes-nav" :aria-expanded="sugAberta && sug.onde==='nav'"
           class="w-full rounded-xl border hairline bg-white/5 py-2 pl-9 pr-10 text-sm placeholder:text-slate-500 focus:border-gold-400/50 focus:outline-none">
         <span class="kbd absolute right-2.5 top-1/2 -translate-y-1/2">/</span>
       </label>
+      <div x-show="sugAberta && sug.onde==='nav'" x-cloak x-transition.opacity.duration.100ms class="sugestoes right-0 w-[28rem]" id="sugestoes-nav" role="listbox">
+  <template x-for="(s, i) in sug.lista" :key="s.tipo + s.id">
+    <a :href="s.link" class="sug-item" :class="sug.ativo===i && 'on'" role="option" :aria-selected="sug.ativo===i" @mouseenter="sug.ativo=i" @click="q=''">
+      <template x-if="s.tipo==='aluno'"><div class="avatar h-9 w-9 text-xs" style="--tc:#f5c542" x-text="initials(s.nome)"></div></template>
+      <template x-if="s.tipo==='escola'"><div class="grid h-9 w-9 flex-none place-items-center rounded-xl border hairline bg-white/5"><i x-icon="'school'" class="h-4 w-4 text-indigo-300"></i></div></template>
+      <div class="min-w-0 flex-1">
+        <div class="truncate font-semibold" x-text="s.nome"></div>
+        <div class="truncate text-xs text-slate-500" x-text="s.sub"></div>
+      </div>
+      <span x-show="s.posicao && s.posicao <= 1000" class="hidden flex-none text-xs font-semibold text-gold-300 sm:inline" x-text="fmt(s.posicao) + 'º'"></span>
+      <div class="flex flex-none items-center gap-1">
+        <span class="coin sm" :class="!s.ouro && 'zero'" x-text="s.ouro"></span>
+        <span class="coin sm prata" :class="!s.prata && 'zero'" x-text="s.prata"></span>
+        <span class="coin sm bronze" :class="!s.bronze && 'zero'" x-text="s.bronze"></span>
+      </div>
+    </a>
+  </template>
+  <p x-show="!sug.lista.length" class="px-3 py-3 text-sm text-slate-400">Nenhuma sugestão. Tente outra grafia ou só o sobrenome, ou veja a busca completa.</p>
+  <button type="button" class="sug-rodape" :class="sug.ativo===sug.lista.length && 'on'" @mouseenter="sug.ativo=sug.lista.length" @click="buscar()">
+    <i x-icon="'search'" class="h-3.5 w-3.5"></i><span class="truncate">Ver todos os resultados para “<span x-text="q.trim()"></span>”</span><span class="kbd ml-auto hidden sm:inline">Enter</span>
+  </button>
+</div>
     </div>
   </div>
   <!-- no celular: rótulos curtos para os 5 links caberem sem rolar; se ainda faltar espaço, quebram linha -->
@@ -173,11 +196,13 @@
       </h1>
       <p class="mt-5 max-w-xl text-lg text-slate-400">Os medalhistas brasileiros da OBMEP, OBM, OBI, IMO e de mais <span x-text="ov ? ov.olimpiadas.length - 4 : 14">14</span> olimpíadas em um só lugar. Encontre alunos e escolas, confira as premiações nas fontes oficiais e veja quem lidera os rankings.</p>
 
-      <div class="search-shell mt-8">
+      <div class="relative mt-8" @click.outside="sug.onde==='home' && fecharSugestoes()">
+      <div class="search-shell">
         <div class="flex flex-col gap-2 p-2 sm:flex-row sm:items-center">
           <div class="relative flex-1">
             <i x-icon="'search'" class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gold-400"></i>
-            <input x-ref="q" x-model="q" @keydown.enter="buscar()" type="search" enterkeyhint="search" autofocus
+            <input x-ref="q" x-model="q" @input="typed('home')" @focus="pedirSugestoes('home')" @keydown="teclaSugestoes($event, 'home')" type="search" enterkeyhint="search" autofocus
+              autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="sugestoes-home" :aria-expanded="sugAberta && sug.onde==='home'"
               :placeholder="campo === 'escola' ? 'Nome da escola, sigla (IFAL, ETEC)…' : campo === 'tudo' ? 'Nome, escola ou cidade…' : 'Nome do aluno…'"
               class="w-full bg-transparent py-3.5 pl-12 pr-4 text-lg placeholder:text-slate-500 focus:outline-none">
           </div>
@@ -188,6 +213,29 @@
           </div>
           <button @click="buscar()" class="btn btn-gold justify-center !px-5 !py-3 !text-base"><i x-icon="'search'" class="h-4 w-4"></i>Buscar</button>
         </div>
+      </div>
+      <div x-show="sugAberta && sug.onde==='home'" x-cloak x-transition.opacity.duration.100ms class="sugestoes inset-x-0" id="sugestoes-home" role="listbox">
+  <template x-for="(s, i) in sug.lista" :key="s.tipo + s.id">
+    <a :href="s.link" class="sug-item" :class="sug.ativo===i && 'on'" role="option" :aria-selected="sug.ativo===i" @mouseenter="sug.ativo=i" @click="q=''">
+      <template x-if="s.tipo==='aluno'"><div class="avatar h-9 w-9 text-xs" style="--tc:#f5c542" x-text="initials(s.nome)"></div></template>
+      <template x-if="s.tipo==='escola'"><div class="grid h-9 w-9 flex-none place-items-center rounded-xl border hairline bg-white/5"><i x-icon="'school'" class="h-4 w-4 text-indigo-300"></i></div></template>
+      <div class="min-w-0 flex-1">
+        <div class="truncate font-semibold" x-text="s.nome"></div>
+        <div class="truncate text-xs text-slate-500" x-text="s.sub"></div>
+      </div>
+      <span x-show="s.posicao && s.posicao <= 1000" class="hidden flex-none text-xs font-semibold text-gold-300 sm:inline" x-text="fmt(s.posicao) + 'º'"></span>
+      <div class="flex flex-none items-center gap-1">
+        <span class="coin sm" :class="!s.ouro && 'zero'" x-text="s.ouro"></span>
+        <span class="coin sm prata" :class="!s.prata && 'zero'" x-text="s.prata"></span>
+        <span class="coin sm bronze" :class="!s.bronze && 'zero'" x-text="s.bronze"></span>
+      </div>
+    </a>
+  </template>
+  <p x-show="!sug.lista.length" class="px-3 py-3 text-sm text-slate-400">Nenhuma sugestão. Tente outra grafia ou só o sobrenome, ou veja a busca completa.</p>
+  <button type="button" class="sug-rodape" :class="sug.ativo===sug.lista.length && 'on'" @mouseenter="sug.ativo=sug.lista.length" @click="buscar()">
+    <i x-icon="'search'" class="h-3.5 w-3.5"></i><span class="truncate">Ver todos os resultados para “<span x-text="q.trim()"></span>”</span><span class="kbd ml-auto hidden sm:inline">Enter</span>
+  </button>
+</div>
       </div>
       <div class="mt-4 flex flex-wrap gap-2 text-sm">
         <a href="/ranking/alunos" class="inline-flex items-center gap-1.5 rounded-full border hairline bg-white/5 px-3 py-1.5 text-slate-300 hover:border-gold-400/40 hover:text-white"><i x-icon="'trophy'" class="h-4 w-4 text-gold-400"></i>Ranking de alunos</a>

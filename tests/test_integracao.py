@@ -105,6 +105,20 @@ class TestPontaAPonta(unittest.TestCase):
         self.assertEqual(self.json("/api/busca?q=costa")["total"], 1)
         self.assertEqual(self.json("/api/aluno?id=" + quote("ANA COSTA|SP"))["nome"], "Ana Costa")
 
+    def test_sugestoes_enquanto_digita(self):
+        r = self.json("/api/sugestoes?q=ma&campo=nome")
+        self.assertEqual([a["id"] for a in r["alunos"]], ["MARIA SOUZA LIMA|AL"])   # início de palavra: não "ANA"
+        self.assertEqual(r["alunos"][0]["ouro"], 1)
+        self.assertEqual(r["escolas"], [])
+        # sigla casa pela expansão; em "tudo" vêm alunos e escolas, os mais premiados primeiro
+        self.assertEqual(len(self.json("/api/sugestoes?q=instituto+federal&campo=escola")["escolas"]), 1)
+        self.assertEqual(len(self.json("/api/sugestoes?q=ifal&campo=escola")["escolas"]), 1)
+        tudo = self.json("/api/sugestoes?q=costa&campo=tudo")
+        self.assertEqual([a["nome"] for a in tudo["alunos"]], ["Ana Costa"])
+        self.assertEqual(self.json("/api/sugestoes?q=m"), {"alunos": [], "escolas": []})   # curto demais
+        _, cab, _ = self.get("/api/sugestoes?q=maria")
+        self.assertIn("s-maxage", cab["Cache-Control"])   # o CDN guarda: sem consulta a cada letra repetida
+
     def test_exportacao_filtrada_em_csv(self):
         status, cab, corpo = self.get("/api/v1/exportar?aluno_id=" + quote("MARIA SOUZA LIMA|AL", safe=""))
         self.assertEqual(status, 200)

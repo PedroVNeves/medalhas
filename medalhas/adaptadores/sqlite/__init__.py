@@ -22,6 +22,9 @@ class SessaoSqlite:
     def busca(self, params: dict) -> dict:
         return site.busca(self._con, params)
 
+    def sugestoes(self, params: dict) -> dict:
+        return site.sugestoes(self._con, params)
+
     def ranking(self, params: dict) -> dict:
         return site.ranking(self._con, params)
 

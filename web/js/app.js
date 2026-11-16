@@ -31,6 +31,8 @@ function app() {
     // busca
     _rotaAtual: null,
     q: "", campo: "nome", busca: { loading: false, total: 0, grupos: [] }, _t: null,
+    // sugestões enquanto digita (início e barra do topo): onde = qual campo mostra a lista; ativo = item do teclado
+    sug: { lista: [], onde: "", ativo: -1, q: "" }, _ts: null,
     bf: { uf: "", area: "", competicao: "", medalha: "", ano: "", nivel: "", rede: "" },
     // ranking
     rk: { tipo: "alunos", itens: [], total: 0, loading: false, f: { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", ordem: "xp" } },
@@ -110,6 +112,7 @@ function app() {
       const atual = location.pathname + location.search + location.hash;
       if (atual === this._rotaAtual && !forcar) return;   // popstate e hashchange chegam juntos
       this._rotaAtual = atual;
+      this.fecharSugestoes();
       let caminho = location.pathname + location.search;
       if (location.hash.startsWith("#/")) {   // link antigo
         const perfil = location.hash.match(/^#\/(aluno|escola)\/([^?]+)/);
@@ -177,9 +180,9 @@ function app() {
     // ------------------------------------------------ busca
     // Na página de busca os resultados acompanham a digitação. Nas outras (início, rankings, perfis)
     // digitar não muda de página: a busca só abre com Enter ou com o botão Buscar (buscar()).
-    typed() {
+    typed(onde = "") {
       clearTimeout(this._t);
-      if (!this.is("busca")) return;
+      if (!this.is("busca")) { this.pedirSugestoes(onde); return; }
       this._t = setTimeout(() => {
         const q = this.q.trim();
         if (q.length < 2) return;
@@ -190,13 +193,65 @@ function app() {
     },
     buscar() {
       clearTimeout(this._t);
+      this.fecharSugestoes();
       const q = this.q.trim();
       if (q.length < 2) { this.$refs.q?.focus(); return; }
       if (this.is("busca")) { this.typed(); return; }
       this.go(`/busca?${new URLSearchParams({ q, campo: this.campo })}`);
     },
+    // ------------------------------------------------ sugestões (fora da página de busca)
+    // Digitar mostra, embaixo do campo, os alunos e escolas mais premiados que casam com o texto;
+    // Enter sem item escolhido abre a busca completa.
+    pedirSugestoes(onde) {
+      clearTimeout(this._ts);
+      if (this.is("busca")) return;   // lá os resultados completos já acompanham a digitação
+      if (onde) this.sug.onde = onde;
+      const q = this.q.trim();
+      if (q.length < 2) { this.sug.lista = []; this.sug.q = ""; return; }
+      this._ts = setTimeout(() => this.carregarSugestoes(q), 120);
+    },
+    // a barra do topo não tem o seletor Pessoa/Escola/Tudo: sugere os dois
+    get campoSugestoes() { return this.sug.onde === "nav" ? "tudo" : this.campo; },
+    async carregarSugestoes(q) {
+      const campo = this.campoSugestoes;
+      let d;
+      try { d = await API("sugestoes", { q, campo }); } catch { return; }
+      if (q !== this.q.trim() || campo !== this.campoSugestoes || !this.sug.onde) return;   // já digitou outra coisa
+      const local = (municipio, uf) => [prettySchool(municipio), uf].filter(Boolean).join(" · ");
+      this.sug.lista = [
+        ...d.alunos.map(a => ({ ...a, tipo: "aluno", link: this.alunoLink(a.id),
+          sub: [prettySchool(a.escola), local(a.municipio, a.uf)].filter(Boolean).join(" · ") })),
+        ...d.escolas.map(e => ({ ...e, tipo: "escola", link: this.escolaLink(e.id), nome: prettySchool(e.nome),
+          sub: [local(e.municipio, e.uf), e.alunos ? `${fmt(e.alunos)} ${e.alunos === 1 ? "medalhista" : "medalhistas"}` : ""]
+            .filter(Boolean).join(" · ") })),
+      ];
+      this.sug.q = q;
+      this.sug.ativo = -1;
+    },
+    get sugAberta() { return !!this.sug.onde && this.q.trim().length >= 2 && this.sug.q !== "" && !this.is("busca"); },
+    fecharSugestoes() {
+      clearTimeout(this._ts);
+      this.sug.onde = ""; this.sug.ativo = -1;
+    },
+    teclaSugestoes(e, onde) {
+      if (this.is("busca")) { if (e.key === "Enter") this.buscar(); return; }
+      const n = this.sug.lista.length;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        if (!this.sugAberta) { this.pedirSugestoes(onde); return; }
+        e.preventDefault();
+        // n = "ver todos os resultados", último item da lista
+        this.sug.ativo = e.key === "ArrowDown" ? (this.sug.ativo >= n ? 0 : this.sug.ativo + 1) : (this.sug.ativo <= 0 ? n : this.sug.ativo - 1);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const item = this.sugAberta && this.sug.lista[this.sug.ativo];
+        if (item) { this.q = ""; this.go(item.link); } else this.buscar();
+      } else if (e.key === "Escape" && this.sugAberta) {
+        e.preventDefault(); this.fecharSugestoes();
+      }
+    },
     setCampo(c) {
       this.campo = c;
+      if (!this.is("busca") && this.sug.onde) this.pedirSugestoes();
       if (this.is("busca")) this.setBuscaFilter("uf", this.bf.uf);
     },
     // filtros da busca (estado, olimpíada, prêmio, ano, nível, rede) ficam na URL

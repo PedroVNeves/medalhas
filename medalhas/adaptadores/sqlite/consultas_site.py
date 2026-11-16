@@ -53,6 +53,84 @@ def busca(con: Conexao, params: dict) -> dict:
     return {"total": total, "limite": MAX_RESULTADOS_BUSCA, "resultados": [com_pontos(r, coluna) for r in linhas]}
 
 
+# ---------------------------------------------------------------- sugestões (enquanto a pessoa digita)
+
+MAX_SUGESTOES = 8
+_COLUNAS_SUGESTAO = {
+    "alunos": "id, nome, uf, escola, municipio, ouro, prata, bronze, mencao",
+    "escolas": "id, nome, municipio, uf, alunos, ouro, prata, bronze, mencao",
+}
+
+
+def _indice_de_sugestoes(con: Conexao) -> dict[tuple[str, int], list[tuple[str, str]]]:
+    """Por (tipo, método), (texto pesquisável, id) de todos os alunos e escolas, do mais ao menos pontuado.
+
+    Montado uma vez por versão da base. O texto segue as colunas da busca (palavras entre espaços), para que
+    "% PALAVRA%" do SQL vire um simples ' PALAVRA' in texto. Alunos com mais de uma grafia guardam todas.
+    Já em ordem de pontos, a busca para nas primeiras que casam: nomes comuns respondem sem varrer tudo.
+    """
+    def montar() -> dict[tuple[str, int], list[tuple[str, str]]]:
+        pontos = ", ".join(f"r.{c}" for c in pontuacao.COLUNAS)
+        linhas = {
+            "alunos": con.execute(
+                f"""SELECT ' ' || REPLACE(t.texto, ',', ' '), r.id, {pontos} FROM alunos r
+                    JOIN (SELECT aluno_id, GROUP_CONCAT(DISTINCT nome_busca) AS texto
+                          FROM medalhas GROUP BY aluno_id) t ON t.aluno_id = r.id""").fetchall(),
+            "escolas": con.execute(
+                f"""SELECT t.texto, r.id, {pontos} FROM escolas r
+                    JOIN (SELECT escola_chave, MAX(escola_termos) AS texto FROM medalhas
+                          WHERE escola_chave != '' GROUP BY escola_chave) t ON t.escola_chave = r.id""").fetchall(),
+        }
+        return {(tipo, i): [(r[0], r[1]) for r in sorted(rs, key=lambda r: r[2 + i] or 0, reverse=True)]
+                for tipo, rs in linhas.items() for i in range(len(pontuacao.COLUNAS))}
+
+    return con.fixo("indice_de_sugestoes", montar)
+
+
+def _casa(texto: str, palavras, com_siglas: bool) -> bool:
+    """Toda palavra digitada começa alguma palavra do texto (ou, em escolas, a sigla casa pela expansão)."""
+    for palavra, expansao in palavras:
+        if f" {palavra}" in texto:
+            continue
+        if com_siglas and expansao != [palavra] and all(f" {e}" in texto for e in expansao):
+            continue
+        return False
+    return True
+
+
+def _mais_pontuados(con: Conexao, tipo: str, palavras, metodo: int, limite: int) -> list[dict]:
+    com_siglas = tipo == "escolas"
+    ids: list[str] = []
+    for texto, ident in _indice_de_sugestoes(con)[(tipo, metodo)]:
+        if _casa(texto, palavras, com_siglas):
+            ids.append(ident)
+            if len(ids) == limite:
+                break
+    if not ids:
+        return []
+    coluna = pontuacao.COLUNAS[metodo]
+    linhas = con.linhas(f"SELECT {_COLUNAS_SUGESTAO[tipo]}, {coluna} AS pontos, {coluna}_pos AS posicao "
+                        f"FROM {tipo} WHERE id IN ({marcadores(len(ids))})", ids)
+    por_id = {r["id"]: r for r in linhas}
+    return [por_id[i] for i in ids if i in por_id]
+
+
+def sugestoes(con: Conexao, params: dict) -> dict:
+    """Os alunos e escolas mais premiados cujo nome casa com o que foi digitado (lista curta e rápida)."""
+    _, coluna = pontuacao.resolver_metodo(params.get("metodo"))
+    campo = params.get("campo") if params.get("campo") in ("nome", "escola", "tudo") else "tudo"
+    palavras = palavras_da_busca(params.get("q", ""))
+    if not palavras or len("".join(p for p, _ in palavras)) < 2:
+        return {"alunos": [], "escolas": []}
+    i = pontuacao.COLUNAS.index(coluna)
+    alunos = _mais_pontuados(con, "alunos", palavras, i, MAX_SUGESTOES) if campo != "escola" else []
+    escolas = _mais_pontuados(con, "escolas", palavras, i, MAX_SUGESTOES) if campo != "nome" else []
+    if campo == "tudo":   # alunos primeiro, mas sempre com espaço para até 3 escolas
+        alunos = alunos[:max(MAX_SUGESTOES - min(3, len(escolas)), 0)]
+        escolas = escolas[:MAX_SUGESTOES - len(alunos)]
+    return {"alunos": alunos, "escolas": escolas}
+
+
 # ---------------------------------------------------------------- rankings
 
 def _pontos_da_carreira(con: Conexao, tabela: str, ids: list[str], coluna: str) -> dict:

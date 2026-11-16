@@ -19,6 +19,8 @@ def _perfil(tipo: str):
 
 ROTAS = {
     "/api/busca": Rota(lambda s, pedido: s.busca(pedido.params), "site"),
+    # lista curta enquanto a pessoa digita: igual para todos até a próxima publicação, o CDN guarda
+    "/api/sugestoes": Rota(lambda s, pedido: s.sugestoes(pedido.params), "site", cache_cdn=86400),
     "/api/ranking": Rota(lambda s, pedido: s.ranking(pedido.params), "site"),
     "/api/aluno": Rota(_perfil(ALUNO), "site"),
     "/api/escola": Rota(_perfil(ESCOLA), "site"),

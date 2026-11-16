@@ -321,6 +321,7 @@ def aquecer(leitura: FonteDeLeitura) -> None:
     """Pré-calcula as consultas pesadas para a primeira visita ser instantânea."""
     with leitura.sessao() as s:
         s.enderecos()
+        s.sugestoes({"q": "aquecer"})   # monta o índice das sugestões da busca
         for metodo in pontuacao.METODOS:
             s.visao_geral({"metodo": metodo})
             for tipo in TIPOS:
