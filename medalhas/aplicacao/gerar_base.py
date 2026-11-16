@@ -39,14 +39,15 @@ def gerar_base(coletores: Iterable[Coletor], repositorio: RepositorioPremiacoes,
         except Exception as e:  # noqa: BLE001 — uma fonte fora do ar não pode derrubar as outras
             relatorio.falhas.append(f"{coletor.sigla}: {type(e).__name__}: {e}")
 
-    com_cidade = escolas.completar_municipios(premiacoes)
-    log(f"Escolas: {com_cidade} premiações sem cidade ganharam a da escola de mesmo nome no estado")
     corrigidas = identidade.corrigir_grafias(premiacoes)
     log(f"Identidades: {corrigidas} premiações com a grafia do nome corrigida à mão")
     exatos, abreviados = identidade.completar_identidades(premiacoes)
     log(f"Identidades: UF inferida pelo nome em {exatos} registros; {abreviados} nomes abreviados completados")
     unidos = identidade.atribuir_alunos(premiacoes)
     log(f"Identidades: {unidos} pessoas reunidas entre estados diferentes")
+    # depois das identidades: quem ganhou o estado pela escola também pode ganhar a cidade
+    com_cidade = escolas.completar_municipios(premiacoes)
+    log(f"Escolas: {com_cidade} premiações sem cidade ganharam a da escola de mesmo nome no estado")
     meninas = sexo.marcar_meninas(premiacoes)
     log(f"Meninas: {meninas} alunas premiadas em olimpíadas ou etapas só para meninas")
 

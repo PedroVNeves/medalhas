@@ -85,6 +85,11 @@ class TestEscolas(unittest.TestCase):
         self.assertEqual(escolas.completar_municipios(ps), 1)
         self.assertEqual([p["municipio"] for p in ps[3:]], ["Santo André", None, None])
 
+    def test_escola_sem_uf_nao_tem_chave(self):
+        termos, chave = escolas.indexar_escola("Colégio Kennedy", None, None)
+        self.assertEqual(chave, "")
+        self.assertIn(" KENNEDY ", termos)   # o nome continua pesquisável
+
     def test_busca_expande_sigla(self):
         self.assertEqual(escolas.palavras_da_busca("etec de sp"),
                          [("ETEC", ["ESCOLA", "TECNICA", "ESTADUAL"]), ("SP", ["SP"])])
@@ -127,6 +132,23 @@ class TestIdentidade(unittest.TestCase):
         identidade.completar_identidades(ps)
         self.assertIsNone(ps[-3]["uf"])     # nome comum: pode ser outra Maria Silva
         self.assertEqual(ps[-1]["uf"], "PI")   # nome raro: é a mesma pessoa
+
+    def test_sem_uf_vai_para_quem_foi_premiado_na_mesma_escola(self):
+        comuns = [premiacao(f"Lucas Oliveira {i}", "SP") for i in range(60)]
+        mg = premiacao("Lucas Gabriel de Oliveira", "MG")
+        mg["escola"] = "EE MAJ LAGE"
+        sem_uf = premiacao("Lucas Gabriel de Oliveira", None, "OITM", 2020)
+        sem_uf["escola"] = "Escola Estadual Major Lage"
+        outra = premiacao("Lucas Gabriel de Oliveira", None, "OITM", 2021)
+        outra["escola"] = "Colégio Kennedy"
+        identidade.completar_identidades(comuns + [mg, sem_uf, outra])
+        self.assertEqual(sem_uf["uf"], "MG")   # nome comum, mas mesma escola
+        self.assertIsNone(outra["uf"])         # nome comum e outra escola: pode ser outra pessoa
+
+    def test_mesma_escola_aceita_abreviacao(self):
+        self.assertTrue(identidade.mesma_escola("Escola Estadual Major Lage", "EE MAJ LAGE"))
+        self.assertFalse(identidade.mesma_escola("Escola Estadual Major Lage", "EE Mestre Zeca Amancio"))
+        self.assertFalse(identidade.mesma_escola("Escola Estadual", "EE Joao Pinto"))   # só palavras genéricas
 
     def test_grafia_corrigida_a_mao_une_os_perfis(self):
         ps = [premiacao("ISAIAS GOUVEIA GONCALVES", "DF", ano=2018), premiacao("Isaias Gouveia Gonçalves", "DF", "OBM", 2019),

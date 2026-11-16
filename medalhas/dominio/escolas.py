@@ -138,22 +138,31 @@ def palavras_canonicas(normalizado: str) -> list[str]:
     return [w for _, exp in _expandir(palavras) for w in exp if w not in PARTICULAS]
 
 
+def palavras_da_chave(escola: str | None) -> set[str]:
+    """Palavras que identificam a escola (sem acento, expandidas, sem partículas), a parte do nome na chave."""
+    palavras = set(palavras_canonicas(normalizar(escola)))
+    if "FEDERAL" in palavras:
+        palavras -= _ENCHIMENTO_FEDERAL
+    return palavras
+
+
 def indexar_escola(escola: str | None, municipio: str | None, uf: str | None) -> tuple[str, str]:
     """(termos de busca, chave da escola).
 
     termos: palavras originais e expandidas, entre espaços, para busca por início de palavra.
     chave:  identifica a mesma escola apesar de acentos, ordem das palavras e abreviações, ex.:
             'IFAL CAMPUS X' == 'INSTITUTO FEDERAL DE EDUCACAO CIENCIA E TECNOLOGIA DE ALAGOAS CAMPUS X'.
+            Sem UF (listas que não informam o estado) não há chave: o mesmo nome em estados diferentes é
+            outra escola, então a premiação fica sem página de escola (o nome continua na premiação).
     """
     if not escola:
         return "", ""
     norm = normalizar(escola)
     canon = palavras_canonicas(norm)
     termos = " " + " ".join(dict.fromkeys(_juntar_letras_soltas(norm.split()) + canon)) + " "
-    palavras_chave = set(canon)
-    if "FEDERAL" in palavras_chave:
-        palavras_chave -= _ENCHIMENTO_FEDERAL
-    chave = " ".join(sorted(palavras_chave)) + "|" + normalizar(municipio) + "|" + (uf or "")
+    if not uf:
+        return termos, ""
+    chave = " ".join(sorted(palavras_da_chave(escola))) + "|" + normalizar(municipio) + "|" + uf
     if chave in ESCOLAS_RENOMEADAS:
         chave = ESCOLAS_RENOMEADAS[chave]
         # buscar pelo nome atual também acha as premiações do nome antigo

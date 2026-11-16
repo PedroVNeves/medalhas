@@ -501,7 +501,8 @@
               <span class="medal-pill"><span class="coin !h-5 !w-5 !text-[0]" :class="medalClass(r.medalha)"></span><span x-text="r.premio || r.medalha"></span></span>
               <span class="min-w-0 flex-1 truncate text-slate-400">
                 <template x-if="busca.byEscola"><a :href="alunoLink(r.aluno_id)" class="link" x-text="r.nome"></a></template>
-                <template x-if="!busca.byEscola && r.escola"><a :href="escolaLink(r.escola_chave)" class="link" x-text="prettySchool(r.escola)"></a></template>
+                <template x-if="!busca.byEscola && r.escola && r.escola_chave"><a :href="escolaLink(r.escola_chave)" class="link" x-text="prettySchool(r.escola)"></a></template>
+                <template x-if="!busca.byEscola && r.escola && !r.escola_chave"><span x-text="prettySchool(r.escola)"></span></template>
                 <template x-if="!busca.byEscola && !r.escola"><span x-text="[prettySchool(r.municipio), r.uf].filter(Boolean).join(' · ')"></span></template>
                 <span class="text-slate-600" x-text="r.nivel ? ' · ' + nivelLabel(r.nivel) : ''"></span>
               </span>

@@ -290,6 +290,7 @@ function app() {
       const map = new Map();
       for (const r of d.resultados) {
         const k = byEscola ? r.escola_chave : r.aluno_id;
+        if (!k) continue;   // escola sem estado (lista sem UF) não tem página: fica de fora do agrupamento por escola
         if (!map.has(k)) map.set(k, { id: k, itens: [] });
         map.get(k).itens.push(r);
       }

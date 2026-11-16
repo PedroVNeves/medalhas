@@ -6,6 +6,9 @@ abaixo equilibram dois erros: separar a mesma pessoa (perde medalhas do perfil) 
 """
 from collections.abc import Iterable
 
+from functools import lru_cache
+
+from .escolas import palavras_da_chave
 from .olimpiadas import area, e_alto_nivel
 from .premiacao import Premiacao
 from .texto import normalizar
@@ -52,6 +55,28 @@ def _alto_nivel(premiacoes: Iterable[Premiacao]) -> bool:
     return any(e_alto_nivel(p["competicao"]) for p in premiacoes)
 
 
+# Palavras comuns a muitas escolas: não servem para dizer que duas escolas são a mesma
+_PALAVRAS_GENERICAS_DE_ESCOLA = frozenset({
+    "ESCOLA", "ESTADUAL", "MUNICIPAL", "COLEGIO", "CENTRO", "EDUCACIONAL", "EDUCACAO", "ENSINO", "FUNDAMENTAL",
+    "MEDIO", "INSTITUTO", "FEDERAL", "PROFESSOR", "PROFESSORA", "PROF", "PROFA", "UNIDADE", "CAMPUS", "INTEGRAL",
+    "TEMPO", "LTDA", "INFANTIL", "BASICA", "TECNICA", "TECNOLOGIA", "CIENCIA"})
+
+
+@lru_cache(maxsize=None)
+def _palavras_marcantes(escola: str) -> frozenset[str]:
+    return frozenset(palavras_da_chave(escola) - _PALAVRAS_GENERICAS_DE_ESCOLA)
+
+
+def mesma_escola(a: str | None, b: str | None) -> bool:
+    """Os dois nomes parecem a mesma escola? Toda palavra marcante do nome mais curto casa com uma do outro,
+    aceitando abreviação ("EE MAJ LAGE" == "Escola Estadual Major Lage")."""
+    if not a or not b:
+        return False
+    menor, maior = sorted((_palavras_marcantes(a), _palavras_marcantes(b)), key=len)
+    return bool(menor) and all(any(w.startswith(x) or x.startswith(w) for w in maior if min(len(w), len(x)) >= 3)
+                               for x in menor)
+
+
 def _estimador_de_homonimos(nomes: Iterable[str]):
     """Função nome -> número esperado de pessoas com esse nome, pela frequência de cada palavra entre os
     nomes distintos (nomes já normalizados)."""
@@ -79,7 +104,8 @@ def _pode_usar_o_nome(p: Premiacao, homonimos_esperados) -> bool:
 def completar_identidades(premiacoes: list[Premiacao]) -> tuple[int, int]:
     """Para quem veio sem UF (IMO, IMC…), descobre a pessoa nos outros registros. Altera a lista.
 
-    1. nome idêntico (sem acento) com uma única UF conhecida -> usa essa UF;
+    1. nome idêntico (sem acento) com uma única UF conhecida -> usa essa UF; ou, se a premiação traz a escola,
+       a UF da pessoa de mesmo nome que foi premiada nessa escola (quando só uma UF bate);
     2. nome abreviado ('Enzo Holanda') que é subsequência de um único nome completo de medalhista de
        alto nível (OBM ou internacionais) -> adota o nome completo (a UF sai em atribuir_alunos). Nas
        internacionais de informática (EGOI, IOAI), os medalhistas da OBI também contam: é de lá que vêm.
@@ -90,9 +116,12 @@ def completar_identidades(premiacoes: list[Premiacao]) -> tuple[int, int]:
     """
     homonimos_esperados = _estimador_de_homonimos(normalizar(p["nome"]) for p in premiacoes)
     ufs_do_nome: dict[str, set[str]] = {}
+    escolas_do_nome: dict[str, set[tuple[str, str]]] = {}   # nome -> {(UF, escola)}
     for p in premiacoes:
         if p.get("uf"):
             ufs_do_nome.setdefault(normalizar(p["nome"]), set()).add(p["uf"])
+            if p.get("escola"):
+                escolas_do_nome.setdefault(normalizar(p["nome"]), set()).add((p["uf"], p["escola"]))
     alto_nivel: dict[str, str] = {}
     for p in premiacoes:
         if p.get("uf") and e_alto_nivel(p["competicao"]):
@@ -111,6 +140,11 @@ def completar_identidades(premiacoes: list[Premiacao]) -> tuple[int, int]:
         chave = normalizar(p["nome"])
         if len(ufs_do_nome.get(chave, ())) == 1 and _pode_usar_o_nome(p, homonimos_esperados):
             p["uf"] = next(iter(ufs_do_nome[chave]))
+            exatos += 1
+            continue
+        pela_escola = {uf for uf, escola in escolas_do_nome.get(chave, ()) if mesma_escola(p.get("escola"), escola)}
+        if len(pela_escola) == 1:   # nome comum, mas premiado na mesma escola: é a mesma pessoa
+            p["uf"] = next(iter(pela_escola))
             exatos += 1
             continue
         palavras = chave.split()
