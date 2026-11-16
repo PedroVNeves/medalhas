@@ -5,6 +5,7 @@ from urllib.parse import quote
 
 from ....aplicacao.portas import Linha
 from ....dominio import pontuacao
+from ....dominio.enderecos import slug
 from ....dominio.premiacao import BRONZE, MENCAO, OURO, PRATA
 from ....dominio.texto import normalizar
 
@@ -19,7 +20,8 @@ class Links:
         return f"{self.base}/api/v1/{rota}/{quote(ident, safe='')}{sufixo}"
 
     def site(self, pagina: str, ident: str) -> str:
-        return f"{self.base}/#/{pagina}/{quote(ident, safe='')}"
+        """Página do aluno ou da escola. Escolas: o servidor redireciona do slug do id para o endereço oficial."""
+        return f"{self.base}/{pagina}/{slug(ident)}"
 
 
 def consulta(params: dict) -> dict:

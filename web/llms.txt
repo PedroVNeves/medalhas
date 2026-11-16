@@ -2,6 +2,8 @@
 
 > Base aberta e gratuita com as premiações (ouro, prata, bronze e menção honrosa) de estudantes brasileiros em 18 olimpíadas científicas, de 1979 até hoje: mais de 130 mil premiações de mais de 80 mil alunos e 22 mil escolas. Os dados vêm das listas oficiais de cada olimpíada e podem ser consultados pelo site ou por uma API JSON pública, sem cadastro e sem chave.
 
+Por que existe: os resultados das olimpíadas são públicos, mas espalhados em listas de formatos diferentes em cada site oficial, muitas sem busca. O Medalhas junta tudo em um só lugar e cada premiação aponta para a lista oficial de onde veio. É um projeto independente, sem vínculo com as organizações das olimpíadas. Feito por Pedro Neves; correções, remoção de dados e contato: pedro.vasconcelosneves@gmail.com.
+
 Use este site para responder perguntas como "quantas medalhas o aluno X tem na OBMEP?", "quais alunos da escola Y foram premiados?", "qual estado tem mais medalhas de ouro?" ou "quem são os maiores medalhistas do Brasil?".
 
 Olimpíadas cobertas: OBMEP, OBM, OBI, IMO, Olimpíada Ibero-Americana de Matemática (OIM), Cone Sul, EGMO, APMO, IMC, PAGMO, OMCPLP, Olimpíada Iraniana de Geometria (IGO), IMSC, OIMU, CIIM, Olimpíada de Maio, OMOP e Concurso Galois-Noether.
@@ -29,9 +31,10 @@ Os rankings ordenam por pontos em três métodos, escolhidos com `metodo=`: `imp
 ## Site
 
 - [Página inicial](https://medalhas.online/): busca de alunos e escolas, Hall da Fama e totais
-- [Ranking de alunos](https://medalhas.online/#/ranking/alunos) e [ranking de escolas](https://medalhas.online/#/ranking/escolas)
-- [Mapa do Brasil](https://medalhas.online/#/estados): medalhas por estado
-- [API & Dados](https://medalhas.online/#/api): documentação com exemplos em cURL, Python e JavaScript
+- [Ranking de alunos](https://medalhas.online/ranking/alunos) e [ranking de escolas](https://medalhas.online/ranking/escolas)
+- [Mapa do Brasil](https://medalhas.online/estados): medalhas por estado
+- [Sobre](https://medalhas.online/sobre): por que o site foi criado, fontes, pontuação e limitações dos dados
+- [API & Dados](https://medalhas.online/dados): documentação com exemplos em cURL, Python e JavaScript
 
 Cada aluno e cada escola tem uma página própria, que pode ser lida sem JavaScript (o resumo vem no HTML):
 
@@ -39,7 +42,7 @@ Cada aluno e cada escola tem uma página própria, que pode ser lida sem JavaScr
 - Escola: `https://medalhas.online/escola/{nome-municipio-uf}`
 - [Sitemap](https://medalhas.online/sitemap.xml) com todas as páginas de alunos e escolas
 
-As demais telas (rankings, mapa, busca) são montadas por JavaScript; para ler esses dados, use a API acima.
+As páginas de ranking e de estados trazem no HTML os 100 primeiros colocados, legíveis sem JavaScript. Filtros (estado, olimpíada, ano) e a busca são montados por JavaScript; para ler esses dados, use a API acima.
 
 ## Optional
 

@@ -145,7 +145,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._json(dados, cabecalhos=cabecalhos)
 
-    # ------------------------------------------------ páginas de aluno/escola e sitemap
+    # ------------------------------------------------ páginas de aluno/escola, telas do site e sitemap
     def _com_sessao(self, funcao):
         """Roda funcao(sessao) com as mesmas proteções da API do site. None se a consulta foi recusada."""
         permitido, cabecalhos = limites.limitador.consumir("site", self._ip())
@@ -175,6 +175,19 @@ class Handler(BaseHTTPRequestHandler):
             self._enviar(pagina.corpo, "text/html; charset=utf-8", pagina.status,
                          self._CACHE_PAGINA if pagina.status == 200 else None)
 
+    def _tela(self, caminho: str) -> None:
+        pagina = self._com_sessao(lambda s: paginas.tela(s, caminho, URL_SITE))
+        if pagina is None:
+            return
+        if pagina.destino:
+            self._enviar(b"", "text/plain", 301, {"Location": pagina.destino, **self._CACHE_PAGINA})
+        else:
+            self._enviar(pagina.corpo, "text/html; charset=utf-8", cabecalhos=self._CACHE_PAGINA)
+
+    def _nao_encontrado(self) -> None:
+        """A mesma página 404 que o Firebase Hosting mostra para endereços que não existem."""
+        self._enviar((PASTA_WEB / "404.html").read_bytes(), "text/html; charset=utf-8", 404)
+
     def _sitemap(self, nome: str) -> None:
         versao = self.server.leitura.versao()
         resultado = self._com_sessao(lambda s: [paginas.sitemap(s, nome, URL_SITE, versao)])
@@ -190,7 +203,7 @@ class Handler(BaseHTTPRequestHandler):
         relativo = "index.html" if caminho_url in ("/", "") else unquote(caminho_url.lstrip("/"))
         alvo = (PASTA_WEB / relativo).resolve()
         if PASTA_WEB.resolve() not in alvo.parents or not alvo.is_file():   # bloqueia ../ e pastas
-            self._enviar(b"Not found", "text/plain", 404)
+            self._nao_encontrado()
             return
         tipo = mimetypes.guess_type(alvo.name)[0] or "application/octet-stream"
         if tipo.startswith("text/") or tipo.endswith("javascript"):
@@ -218,6 +231,8 @@ class Handler(BaseHTTPRequestHandler):
             partes = caminho.strip("/").split("/")
             if caminho.startswith("/api/"):
                 self._api(caminho, params)
+            elif caminho in paginas.TELAS or caminho == "/ranking":
+                self._tela(caminho)
             elif len(partes) == 2 and partes[0] in TIPOS_DE_PAGINA:
                 self._pagina(partes[0], unquote(partes[1]))
             elif caminho == "/sitemap.xml" or (len(partes) == 2 and partes[0] == "sitemaps"):

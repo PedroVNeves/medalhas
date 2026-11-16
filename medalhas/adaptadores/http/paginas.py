@@ -1,4 +1,4 @@
-"""Páginas com endereço próprio (/aluno/..., /escola/...) e o sitemap, para buscadores e IAs.
+"""Páginas com endereço próprio (/aluno/..., /escola/..., /ranking/..., /sobre...) e o sitemap, para buscadores e IAs.
 
 O site é montado no navegador (Alpine), a partir do mesmo index.html. Aqui o servidor entrega esse
 index.html já com título, descrição, endereço canônico e um resumo em texto do aluno ou da escola:
@@ -131,6 +131,112 @@ def _migalhas(base: str, nome: str, url: str) -> dict:
 
 # ---------------------------------------------------------------- páginas
 
+# Telas do site com endereço próprio além dos perfis. O título de cada uma também está em web/js/app.js
+# (TITULOS), que o troca ao navegar sem recarregar; o teste confere que os dois batem.
+SOBRE = "/sobre"
+CONTATO = "pedro.vasconcelosneves@gmail.com"
+MAX_RANKING_NO_RESUMO = 100
+UF_NOMES = {
+    "AC": "Acre", "AL": "Alagoas", "AM": "Amazonas", "AP": "Amapá", "BA": "Bahia", "CE": "Ceará",
+    "DF": "Distrito Federal", "ES": "Espírito Santo", "GO": "Goiás", "MA": "Maranhão", "MG": "Minas Gerais",
+    "MS": "Mato Grosso do Sul", "MT": "Mato Grosso", "PA": "Pará", "PB": "Paraíba", "PE": "Pernambuco",
+    "PI": "Piauí", "PR": "Paraná", "RJ": "Rio de Janeiro", "RN": "Rio Grande do Norte", "RO": "Rondônia",
+    "RR": "Roraima", "RS": "Rio Grande do Sul", "SC": "Santa Catarina", "SE": "Sergipe", "SP": "São Paulo",
+    "TO": "Tocantins"}
+
+
+@dataclass(frozen=True)
+class Tela:
+    titulo: str
+    descricao: str
+    indexar: bool = True
+
+
+TELAS = {
+    "/ranking/alunos": Tela(
+        "Ranking dos maiores medalhistas das olimpíadas do Brasil · Medalhas",
+        "Os alunos com mais medalhas na OBMEP, OBM, OBI, IMO e outras olimpíadas científicas, de 1979 até hoje. "
+        "Filtre por estado, olimpíada, nível, ano e rede de ensino."),
+    "/ranking/escolas": Tela(
+        "Ranking das escolas com mais medalhas em olimpíadas · Medalhas",
+        "As escolas brasileiras com mais alunos premiados na OBMEP, OBI e outras olimpíadas científicas. "
+        "Filtre por estado, olimpíada, ano e escola pública ou privada."),
+    "/ranking/estados": Tela(
+        "Ranking dos estados em medalhas nas olimpíadas · Medalhas",
+        "Quais estados do Brasil têm mais medalhas na OBMEP, OBM, OBI, IMO e outras olimpíadas científicas, "
+        "com alunos e escolas premiados em cada um."),
+    "/estados": Tela(
+        "Mapa das medalhas em olimpíadas por estado do Brasil · Medalhas",
+        "Mapa do Brasil com as medalhas de cada estado na OBMEP, OBM, OBI, IMO e outras olimpíadas científicas: "
+        "ouros, total de premiações, alunos e escolas."),
+    "/dados": Tela(
+        "API e dados abertos dos medalhistas das olimpíadas · Medalhas",
+        "Baixe as premiações da OBMEP, OBM, OBI, IMO e outras olimpíadas em CSV ou JSON, ou consulte pela API "
+        "pública, gratuita e sem cadastro."),
+    "/busca": Tela("Busca · Medalhas", "Busque alunos e escolas premiados em olimpíadas científicas.", indexar=False),
+    SOBRE: Tela(
+        "Sobre o Medalhas: por que reunimos os medalhistas das olimpíadas",
+        "Os resultados das olimpíadas científicas são públicos, mas espalhados e difíceis de achar. O Medalhas "
+        "reúne em um só lugar as premiações de estudantes brasileiros, com link para a fonte oficial."),
+}
+_TRECHO_SOBRE = re.compile(r"<!-- sobre:inicio -->(.*?)<!-- sobre:fim -->", re.S)
+
+
+def tela(sessao: SessaoDeLeitura, caminho: str, base: str) -> Pagina | None:
+    """Página de uma tela do site (caminho sem barra no fim). None se o caminho não é uma tela."""
+    if caminho == "/ranking":
+        return Pagina(301, destino="/ranking/alunos")
+    t = TELAS.get(caminho)
+    if not t:
+        return None
+    url = base + caminho
+    nome = t.titulo.split(" · ")[0].split(":")[0]
+    dados = {"@context": "https://schema.org", "@graph": [
+        {"@type": "AboutPage" if caminho == SOBRE else "WebPage", "@id": url, "url": url, "name": t.titulo,
+         "description": t.descricao, "inLanguage": "pt-BR", "isPartOf": {"@id": base + "/#site"}},
+        _migalhas(base, nome, url)]}
+    if caminho == SOBRE:
+        corpo = _resumo_sobre()
+    elif caminho.startswith("/ranking/"):
+        corpo = _resumo_ranking(sessao, caminho.rsplit("/", 1)[1], t)
+    elif caminho == "/estados":
+        corpo = _resumo_ranking(sessao, "estados", t)
+    else:
+        corpo = f"<h1>{html.escape(nome)}</h1><p>{html.escape(t.descricao)}</p>"
+    resumo = corpo + _rodape(base, base + "/api/v1")
+    return Pagina(200, _montar(t.titulo, t.descricao, url, dados if t.indexar else None, resumo, t.indexar))
+
+
+def _resumo_sobre() -> str:
+    """O texto da tela Sobre, tirado do index.html: um texto só para a tela e para quem não roda JavaScript."""
+    trecho = _TRECHO_SOBRE.search(_index())
+    if not trecho:
+        raise RuntimeError("index.html sem os marcadores sobre:inicio / sobre:fim esperados por paginas.py")
+    return trecho[1]
+
+
+def _resumo_ranking(sessao: SessaoDeLeitura, tipo: str, t: Tela) -> str:
+    e = html.escape
+    r = sessao.ranking({"tipo": tipo, "limite": MAX_RANKING_NO_RESUMO, "metodo": "impa"})
+    enderecos = sessao.enderecos()
+    linhas = []
+    for it in r["itens"]:
+        if tipo == "alunos":
+            nome = f'<a href="/aluno/{enderecos.de(ALUNO, it["id"])}">{e(it["nome"])}</a>'
+            lugar = ", ".join(p for p in (it.get("escola") and nome_de_exibicao(it["escola"]), it.get("uf")) if p)
+        elif tipo == "escolas":
+            nome = f'<a href="/escola/{enderecos.de(ESCOLA, it["id"])}">{e(nome_de_exibicao(it["nome"]))}</a>'
+            lugar = ", ".join(p for p in (it.get("municipio") and capitalizar_nome(it["municipio"]), it.get("uf")) if p)
+        else:
+            nome, lugar = e(UF_NOMES.get(it["id"], it["id"])), f"{it['alunos']} alunos, {it['escolas']} escolas"
+        linhas.append(f"<li>{nome}{' (' + e(lugar) + ')' if lugar else ''}: {e(_medalhas(it))}, "
+                      f"{it['xp']} pontos</li>")
+    titulo = e(t.titulo.split(" · ")[0])
+    return (f"<h1>{titulo}</h1><p>{e(t.descricao)}</p>"
+            f"<p>Os {len(linhas)} primeiros de {r['total']}, pela tabela de pontos do IMPA Tech "
+            f"(ouro 18, prata 6, bronze 2).</p><ol>{''.join(linhas)}</ol>")
+
+
 def perfil(sessao: SessaoDeLeitura, tipo: str, endereco: str, base: str) -> Pagina:
     """Página de um aluno ou escola. base: URL pública do site, sem barra no fim."""
     achado = sessao.enderecos().resolver(tipo, endereco)
@@ -226,7 +332,8 @@ def _gerar_sitemaps(sessao: SessaoDeLeitura, base: str) -> dict[str, bytes]:
         return ('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
                 f"{corpo}</urlset>\n").encode("utf-8")
 
-    arquivos = {"sitemaps/paginas.xml": urlset([base + "/"])}
+    telas = [base + c for c, t in TELAS.items() if t.indexar]
+    arquivos = {"sitemaps/paginas.xml": urlset([base + "/", *telas])}
     for tipo, plural in ((ALUNO, "alunos"), (ESCOLA, "escolas")):
         urls = [f"{base}/{tipo}/{e}" for e in enderecos.todos(tipo)]
         for i in range(0, len(urls), URLS_POR_SITEMAP):

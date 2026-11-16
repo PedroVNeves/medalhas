@@ -38,20 +38,17 @@
   ]
 }
 </script>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏅</text></svg>">
+<!-- arquivo próprio (não data:): o Google só mostra nos resultados da busca um ícone com endereço rastreável -->
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 
-<script src="https://cdn.tailwindcss.com"></script>
-<script>
-  tailwind.config = { theme: { extend: {
-    fontFamily: { sans: ["Inter", "system-ui", "sans-serif"], display: ["Space Grotesk", "Inter", "sans-serif"] },
-    colors: { ink: { 900: "#070a14", 800: "#0b0f1c", 700: "#0f1424", 600: "#151b2f" }, gold: { 300: "#ffe08a", 400: "#f5c542", 600: "#b8860b" } },
-  } } };
-</script>
 <link rel="stylesheet" href="/styles.css">
+<!-- classes do Tailwind, geradas no build (npm run css). Depois de styles.css, na mesma ordem de quando
+     vinham do CDN, para as mesmas regras continuarem valendo. -->
+<link rel="stylesheet" href="/css/site.css">
 
 <script defer src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
@@ -81,12 +78,18 @@
     <li>Medalhas de um aluno: <code>/api/v1/alunos?nome=NOME</code></li>
     <li>Medalhistas de uma escola: <code>/api/v1/escolas?nome=NOME</code></li>
   </ul>
+  <p>Páginas do site: <a href="/ranking/alunos" style="color:#f5c542">ranking de alunos</a>,
+    <a href="/ranking/escolas" style="color:#f5c542">ranking de escolas</a>,
+    <a href="/ranking/estados" style="color:#f5c542">ranking de estados</a>,
+    <a href="/estados" style="color:#f5c542">mapa por estado</a>,
+    <a href="/dados" style="color:#f5c542">API e dados abertos</a> e
+    <a href="/sobre" style="color:#f5c542">sobre o projeto</a>.</p>
 </main></noscript>
 
 <!-- ================================================================ NAV -->
 <header class="sticky top-0 z-40 border-b hairline bg-ink-900/70 backdrop-blur-xl">
   <div class="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6">
-    <a href="/#/" class="group flex flex-none items-center gap-2.5 whitespace-nowrap">
+    <a href="/" class="group flex flex-none items-center gap-2.5 whitespace-nowrap">
       <span class="coin lg !text-base">★</span>
       <span class="leading-tight">
         <span class="font-display block text-lg font-bold text-shine">Medalhas</span>
@@ -94,11 +97,11 @@
       </span>
     </a>
     <nav class="ml-2 hidden items-center gap-1 md:flex">
-      <a href="/#/" class="nav-link" :class="is('home') && 'active'">Início</a>
-      <a href="/#/ranking/alunos" class="nav-link" :class="is('ranking') && 'active'">Rankings</a>
-      <a href="/#/estados" class="nav-link" :class="is('estados') && 'active'">Estados</a>
-      <a href="/#/sobre" class="nav-link" :class="is('sobre') && 'active'">Como funciona</a>
-      <a href="/#/api" class="nav-link" :class="is('api') && 'active'">API &amp; Dados</a>
+      <a href="/" class="nav-link" :class="is('home') && 'active'">Início</a>
+      <a href="/ranking/alunos" class="nav-link" :class="is('ranking') && 'active'">Rankings</a>
+      <a href="/estados" class="nav-link" :class="is('estados') && 'active'">Estados</a>
+      <a href="/sobre" class="nav-link" :class="is('sobre') && 'active'">Sobre</a>
+      <a href="/dados" class="nav-link" :class="is('dados') && 'active'">API &amp; Dados</a>
     </nav>
     <!-- pontuação na mesma linha só a partir de xl: até 1280px, logo + links + estes botões não cabem juntos -->
     <div class="ml-auto hidden flex-none xl:block"><div class="seg flex-nowrap" title="Como os pontos são calculados em todo o site">
@@ -120,11 +123,11 @@
   </div>
   <!-- no celular: rótulos curtos para os 5 links caberem sem rolar; se ainda faltar espaço, quebram linha -->
   <nav class="flex flex-wrap gap-0.5 px-4 pb-2 min-[360px]:gap-1 sm:px-6 md:hidden">
-    <a href="/#/" class="nav-link" :class="is('home') && 'active'">Início</a>
-    <a href="/#/ranking/alunos" class="nav-link" :class="is('ranking') && 'active'">Rankings</a>
-    <a href="/#/estados" class="nav-link" :class="is('estados') && 'active'">Estados</a>
-    <a href="/#/sobre" class="nav-link" :class="is('sobre') && 'active'"><span class="sm:hidden">Sobre</span><span class="hidden sm:inline">Como funciona</span></a>
-    <a href="/#/api" class="nav-link" :class="is('api') && 'active'"><span class="sm:hidden">API</span><span class="hidden sm:inline">API &amp; Dados</span></a>
+    <a href="/" class="nav-link" :class="is('home') && 'active'">Início</a>
+    <a href="/ranking/alunos" class="nav-link" :class="is('ranking') && 'active'">Rankings</a>
+    <a href="/estados" class="nav-link" :class="is('estados') && 'active'">Estados</a>
+    <a href="/sobre" class="nav-link" :class="is('sobre') && 'active'">Sobre</a>
+    <a href="/dados" class="nav-link" :class="is('dados') && 'active'"><span class="sm:hidden">API</span><span class="hidden sm:inline">API &amp; Dados</span></a>
   </nav>
   <div class="flex items-center gap-2 px-4 pb-2 sm:px-6 xl:hidden"><span class="hidden text-[11px] font-semibold uppercase tracking-wider text-slate-500 min-[360px]:inline">Pontuação</span><div class="seg" title="Como os pontos são calculados em todo o site">
       <template x-for="m in ov?.metodos || []" :key="m.id">
@@ -136,6 +139,19 @@
 </header>
 
 <main class="mx-auto max-w-7xl px-4 pb-24 sm:px-6">
+
+<!-- ================================================================ NÃO ENCONTRADA -->
+<section x-show="naoEncontrada" x-cloak class="fade-in pt-16">
+  <div class="glass card mx-auto max-w-xl p-10 text-center">
+    <p class="font-display text-6xl font-bold text-gold-grad">404</p>
+    <h1 class="font-display mt-3 text-2xl font-bold">Página não encontrada</h1>
+    <p class="mt-2 text-slate-400">Este endereço não existe no Medalhas. Busque um aluno ou escola pela página inicial.</p>
+    <div class="mt-6 flex flex-wrap justify-center gap-2">
+      <a href="/" class="btn btn-gold"><i x-icon="'search'" class="h-4 w-4"></i>Ir para a busca</a>
+      <a href="/ranking/alunos" class="btn"><i x-icon="'trophy'" class="h-4 w-4"></i>Rankings</a>
+    </div>
+  </div>
+</section>
 
 <!-- ================================================================ HOME -->
 <section x-show="is('home')" x-cloak class="fade-in">
@@ -167,9 +183,9 @@
         </div>
       </div>
       <div class="mt-4 flex flex-wrap gap-2 text-sm">
-        <a href="/#/ranking/alunos" class="inline-flex items-center gap-1.5 rounded-full border hairline bg-white/5 px-3 py-1.5 text-slate-300 hover:border-gold-400/40 hover:text-white"><i x-icon="'trophy'" class="h-4 w-4 text-gold-400"></i>Ranking de alunos</a>
-        <a href="/#/ranking/escolas" class="inline-flex items-center gap-1.5 rounded-full border hairline bg-white/5 px-3 py-1.5 text-slate-300 hover:border-gold-400/40 hover:text-white"><i x-icon="'school'" class="h-4 w-4 text-indigo-300"></i>Melhores escolas</a>
-        <a href="/#/estados" class="inline-flex items-center gap-1.5 rounded-full border hairline bg-white/5 px-3 py-1.5 text-slate-300 hover:border-gold-400/40 hover:text-white"><i x-icon="'map'" class="h-4 w-4 text-pink-300"></i>Mapa do Brasil</a>
+        <a href="/ranking/alunos" class="inline-flex items-center gap-1.5 rounded-full border hairline bg-white/5 px-3 py-1.5 text-slate-300 hover:border-gold-400/40 hover:text-white"><i x-icon="'trophy'" class="h-4 w-4 text-gold-400"></i>Ranking de alunos</a>
+        <a href="/ranking/escolas" class="inline-flex items-center gap-1.5 rounded-full border hairline bg-white/5 px-3 py-1.5 text-slate-300 hover:border-gold-400/40 hover:text-white"><i x-icon="'school'" class="h-4 w-4 text-indigo-300"></i>Melhores escolas</a>
+        <a href="/estados" class="inline-flex items-center gap-1.5 rounded-full border hairline bg-white/5 px-3 py-1.5 text-slate-300 hover:border-gold-400/40 hover:text-white"><i x-icon="'map'" class="h-4 w-4 text-pink-300"></i>Mapa do Brasil</a>
       </div>
     </div>
 
@@ -177,7 +193,7 @@
     <div class="glass card relative overflow-hidden p-6">
       <div class="mb-1 flex items-center justify-between">
         <h2 class="font-display text-sm font-semibold uppercase tracking-[.18em] text-slate-400">Hall da Fama</h2>
-        <a href="/#/ranking/alunos" class="text-xs text-slate-400 hover:text-gold-300">ver ranking →</a>
+        <a href="/ranking/alunos" class="text-xs text-slate-400 hover:text-gold-300">ver ranking →</a>
       </div>
       <p class="mb-6 text-xs text-slate-500">Maiores pontuações de todos os tempos</p>
       <div class="grid grid-cols-3 items-end gap-3" x-show="podio.length">
@@ -222,7 +238,7 @@
     <div class="glass card p-5">
       <div class="mb-3 flex items-center justify-between">
         <h3 class="font-display flex items-center gap-2 text-lg font-semibold"><i x-icon="'flame'" class="h-5 w-5 text-orange-400"></i>Top 10 alunos</h3>
-        <a href="/#/ranking/alunos" class="text-xs text-slate-400 hover:text-gold-300">ranking completo →</a>
+        <a href="/ranking/alunos" class="text-xs text-slate-400 hover:text-gold-300">ranking completo →</a>
       </div>
       <ol class="stagger divide-y divide-white/5">
         <template x-for="a in ov?.top_alunos || []" :key="a.id">
@@ -244,7 +260,7 @@
     <div class="glass card p-5">
       <div class="mb-3 flex items-center justify-between">
         <h3 class="font-display flex items-center gap-2 text-lg font-semibold"><i x-icon="'landmark'" class="h-5 w-5 text-indigo-300"></i>Top 10 escolas</h3>
-        <a href="/#/ranking/escolas" class="text-xs text-slate-400 hover:text-gold-300">ranking completo →</a>
+        <a href="/ranking/escolas" class="text-xs text-slate-400 hover:text-gold-300">ranking completo →</a>
       </div>
       <ol class="stagger divide-y divide-white/5">
         <template x-for="e in ov?.top_escolas || []" :key="e.id">
@@ -326,7 +342,7 @@
       <button class="menu-item" @click="aberto = false; baixar(exportBusca, 'csv')"><i x-icon="'file-spreadsheet'"></i><span>CSV<small>planilhas, Python, R</small></span></button>
       <button class="menu-item" @click="aberto = false; baixar(exportBusca, 'excel')"><i x-icon="'sheet'"></i><span>Excel<small>CSV com ; para o Excel em português</small></span></button>
       <button class="menu-item" @click="aberto = false; baixar(exportBusca, 'json')"><i x-icon="'braces'"></i><span>JSON<small>para programas</small></span></button>
-      <a href="/#/api" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
+      <a href="/dados" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
     </div>
   </div>
       </template>
@@ -375,7 +391,7 @@
     </select>
     <button x-show="buscaFiltrosAtivos" @click="limparBuscaFiltros()" class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-400 hover:text-white"><i x-icon="'x'" class="h-3.5 w-3.5"></i>limpar filtros</button>
     <span x-show="route.query.escola_chave" class="inline-flex items-center gap-1 rounded-full border border-indigo-400/30 bg-indigo-400/10 px-2 py-0.5 text-xs text-indigo-200">só esta escola
-      <button @click="go(`#/busca?${new URLSearchParams({q, campo})}`)" class="hover:text-white" title="Remover"><i x-icon="'x'" class="h-3 w-3"></i></button></span>
+      <button @click="go(`/busca?${new URLSearchParams({q, campo})}`)" class="hover:text-white" title="Remover"><i x-icon="'x'" class="h-3 w-3"></i></button></span>
 
     <div x-show="impa3" class="filtros-fixo flex w-full items-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-200">
       <i x-icon="'lock'" class="h-3.5 w-3.5 flex-none"></i>
@@ -453,7 +469,7 @@
       <button class="menu-item" @click="aberto = false; baixar(exportRanking('premiacoes'), 'csv')"><i x-icon="'file-spreadsheet'"></i><span>CSV<small>planilhas, Python, R</small></span></button>
       <button class="menu-item" @click="aberto = false; baixar(exportRanking('premiacoes'), 'excel')"><i x-icon="'sheet'"></i><span>Excel<small>CSV com ; para o Excel em português</small></span></button>
       <button class="menu-item" @click="aberto = false; baixar(exportRanking('premiacoes'), 'json')"><i x-icon="'braces'"></i><span>JSON<small>para programas</small></span></button>
-      <a href="/#/api" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
+      <a href="/dados" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
     </div>
   </div>
   </div>
@@ -683,7 +699,7 @@
       <button class="menu-item" @click="aberto = false; baixar({ aluno_id: aluno.id }, 'csv')"><i x-icon="'file-spreadsheet'"></i><span>CSV<small>planilhas, Python, R</small></span></button>
       <button class="menu-item" @click="aberto = false; baixar({ aluno_id: aluno.id }, 'excel')"><i x-icon="'sheet'"></i><span>Excel<small>CSV com ; para o Excel em português</small></span></button>
       <button class="menu-item" @click="aberto = false; baixar({ aluno_id: aluno.id }, 'json')"><i x-icon="'braces'"></i><span>JSON<small>para programas</small></span></button>
-      <a href="/#/api" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
+      <a href="/dados" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
     </div>
   </div>
       </div>
@@ -838,7 +854,7 @@
       <button class="menu-item" @click="aberto = false; baixar({ escola_id: escola.id }, 'csv')"><i x-icon="'file-spreadsheet'"></i><span>CSV<small>planilhas, Python, R</small></span></button>
       <button class="menu-item" @click="aberto = false; baixar({ escola_id: escola.id }, 'excel')"><i x-icon="'sheet'"></i><span>Excel<small>CSV com ; para o Excel em português</small></span></button>
       <button class="menu-item" @click="aberto = false; baixar({ escola_id: escola.id }, 'json')"><i x-icon="'braces'"></i><span>JSON<small>para programas</small></span></button>
-      <a href="/#/api" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
+      <a href="/dados" class="menu-rodape" @click="aberto = false"><i x-icon="'code'" class="h-3.5 w-3.5"></i>Acessar pela API</a>
     </div>
   </div>
       </div>
@@ -931,7 +947,7 @@
               </a></li>
             </template>
           </ol>
-          <a :href="`/#/busca?${new URLSearchParams({q: escola.nome, campo: 'escola', escola_chave: escola.id})}`" class="mt-3 block text-xs text-gold-300">ver todas as premiações (com filtros) →</a>
+          <a :href="`/busca?${new URLSearchParams({q: escola.nome, campo: 'escola', escola_chave: escola.id})}`" class="mt-3 block text-xs text-gold-300">ver todas as premiações (com filtros) →</a>
         </div>
         <div class="glass card p-5">
           <h3 class="font-display mb-4 flex items-center gap-2 text-lg font-semibold"><i x-icon="'sparkles'" class="h-5 w-5 text-gold-400"></i>Conquistas da escola <span class="text-sm font-normal text-slate-500" x-text="`${desbloqueadas(escola.conquistas)}/${escola.conquistas.length}`"></span></h3>
@@ -960,8 +976,96 @@
 
 <!-- ================================================================ SOBRE -->
 <section x-show="is('sobre')" x-cloak class="fade-in pt-10">
-  <p class="text-sm font-medium uppercase tracking-[.18em] text-gold-400">Regras do jogo</p>
-  <h1 class="font-display text-4xl font-bold">Como funciona</h1>
+  <!-- o trecho entre sobre:inicio e sobre:fim também vai, como texto, para quem não roda JavaScript em /sobre
+       (paginas.py). Só texto fixo aqui dentro: x-text não roda nesse resumo. -->
+  <!-- sobre:inicio -->
+  <div class="max-w-3xl">
+    <p class="text-sm font-medium uppercase tracking-[.18em] text-gold-400">Sobre o projeto</p>
+    <h1 class="font-display mt-1 text-4xl font-bold sm:text-5xl">Por que o Medalhas existe</h1>
+    <p class="mt-5 text-lg text-slate-300">O Medalhas nasceu de uma dificuldade simples: descobrir quem ganhou medalha
+      nas olimpíadas de conhecimento do Brasil dá muito trabalho.</p>
+    <p class="mt-4 text-slate-400">Os resultados são públicos, mas estão espalhados e são difíceis de achar na internet. Cada
+      olimpíada publica suas listas do seu jeito: a OBMEP em relatórios separados por ano, nível e medalha; a OBM em
+      páginas anuais; a OBI em quadros de mérito por modalidade; a IMO no site internacional; e as competições
+      internacionais em páginas avulsas. Muitas listas antigas não têm busca, mudam de endereço e não conversam entre si.</p>
+    <p class="mt-4 text-slate-400">Na prática, perguntas simples, como <i>quantas medalhas este aluno ganhou ao longo dos
+      anos?</i>, <i>quais alunos desta escola já foram premiados?</i> ou <i>qual estado mais se destaca?</i>, exigiam
+      abrir dezenas de páginas e juntar tudo à mão.</p>
+    <p class="mt-4 text-slate-300">O Medalhas reúne tudo em um só lugar: lê as listas oficiais de cada olimpíada, junta as
+      premiações de cada aluno e de cada escola e deixa tudo pesquisável, com rankings, mapa por estado e os dados
+      abertos para quem quiser analisar.</p>
+  </div>
+
+  <div class="mt-10 grid gap-4 md:grid-cols-3">
+    <div class="glass card p-5">
+      <div class="flex items-center gap-2 font-semibold text-white"><i x-icon="'graduation-cap'" class="h-5 w-5 text-gold-400"></i>Estudantes e famílias</div>
+      <p class="mt-2 text-sm text-slate-400">Encontre o histórico completo de premiações em uma página só, fácil de
+        compartilhar e de conferir, inclusive em processos seletivos que contam medalhas, como o do IMPA Tech.</p>
+    </div>
+    <div class="glass card p-5">
+      <div class="flex items-center gap-2 font-semibold text-white"><i x-icon="'school'" class="h-5 w-5 text-indigo-300"></i>Professores e escolas</div>
+      <p class="mt-2 text-sm text-slate-400">Veja todos os alunos premiados de uma escola, ano a ano, e reconheça quem
+        levou o nome da escola e da cidade às olimpíadas.</p>
+    </div>
+    <div class="glass card p-5">
+      <div class="flex items-center gap-2 font-semibold text-white"><i x-icon="'chart-column'" class="h-5 w-5 text-pink-300"></i>Pesquisadores e jornalistas</div>
+      <p class="mt-2 text-sm text-slate-400">Baixe os dados em CSV ou JSON, ou consulte pela API pública, sem cadastro,
+        para estudar o desempenho de escolas, cidades e estados ao longo das décadas.</p>
+    </div>
+  </div>
+
+  <div class="glass card mt-4 p-6">
+    <h2 class="font-display text-lg font-semibold text-white">Nossos princípios</h2>
+    <ul class="mt-3 grid gap-4 text-sm text-slate-400 md:grid-cols-3">
+      <li><b class="text-slate-200">Fonte oficial sempre.</b> Toda premiação traz o link da página oficial onde foi
+        publicada, para qualquer pessoa conferir.</li>
+      <li><b class="text-slate-200">Gratuito e aberto.</b> Busca, rankings, exportação e API são livres, sem cadastro e
+        sem chave.</li>
+      <li><b class="text-slate-200">Sempre atualizado.</b> Novas edições são encontradas nas páginas de cada olimpíada e
+        entram na base sem esperar ninguém digitar nada.</li>
+    </ul>
+    <p class="mt-5 border-t hairline pt-4 text-xs text-slate-500">O Medalhas é um projeto independente, sem vínculo com a
+      OBMEP, a OBM, a OBI, a IMO, o IMPA ou as demais organizações das olimpíadas. As informações vêm das listas
+      publicadas por elas; em caso de diferença, vale a fonte oficial.</p>
+  </div>
+
+  <div class="mt-4 grid gap-4 md:grid-cols-2">
+    <div class="glass card p-6">
+      <h2 class="font-display flex items-center gap-2 text-lg font-semibold text-white"><i x-icon="'user'" class="h-5 w-5 text-gold-400"></i>Quem faz o Medalhas</h2>
+      <p class="mt-3 text-sm text-slate-400">O Medalhas é feito por <b class="text-slate-200">Pedro Neves</b>, que
+        criou o site para tornar fácil de encontrar o que estudantes de todo o Brasil conquistaram nas olimpíadas
+        de conhecimento. É um projeto pessoal e independente.</p>
+    </div>
+    <div id="contato" class="glass card p-6">
+      <h2 class="font-display flex items-center gap-2 text-lg font-semibold text-white"><i x-icon="'mail'" class="h-5 w-5 text-gold-400"></i>Contato, correções e remoção</h2>
+      <p class="mt-3 text-sm text-slate-400">Achou um dado errado, um nome duplicado ou quer que uma premiação sua
+        seja retirada do site? Escreva para
+        <a class="link" href="mailto:pedro.vasconcelosneves@gmail.com?subject=Medalhas%3A%20corre%C3%A7%C3%A3o%20ou%20remo%C3%A7%C3%A3o">pedro.vasconcelosneves@gmail.com</a>
+        com o endereço da página (por exemplo, medalhas.online/aluno/...) e o que precisa mudar. Sugestões e
+        outros contatos também são bem-vindos.</p>
+    </div>
+  </div>
+  <!-- sobre:fim -->
+
+  <div class="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4" x-show="ov">
+    <template x-for="s in ov ? [
+        {l:'Premiações reunidas', v: fmt(ov.totais.total)},
+        {l:'Olimpíadas', v: ov.olimpiadas.length},
+        {l:'Alunos premiados', v: fmt(ov.totais.alunos)},
+        {l:'Anos de história', v: `${ov.totais.de}–${ov.totais.ate}`}] : []" :key="s.l">
+      <div class="glass card p-5">
+        <div class="text-xs font-medium uppercase tracking-wider text-slate-400" x-text="s.l"></div>
+        <div class="font-display tabular mt-1 text-2xl font-bold text-gold-300 sm:text-3xl" x-text="s.v"></div>
+      </div>
+    </template>
+  </div>
+  <div class="mt-6 flex flex-wrap gap-2 text-sm">
+    <a href="/" class="btn btn-gold"><i x-icon="'search'" class="h-4 w-4"></i>Buscar um aluno ou escola</a>
+    <a href="/dados" class="btn"><i x-icon="'download'" class="h-4 w-4"></i>Dados abertos e API</a>
+  </div>
+
+  <p class="mt-16 text-sm font-medium uppercase tracking-[.18em] text-gold-400">Regras do jogo</p>
+  <h2 id="como-funciona" class="font-display text-3xl font-bold sm:text-4xl">Como funciona</h2>
   <div class="mt-8 grid gap-6 lg:grid-cols-2">
     <div class="glass card p-6">
       <h3 class="font-display mb-2 text-lg font-semibold">Métodos de pontuação</h3>
@@ -1051,7 +1155,7 @@
 </section>
 
 <!-- ================================================================ API & DADOS -->
-<section x-show="is('api')" x-cloak class="fade-in pt-10">
+<section x-show="is('dados')" x-cloak class="fade-in pt-10">
   <p class="text-sm font-medium uppercase tracking-[.18em] text-gold-400">Para desenvolvedores e pesquisadores</p>
   <h1 class="font-display text-4xl font-bold">API &amp; Dados</h1>
   <p class="mt-3 max-w-3xl text-slate-300">
@@ -1279,9 +1383,11 @@
 
 </main>
 
-<footer class="border-t hairline py-8 text-center text-xs text-slate-500">
-  Dados públicos das olimpíadas científicas · cada premiação aponta para a fonte oficial ·
-  <a href="/#/api" class="link">API &amp; dados abertos</a>
+<footer class="border-t hairline px-4 py-8 text-center text-xs text-slate-500">
+  <p>Dados públicos das olimpíadas científicas · cada premiação aponta para a fonte oficial ·
+    <a href="/sobre" class="link">Sobre o projeto</a> · <a href="/dados" class="link">API &amp; dados abertos</a> ·
+    <a href="/sobre#contato" class="link">Contato e correções</a></p>
+  <p class="mt-1">Projeto independente, sem vínculo com as organizações das olimpíadas.</p>
 </footer>
 
 <!-- aviso flutuante -->

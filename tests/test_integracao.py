@@ -208,6 +208,63 @@ class TestPontaAPonta(unittest.TestCase):
         alunos = self.get("/sitemaps/alunos-1.xml")[2].decode()
         self.assertIn("<loc>https://medalhas.online/aluno/maria-souza-lima-al</loc>", alunos)
         self.assertEqual(self.get("/sitemaps/nada.xml")[0], 404)
+        self.assertIn("<loc>https://medalhas.online/sobre</loc>", self.get("/sitemaps/paginas.xml")[2].decode())
+
+    def test_pagina_sobre(self):
+        status, cab, corpo = self.get("/sobre")
+        self.assertEqual(status, 200)
+        pagina = corpo.decode()
+        self.assertIn("<title>Sobre o Medalhas: por que reunimos os medalhistas das olimpíadas</title>", pagina)
+        self.assertIn('<link rel="canonical" href="https://medalhas.online/sobre">', pagina)
+        self.assertIn('"@type": "AboutPage"', pagina)
+        resumo = re.search(r"<noscript>(.*?)</noscript>", pagina, re.S)[1]   # o texto da tela, sem JavaScript
+        self.assertIn("Por que o Medalhas existe", resumo)
+        self.assertIn("projeto independente", resumo)
+        self.assertIn("mailto:", resumo)                                     # contato para correção e remoção
+        self.assertNotIn("x-text", resumo)
+        self.assertIn("s-maxage", cab["Cache-Control"])
+
+    def test_telas_com_endereco_proprio(self):
+        status, _, corpo = self.get("/ranking/alunos")
+        self.assertEqual(status, 200)
+        pagina = corpo.decode()
+        self.assertIn('<link rel="canonical" href="https://medalhas.online/ranking/alunos">', pagina)
+        self.assertIn('<a href="/aluno/maria-souza-lima-al">Maria Souza Lima</a>', pagina)   # ranking sem JavaScript
+        self.assertIn("Alagoas", self.get("/ranking/estados")[2].decode())
+        self.assertIn("/escola/", self.get("/ranking/escolas")[2].decode())
+        self.assertIn('content="noindex"', self.get("/busca?q=ana")[2].decode())   # resultado de busca fica fora
+        self.assertEqual(self.get("/dados/")[0], 200)                               # barra no fim também vale
+        status, cab = self.sem_redirecionar("/ranking")
+        self.assertEqual((status, cab["Location"]), (301, "/ranking/alunos"))
+        sitemap = self.get("/sitemaps/paginas.xml")[2].decode()
+        self.assertIn("<loc>https://medalhas.online/ranking/escolas</loc>", sitemap)
+        self.assertNotIn("/busca", sitemap)
+
+    def test_titulos_do_site_iguais_aos_do_servidor(self):
+        from medalhas.adaptadores.http.paginas import TELAS
+        app_js = (Path(__file__).parent.parent / "web" / "js" / "app.js").read_text(encoding="utf-8")
+        for caminho, tela in TELAS.items():
+            self.assertIn(f'"{caminho}": "{tela.titulo}"', app_js)
+
+    def test_links_da_api_para_o_site_usam_o_endereco_real(self):
+        aluno = self.json("/api/v1/alunos?nome=maria+souza")["alunos"][0]
+        self.assertEqual(aluno["perfil"], f"{self.base}/aluno/maria-souza-lima-al")
+
+    def test_endereco_inexistente(self):
+        status, cab, corpo = self.get("/nada/aqui")
+        self.assertEqual(status, 404)
+        self.assertIn("Página não encontrada", corpo.decode())
+        self.assertIn('content="noindex"', corpo.decode())
+        self.assertEqual(self.get("/ranking/planetas")[0], 404)
+
+    def test_css_gerado_no_build(self):
+        web = Path(__file__).parent.parent / "web"
+        css = (web / "css" / "site.css").read_text(encoding="utf-8")
+        self.assertIn(".bg-ink-900", css)   # cor própria do tema: o CSS veio da nossa configuração
+        for pagina in ("index.html", "404.html"):
+            html = (web / pagina).read_text(encoding="utf-8")
+            self.assertIn('href="/css/site.css"', html)
+            self.assertNotIn("cdn.tailwindcss.com", html)
 
 
 if __name__ == "__main__":

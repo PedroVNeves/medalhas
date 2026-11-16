@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Firebase Hosting mostra esta página (com status 404) em endereços que não existem; o servidor Python também -->
+<title>Página não encontrada · Medalhas</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#070a14">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/css/site.css">
+</head>
+<body class="min-h-screen overflow-x-clip antialiased">
+<div class="aurora"></div><div class="grid-bg"></div>
+
+<header class="border-b hairline bg-ink-900/70">
+  <div class="mx-auto flex max-w-7xl items-center px-4 py-3 sm:px-6">
+    <a href="/" class="flex items-center gap-2.5 whitespace-nowrap">
+      <span class="coin lg !text-base">★</span>
+      <span class="leading-tight">
+        <span class="font-display block text-lg font-bold text-shine">Medalhas</span>
+        <span class="block text-[10px] font-semibold uppercase tracking-[.2em] text-slate-500">Olimpíadas · Brasil</span>
+      </span>
+    </a>
+  </div>
+</header>
+
+<main class="mx-auto max-w-xl px-4 pb-24 pt-16 sm:px-6">
+  <div class="glass card p-8 text-center sm:p-10">
+    <p class="font-display text-6xl font-bold text-gold-grad">404</p>
+    <h1 class="font-display mt-3 text-2xl font-bold">Página não encontrada</h1>
+    <p class="mt-2 text-slate-400">Este endereço não existe no Medalhas. Talvez o link esteja incompleto ou a página
+      tenha mudado de lugar. Tente buscar o aluno ou a escola:</p>
+
+    <form action="/busca" method="get" class="search-shell mt-6 flex gap-2 p-2 text-left">
+      <input type="hidden" name="campo" value="tudo">
+      <input name="q" type="search" required minlength="2" enterkeyhint="search" placeholder="Nome, escola ou cidade…" aria-label="Buscar"
+        class="min-w-0 flex-1 bg-transparent px-3 py-2.5 placeholder:text-slate-500 focus:outline-none">
+      <button class="btn btn-gold justify-center !px-4">Buscar</button>
+    </form>
+
+    <nav class="mt-6 flex flex-wrap justify-center gap-2 text-sm">
+      <a href="/" class="btn">Página inicial</a>
+      <a href="/ranking/alunos" class="btn">Ranking de alunos</a>
+      <a href="/ranking/escolas" class="btn">Ranking de escolas</a>
+      <a href="/estados" class="btn">Mapa do Brasil</a>
+    </nav>
+    <p class="mt-6 text-xs text-slate-500">Chegou aqui por um link do próprio site? Avise em
+      <a class="link" href="mailto:pedro.vasconcelosneves@gmail.com?subject=Medalhas%3A%20link%20quebrado">pedro.vasconcelosneves@gmail.com</a>.</p>
+  </div>
+</main>
+</body>
+</html>

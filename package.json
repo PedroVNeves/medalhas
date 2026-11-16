@@ -1,0 +1,12 @@
+{
+  "name": "medalhas-web",
+  "private": true,
+  "description": "Só para gerar o CSS do site (web/css/site.css). O servidor é Python e não precisa de Node.",
+  "scripts": {
+    "css": "tailwindcss -c tailwind.config.js -i web/css/entrada.css -o web/css/site.css --minify",
+    "css:watch": "tailwindcss -c tailwind.config.js -i web/css/entrada.css -o web/css/site.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "3.4.19"
+  }
+}

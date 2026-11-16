@@ -39,7 +39,7 @@ def indice(s: SessaoDeLeitura, pedido: Pedido) -> dict:
     return {
         "nome": "Medalhas API", "versao": VERSAO, "atualizado_em": base["atualizado_em"],
         "premiacoes": base["premiacoes"],
-        "documentacao": f"{b}/#/api", "openapi": f"{b}/api/v1/openapi.json",
+        "documentacao": f"{b}/dados", "openapi": f"{b}/api/v1/openapi.json",
         "rotas": {
             "GET /api/v1/alunos?nome=": "busca alunos pelo nome",
             "GET /api/v1/alunos/{id}": "um aluno e todas as premiações dele",

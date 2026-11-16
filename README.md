@@ -47,8 +47,16 @@ e **Canguru** (não publica lista pública de premiados).
 
 ## O site
 
-Página única servida pelo `server.py`, sem etapa de build (Tailwind, Alpine.js, ECharts, Lucide e
-canvas-confetti via CDN):
+Página única servida pelo `server.py` (Alpine.js, ECharts, Lucide e canvas-confetti via CDN). O CSS do
+Tailwind é gerado de antemão em `web/css/site.css`, que fica no repositório: para rodar o site basta o
+Python. Só quem muda classes no HTML/JS precisa do Node:
+
+```bash
+npm install          # uma vez: instala o Tailwind (só para gerar o CSS)
+npm run css          # gera web/css/site.css (o `firebase deploy` também roda isso antes de publicar)
+npm run css:watch    # regera a cada mudança enquanto você edita
+```
+
 
 - **Busca** por pessoa, escola (com siglas) ou tudo, com link para a fonte oficial de cada premiação.
 - **Rankings** de alunos, escolas e estados, filtráveis por UF, olimpíada, período, nível e rede, ordenados
@@ -62,12 +70,17 @@ canvas-confetti via CDN):
 
 Cada aluno e cada escola tem endereço próprio, que o Google indexa: `/aluno/maria-souza-lima-al` (o id
 `NOME|UF` em forma de slug) e `/escola/em-benedita-braga-cobra-borda-da-mata-mg` (nome de exibição +
-município + UF; ver `dominio/enderecos.py`). As outras telas ficam depois do `#` na página inicial
-(`/#/ranking/alunos`, `/#/busca?q=...`), e links antigos como `#/aluno/NOME%7CUF` continuam funcionando.
+município + UF; ver `dominio/enderecos.py`). As outras telas também: `/ranking/alunos`, `/ranking/escolas`,
+`/ranking/estados`, `/estados`, `/dados` (API & Dados), `/sobre` e `/busca?q=...` (esta fora do Google).
+Links antigos com `#` (`/#/ranking/alunos`, `#/aluno/NOME%7CUF`, `#/api`) continuam funcionando: o site
+troca pelo endereço novo.
 
-- Ao abrir `/aluno/...` ou `/escola/...`, o servidor (`adaptadores/http/paginas.py`) entrega o mesmo
-  `index.html` com título, descrição, endereço canônico e um resumo em texto do perfil (em `<noscript>`,
-  para robôs de IA que não rodam JavaScript). No site, a troca de página acontece sem recarregar.
+- Ao abrir qualquer um desses endereços, o servidor (`adaptadores/http/paginas.py`) entrega o mesmo
+  `index.html` com título, descrição, endereço canônico e um resumo em texto (em `<noscript>`, para robôs
+  de IA que não rodam JavaScript): o perfil, os 100 primeiros do ranking, ou o texto do Sobre (o trecho
+  entre `sobre:inicio` e `sobre:fim` do `index.html`). No site, a troca de página acontece sem recarregar.
+  Os títulos de cada tela estão em `paginas.py` (`TELAS`) e em `web/js/app.js` (`TITULOS`).
+- Endereço que não existe mostra `web/404.html` (o Firebase Hosting e o servidor Python, com status 404).
 - O site monta os links de escola pelo id (`slug()` em `web/js/util.js`, cópia do Python); o servidor
   redireciona esse endereço para o oficial, e o site troca o da barra quando o perfil carrega.
 - `/sitemap.xml` lista todas as páginas (um arquivo a cada 40 mil endereços em `/sitemaps/`).
@@ -141,7 +154,7 @@ base; rankings filtrados são agregados na hora e ficam em cache na memória.
 
 Acesso livre, sem cadastro e sem chave. Respostas em JSON (UTF-8) e CORS liberado, então a API pode ser
 chamada de outro site, de um script ou de uma planilha. A documentação completa, com exemplos em cURL,
-Python e JavaScript e um botão para testar cada rota, está na página **API & Dados** do site (`#/api`).
+Python e JavaScript e um botão para testar cada rota, está na página **API & Dados** do site (`/dados`).
 A especificação [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) fica em `/api/v1/openapi.json`, para
 importar no Postman, Insomnia ou Swagger Editor.
 
@@ -252,12 +265,13 @@ por IP:
 
 ```
 visitante -> medalhas.online (Firebase Hosting: HTTPS, CDN, arquivos de web/)
-                 └── /api/**, /aluno/**, /escola/**, /sitemap.xml, /sitemaps/**
+                 └── /api/**, /aluno/**, /escola/**, /ranking/**, /estados, /dados, /busca, /sobre,
+                     /sitemap.xml, /sitemaps/**
                        ->  Cloud Run "medalhas" (server.py + data/medalhas.db dentro da imagem)
 ```
 
 - `Dockerfile`: imagem do servidor; a base vai dentro dela (só leitura). `.gcloudignore` define o que sobe.
-- `firebase.json`: publica `web/` e repassa a API, as páginas de perfil e o sitemap ao Cloud Run em
+- `firebase.json`: publica `web/` e repassa a API, as telas com endereço próprio e o sitemap ao Cloud Run em
   `southamerica-east1` (São Paulo).
 - O servidor roda com `--trust-proxy`: lê o IP do visitante em `X-Forwarded-For` e o domínio em
   `X-Forwarded-Host` (para os links da API apontarem para o seu domínio).
@@ -284,7 +298,8 @@ firebase deploy --only hosting
 Rode sempre os dois comandos, nessa ordem: `/api/overview` (dados da página inicial) e as páginas de
 aluno e escola ficam até um dia no CDN do Firebase Hosting, e é o `firebase deploy` que limpa esse cache.
 Sem ele, o site continuaria mostrando os números antigos. As páginas de perfil saem do `index.html` que
-está dentro da imagem do Cloud Run: mudou o `index.html`, publique os dois.
+está dentro da imagem do Cloud Run: mudou o `index.html`, publique os dois. O `firebase deploy` roda
+`npm run css` antes de publicar (`predeploy` no `firebase.json`), então precisa do `npm install` feito.
 
 `--max-instances` limita o custo: cada instância tem seus próprios contadores de limite por IP.
 Sem tráfego o Cloud Run desliga (custo zero, primeira visita depois disso demora alguns segundos).
@@ -335,10 +350,12 @@ medalhas/
     coletores/                 leitura das páginas oficiais (download com cache em cache/)
     sqlite/                    esquema, gravação, tabelas-resumo e consultas (site e API)
     http/                      servidor, site estático, API do site, limites por IP
-      paginas.py               páginas de aluno/escola com título e resumo, e o sitemap
+      paginas.py               páginas de aluno/escola e das telas com título e resumo, e o sitemap
       api_v1/                  API pública: parâmetros, rotas, apresentação JSON, exportação, OpenAPI
 web/
-  index.html, styles.css       página única (Tailwind, Alpine.js, ECharts via CDN)
+  index.html, styles.css       página única (Alpine.js, ECharts via CDN) e estilos próprios
+  404.html                     página de endereço inexistente
+  css/site.css                 classes do Tailwind, geradas por `npm run css` (entrada: css/entrada.css)
   js/util.js                   chamada à API, formatação, ícones
   js/graficos.js               gráficos, mapa, confete
   js/documentacao-api.js       conteúdo da página API & Dados

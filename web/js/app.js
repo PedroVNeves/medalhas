@@ -1,6 +1,20 @@
 /* Componente Alpine da página inteira: rotas, estado e ações. Depende de util.js, graficos.js e documentacao-api.js. */
 
 const TITULO_SITE = "Medalhas · Medalhistas da OBMEP, OBM, OBI e IMO: busca e rankings";
+// os mesmos títulos que o servidor põe em cada endereço (paginas.py, TELAS): valem ao navegar sem recarregar
+const TITULOS = {
+  "/ranking/alunos": "Ranking dos maiores medalhistas das olimpíadas do Brasil · Medalhas",
+  "/ranking/escolas": "Ranking das escolas com mais medalhas em olimpíadas · Medalhas",
+  "/ranking/estados": "Ranking dos estados em medalhas nas olimpíadas · Medalhas",
+  "/estados": "Mapa das medalhas em olimpíadas por estado do Brasil · Medalhas",
+  "/dados": "API e dados abertos dos medalhistas das olimpíadas · Medalhas",
+  "/busca": "Busca · Medalhas",
+  "/sobre": "Sobre o Medalhas: por que reunimos os medalhistas das olimpíadas",
+};
+// telas do site; outro endereço mostra "página não encontrada"
+const TELAS = ["home", "busca", "ranking", "estados", "sobre", "dados", "aluno", "escola"];
+// endereços que o site abre sem recarregar a página
+const ROTA_INTERNA = /^\/(busca|ranking(\/(alunos|escolas|estados))?|estados|sobre|dados|(aluno|escola)\/[^/]+)?$/;
 
 function app() {
   return {
@@ -38,8 +52,8 @@ function app() {
         if (!a || a.target || a.hasAttribute("download")) return;
         const url = new URL(a.href, location.href);
         if (url.origin !== location.origin) return;
-        if (url.hash.startsWith("#/")) { e.preventDefault(); this.navegar("/" + url.hash); }
-        else if (/^\/(aluno|escola)\/[^/]+$/.test(url.pathname)) { e.preventDefault(); this.navegar(url.pathname); }
+        if (url.pathname === location.pathname && url.search === location.search && url.hash && !url.hash.startsWith("#/")) return;   // âncora na mesma página
+        if (ROTA_INTERNA.test(url.pathname)) { e.preventDefault(); this.navegar(url.pathname + url.search + url.hash); }
       });
       window.addEventListener("keydown", e => {
         if (e.key === "/" && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); this.$refs.q?.focus(); }
@@ -81,10 +95,10 @@ function app() {
     },
 
     // ------------------------------------------------ roteamento
-    // Perfis têm endereço próprio, que o Google indexa: /aluno/maria-souza-lima-al e /escola/...
-    // (o servidor entrega o index.html com título e resumo daquela página). As outras telas ficam
-    // depois do # na página inicial: /#/ranking/alunos, /#/busca?q=...
-    go(path) { this.navegar(path.startsWith("#") ? "/" + path : path); },
+    // Cada tela tem endereço próprio, que o Google indexa: /ranking/alunos, /estados, /sobre,
+    // /aluno/maria-souza-lima-al... (o servidor entrega o index.html com o título e um resumo daquela
+    // página). Links antigos com # (/#/ranking/alunos, #/aluno/NOME%7CUF, #/api) são convertidos.
+    go(path) { this.navegar(path); },
     navegar(url) {
       if (url !== location.pathname + location.search + location.hash) history.pushState(null, "", url);
       this.onRoute();
@@ -93,11 +107,11 @@ function app() {
       const atual = location.pathname + location.search + location.hash;
       if (atual === this._rotaAtual && !forcar) return;   // popstate e hashchange chegam juntos
       this._rotaAtual = atual;
-      let caminho = location.hash.startsWith("#/") ? location.hash.slice(1) : location.pathname + location.search;
-      // links antigos: #/aluno/NOME%7CUF -> /aluno/nome-uf
-      const antigo = location.hash.match(/^#\/(aluno|escola)\/([^?]+)/);
-      if (antigo) {
-        caminho = `/${antigo[1]}/${slug(decodeURIComponent(antigo[2]))}`;
+      let caminho = location.pathname + location.search;
+      if (location.hash.startsWith("#/")) {   // link antigo
+        const perfil = location.hash.match(/^#\/(aluno|escola)\/([^?]+)/);
+        caminho = perfil ? `/${perfil[1]}/${slug(decodeURIComponent(perfil[2]))}`
+          : location.hash.slice(1).replace(/^\/api(?=\?|$)/, "/dados");
         history.replaceState(null, "", caminho);
         this._rotaAtual = caminho;
       }
@@ -105,8 +119,8 @@ function app() {
       const parts = (path || "/").split("/").filter(Boolean);
       const query = Object.fromEntries(new URLSearchParams(qs || ""));
       this.route = { name: parts[0] || "home", param: decodeURIComponent(parts.slice(1).join("/")), query };
-      if (!["aluno", "escola"].includes(this.route.name)) document.title = TITULO_SITE;
-      // links podem fixar o método: #/ranking/alunos?metodo=impa3
+      if (!["aluno", "escola"].includes(this.route.name)) document.title = TITULOS[path] || TITULO_SITE;
+      // links podem fixar o método: /ranking/alunos?metodo=impa3
       if (["impa", "impa3", "site"].includes(query.metodo) && query.metodo !== this.metodo) {
         this.metodo = METODO = query.metodo;
         localStorage.setItem("metodo", query.metodo);
@@ -120,16 +134,18 @@ function app() {
         for (const k of Object.keys(this.bf)) this.bf[k] = query[k] || "";
         this.runSearch();
       }
+      if (r.name === "ranking" && !r.param) { history.replaceState(null, "", this.rankLink("alunos")); this._rotaAtual = location.pathname + location.search; r.param = "alunos"; }
       if (r.name === "ranking") { this.rk.tipo = r.param || "alunos"; Object.assign(this.rk.f, { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", ordem: "xp" }, Object.fromEntries(Object.entries(query).filter(([k]) => k !== "metodo"))); this.loadRanking(); }
       if (r.name === "estados") { this.mapSel = ""; this.$nextTick(() => this.drawMap()); }
-      if (r.name === "api") this.loadDoc();
+      if (r.name === "dados") this.loadDoc();
       if (r.name === "aluno") this.loadAluno(r.param);
       if (r.name === "escola") this.loadEscola(r.param);
     },
     is(name) { return this.route.name === name; },
+    get naoEncontrada() { return !TELAS.includes(this.route.name); },
     alunoLink(id) { return "/aluno/" + slug(id); },
     escolaLink(id) { return "/escola/" + slug(id); },
-    rankLink(tipo, extra = {}) { const p = new URLSearchParams(extra).toString(); return `/#/ranking/${tipo}${p ? "?" + p : ""}`; },
+    rankLink(tipo, extra = {}) { const p = new URLSearchParams(extra).toString(); return `/ranking/${tipo}${p ? "?" + p : ""}`; },
 
     // ------------------------------------------------ home
     drawHome() {
@@ -165,7 +181,7 @@ function app() {
         const q = this.q.trim();
         if (q.length < 2) return;
         const query = this.buscaQuery({ q, campo: this.campo });
-        history.replaceState(null, "", `#/busca?${new URLSearchParams(query)}`); this._rotaAtual = location.pathname + location.search + location.hash;
+        history.replaceState(null, "", `/busca?${new URLSearchParams(query)}`); this._rotaAtual = location.pathname + location.search + location.hash;
         this.route.query = query; this.runSearch();
       }, 220);
     },
@@ -174,7 +190,7 @@ function app() {
       const q = this.q.trim();
       if (q.length < 2) { this.$refs.q?.focus(); return; }
       if (this.is("busca")) { this.typed(); return; }
-      this.go(`#/busca?${new URLSearchParams({ q, campo: this.campo })}`);
+      this.go(`/busca?${new URLSearchParams({ q, campo: this.campo })}`);
     },
     setCampo(c) {
       this.campo = c;
@@ -190,7 +206,7 @@ function app() {
     setBuscaFilter(k, v) {
       this.bf[k] = v;
       const query = this.buscaQuery({ q: this.q.trim(), campo: this.campo });
-      history.replaceState(null, "", `#/busca?${new URLSearchParams(query)}`); this._rotaAtual = location.pathname + location.search + location.hash;
+      history.replaceState(null, "", `/busca?${new URLSearchParams(query)}`); this._rotaAtual = location.pathname + location.search + location.hash;
       this.route.query = query;
       this.runSearch();
     },
