@@ -67,6 +67,14 @@ class TestEscolas(unittest.TestCase):
         self.assertIn(" EEEF ", termos)
         self.assertIn(" ESCOLA ", termos)
 
+    def test_escola_renomeada_usa_a_chave_do_nome_atual(self):
+        termos, antiga = escolas.indexar_escola("CEFET DO ESPIRITO SANTO", "VITORIA", "ES")
+        _, atual = escolas.indexar_escola("Ifes - Campus Vitória", "Vitória", "ES")
+        self.assertEqual(antiga, atual)
+        self.assertIn(" INSTITUTO ", termos)   # quem busca "instituto federal" também acha o tempo de CEFET
+        # o CEFET de outra cidade continua separado
+        self.assertNotEqual(escolas.indexar_escola("CEFETES CARIACICA", "CARIACICA", "ES")[1], atual)
+
     def test_busca_expande_sigla(self):
         self.assertEqual(escolas.palavras_da_busca("etec de sp"),
                          [("ETEC", ["ESCOLA", "TECNICA", "ESTADUAL"]), ("SP", ["SP"])])

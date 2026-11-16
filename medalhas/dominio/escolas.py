@@ -11,6 +11,13 @@ PARTICULAS = {"DE", "DA", "DO", "DAS", "DOS", "E", "D"}
 # Palavras ignoradas na chave de institutos e centros federais (cada edição escreve de um jeito)
 _ENCHIMENTO_FEDERAL = {"EDUCACAO", "CIENCIA", "TECNOLOGIA", "CAMPUS", "UNIDADE", "AVANCADO"}
 
+# Escolas que mudaram de nome: a chave do nome antigo passa a ser a do atual, e as premiações das duas épocas
+# ficam numa página só. Mantida à mão, a pedido (correções chegam pelo contato do site).
+ESCOLAS_RENOMEADAS: dict[str, str] = {
+    # o CEFET-ES virou o Ifes em 2008 (Lei 11.892); a sede do CEFET em Vitória é o Ifes - Campus Vitória
+    "CENTRO ESPIRITO FEDERAL SANTO TECNOLOGICA|VITORIA|ES": "ESPIRITO FEDERAL INSTITUTO SANTO VITORIA|VITORIA|ES",
+}
+
 UF_NOMES = {
     "AC": "ACRE", "AL": "ALAGOAS", "AM": "AMAZONAS", "AP": "AMAPA", "BA": "BAHIA", "CE": "CEARA",
     "DF": "DISTRITO FEDERAL", "ES": "ESPIRITO SANTO", "GO": "GOIAS", "MA": "MARANHAO",
@@ -145,6 +152,11 @@ def indexar_escola(escola: str | None, municipio: str | None, uf: str | None) ->
     if "FEDERAL" in palavras_chave:
         palavras_chave -= _ENCHIMENTO_FEDERAL
     chave = " ".join(sorted(palavras_chave)) + "|" + normalizar(municipio) + "|" + (uf or "")
+    if chave in ESCOLAS_RENOMEADAS:
+        chave = ESCOLAS_RENOMEADAS[chave]
+        # buscar pelo nome atual também acha as premiações do nome antigo
+        novas = [w for w in chave.split("|")[0].split() if f" {w} " not in termos]
+        termos += " ".join(novas) + " " if novas else ""
     return termos, chave
 
 
