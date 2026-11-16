@@ -68,6 +68,19 @@ class TestColetores(unittest.TestCase):
         self.assertEqual(itabirana._faixa("Medalha Elas em Destaque"), "Elas em Destaque")
         self.assertIsNone(itabirana._faixa("Nível 1"))
 
+    def test_edicoes_da_ioai_pelo_menu_do_site(self):
+        menu = """<a href='https://ioai-official.org/bulgaria-2024/results/'>2024 Results &amp; awards</a>
+                  <a href='https://ioai-official.org/china-2025/results-2025/'>2025 Results</a>
+                  <a href='https://ioai-official.org/about/'>About</a>"""
+        with mock.patch.object(ioai, "baixar", return_value=menu):
+            self.assertEqual(ioai.edicoes(), {2024: "https://ioai-official.org/bulgaria-2024/results/",
+                                              2025: "https://ioai-official.org/china-2025/results-2025/"})
+
+    def test_rede_da_itabirana(self):
+        self.assertEqual(itabirana._rede("Pública Não Seletiva"), "Pública")
+        self.assertEqual(itabirana._rede("Privada"), "Privada")
+        self.assertIsNone(itabirana._rede(None))
+
     def test_resultados_da_ioai_so_do_brasil(self):
         pagina = """<table><tr><th>rank</th><th>name</th><th>team</th><th>total</th><th>award</th></tr>
             <tr><td>1</td><td>Artem G</td><td>Russia 1</td><td>428</td><td>Gold + 1st Place</td></tr>

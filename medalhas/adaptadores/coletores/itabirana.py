@@ -36,6 +36,13 @@ def _faixa(texto: str) -> str | None:
     return _FAIXAS.get(t)
 
 
+def _rede(texto: str | None) -> str | None:
+    """'Pública Não Seletiva', 'Pública Seletiva' -> 'Pública'; 'Privada' -> 'Privada' (como a OBMEP)."""
+    if not texto:
+        return None
+    return "Privada" if normalizar(texto).startswith("PRIVADA") else "Pública"
+
+
 def ler_pdf(paginas_do_pdf) -> list[dict]:
     registros, faixa, tem_cidade = [], None, False
     for pagina in paginas_do_pdf:
@@ -54,6 +61,7 @@ def ler_pdf(paginas_do_pdf) -> list[dict]:
             premio = next((_faixa(t) for t in resto if _faixa(t)), None)
             if not nivel or not (premio or faixa):
                 continue   # título, rodapé ou observação
+            rede = next((t for t in resto if _REDE.match(t)), None)   # "Pública Não Seletiva", "Privada" (2024+)
             outros = [t for t in resto if t != nivel and not _faixa(t) and not _REDE.match(t)]
             cidade = outros.pop() if tem_cidade and outros else None
             escola = " ".join(outros)
@@ -65,7 +73,8 @@ def ler_pdf(paginas_do_pdf) -> list[dict]:
             if len(nome.split()) < 2:
                 continue   # "Gustavo", "Luna": sem sobrenome não dá para saber quem é
             registros.append({"nome": nome.strip(), "escola": escola.strip() or None, "cidade": cidade,
-                              "nivel": _NIVEL.match(nivel).group(1), "faixa": premio or faixa})
+                              "nivel": _NIVEL.match(nivel).group(1), "faixa": premio or faixa,
+                              "rede": _rede(rede)})
     return registros
 
 
@@ -81,7 +90,7 @@ def coletar(log=print) -> list[Premiacao]:
                 medalha = r["faixa"]
                 premiacoes.append({
                     "competicao": "OITM", "ano": ano, "nivel": r["nivel"], "nome": r["nome"], "escola": r["escola"],
-                    "rede": None, "esfera": None, "municipio": r["cidade"], "uf": "MG" if r["cidade"] else None,
+                    "rede": r["rede"], "esfera": None, "municipio": r["cidade"], "uf": "MG" if r["cidade"] else None,
                     "premio": medalha, "medalha": medalha, "pontos": None, "fonte": SITE + href,
                 })
     anos = sorted({p["ano"] for p in premiacoes})

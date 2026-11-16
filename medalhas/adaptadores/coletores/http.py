@@ -12,44 +12,15 @@ PAUSA_ENTRE_DOWNLOADS = 0.5   # segundos: gentileza com os servidores das olimp�
 TEMPO_LIMITE = 60
 
 
-def baixar(url: str) -> str | None:
-    """Conteúdo da URL como texto, ou None se a página não existe (404).
+def _baixar(url: str, extensao: str) -> bytes | None:
+    """Conteúdo bruto da URL, ou None se a página não existe (404).
 
-    Cada página é baixada uma vez e guardada em PASTA_CACHE (apague a pasta para baixar de novo).
-    Falhas de rede (DNS, timeout, 5xx) são tentadas de novo com espera crescente: 2, 4, 8, 16 s.
+    Cada endereço é baixado uma vez e guardado em PASTA_CACHE (apague a pasta, ou rode build_db.py --refresh,
+    para baixar de novo). Falhas de rede (DNS, timeout, 5xx) são tentadas de novo com espera crescente:
+    2, 4, 8, 16 s.
     """
     PASTA_CACHE.mkdir(exist_ok=True)
-    arquivo = PASTA_CACHE / f"{hashlib.sha1(url.encode()).hexdigest()[:16]}.html"
-    if arquivo.exists():
-        return arquivo.read_text(encoding="utf-8")
-    for tentativa in range(TENTATIVAS):
-        try:
-            pedido = urllib.request.Request(url, headers={"User-Agent": AGENTE})
-            with urllib.request.urlopen(pedido, timeout=TEMPO_LIMITE) as resposta:
-                bruto = resposta.read()
-            try:
-                texto = bruto.decode("utf-8")
-            except UnicodeDecodeError:   # páginas antigas em Latin-1 / Windows-1252
-                texto = bruto.decode("cp1252", errors="replace")
-            arquivo.write_text(texto, encoding="utf-8")
-            time.sleep(PAUSA_ENTRE_DOWNLOADS)
-            return texto
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                return None
-            if tentativa == TENTATIVAS - 1:
-                raise
-        except (urllib.error.URLError, TimeoutError, ConnectionError):
-            if tentativa == TENTATIVAS - 1:
-                raise
-        time.sleep(2 ** (tentativa + 1))
-    return None
-
-
-def baixar_bytes(url: str) -> bytes | None:
-    """Como baixar, mas sem decodificar: para PDFs. Cache em PASTA_CACHE com extensão .bin."""
-    PASTA_CACHE.mkdir(exist_ok=True)
-    arquivo = PASTA_CACHE / f"{hashlib.sha1(url.encode()).hexdigest()[:16]}.bin"
+    arquivo = PASTA_CACHE / f"{hashlib.sha1(url.encode()).hexdigest()[:16]}.{extensao}"
     if arquivo.exists():
         return arquivo.read_bytes()
     for tentativa in range(TENTATIVAS):
@@ -70,3 +41,19 @@ def baixar_bytes(url: str) -> bytes | None:
                 raise
         time.sleep(2 ** (tentativa + 1))
     return None
+
+
+def baixar(url: str) -> str | None:
+    """Página como texto (UTF-8; páginas antigas em Latin-1/Windows-1252), ou None se não existe."""
+    bruto = _baixar(url, "html")
+    if bruto is None:
+        return None
+    try:
+        return bruto.decode("utf-8")
+    except UnicodeDecodeError:
+        return bruto.decode("cp1252", errors="replace")
+
+
+def baixar_bytes(url: str) -> bytes | None:
+    """Arquivo sem decodificar (PDFs), ou None se não existe. Cache com extensão .bin."""
+    return _baixar(url, "bin")

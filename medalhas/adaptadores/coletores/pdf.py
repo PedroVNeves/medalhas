@@ -10,7 +10,10 @@ _TOLERANCIA_Y = 2.0   # trechos da mesma linha podem variar alguns décimos na a
 
 def paginas(conteudo: bytes):
     """Páginas do PDF. pypdf é importado só aqui: só quem gera a base precisa dele (pip install pypdf)."""
-    from pypdf import PdfReader
+    try:
+        from pypdf import PdfReader
+    except ModuleNotFoundError:
+        raise RuntimeError("falta o pypdf para ler PDFs (pip install pypdf)") from None
     return PdfReader(io.BytesIO(conteudo)).pages
 
 

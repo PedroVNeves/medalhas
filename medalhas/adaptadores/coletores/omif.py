@@ -42,7 +42,9 @@ _ESTADOS = {
     "SERGIPE": "SE", "SAO PAULO": "SP", "TOCANTINS": "TO", "PEDRO II": "RJ", "MATO DE GROSSO": "MT",
 }
 # onde começa a instituição quando o PDF junta "Nome do Aluno IFES - CAMPUS X" num trecho só
-_INICIO_INSTITUICAO = re.compile(r"\s((?:IF|CEFET|CPII|UF)[A-Z]*\b.*|(?:Instituto|INSTITUTO) Federal.*|(?:Col[eé]gio|COL[EÉ]GIO) Pedro II.*)$")
+_INICIO_INSTITUICAO = re.compile(r"\s((?:IF|CEFET|CPII|UF)[A-Z]*\b.*"
+                                 r"|(?:Instituto|INSTITUTO) Federal.*"
+                                 r"|(?:Col[eé]gio|COL[EÉ]GIO) Pedro II.*)$")
 
 
 def uf_da_instituicao(instituicao: str) -> str | None:

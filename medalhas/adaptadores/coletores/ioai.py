@@ -1,7 +1,8 @@
 """Coletor da IOAI (International Olympiad in Artificial Intelligence): brasileiros nas tabelas de resultados.
 
-Cada edição tem uma página de resultados em ioai-official.org com a tabela individual (nome, país ou equipe,
-notas e prêmio). A edição de 2024 (Bulgária) só publicou resultados por equipe, sem nomes, e fica de fora.
+O menu de ioai-official.org lista a página de resultados de cada edição ("2025 Results", "Results 2026"…),
+com a tabela individual (nome, país ou equipe, notas e prêmio). A página de 2024 (Bulgária) só tem
+resultados por equipe e não traz brasileiros nos certificados individuais: a leitura dela não acha ninguém.
 """
 import re
 
@@ -9,10 +10,7 @@ from ...dominio.premiacao import BRONZE, MENCAO, OURO, PRATA, Premiacao
 from .html import texto
 from .http import baixar
 
-EDICOES = {
-    2025: "https://ioai-official.org/china-2025/results-2025/",
-    2026: "https://ioai-official.org/republic-of-kazakhstan/results-2026/",
-}
+SITE = "https://ioai-official.org/"
 PREMIOS = {"gold": OURO, "silver": PRATA, "bronze": BRONZE, "honourable mention": MENCAO,
            "honorable mention": MENCAO}
 
@@ -40,9 +38,20 @@ def ler_resultados(pagina: str) -> list[dict]:
     return linhas
 
 
+def edicoes() -> dict[int, str]:
+    """Ano -> página de resultados, a partir dos links do menu do site (o ano está no endereço)."""
+    pagina = baixar(SITE) or ""
+    achadas = {}
+    for url in re.findall(r"""href=["'](https://ioai-official\.org/[^"']*results?[^"']*)["']""", pagina, re.I):
+        ano = re.search(r"(20\d{2})", url)
+        if ano:
+            achadas.setdefault(int(ano.group(1)), url)
+    return dict(sorted(achadas.items()))
+
+
 def coletar(log=print) -> list[Premiacao]:
     premiacoes: list[Premiacao] = []
-    for ano, url in EDICOES.items():
+    for ano, url in edicoes().items():
         for r in ler_resultados(baixar(url) or ""):
             premiacoes.append({
                 "competicao": "IOAI", "ano": ano, "nivel": None, "nome": r["nome"], "escola": None, "rede": None,
