@@ -166,21 +166,31 @@ def completar_municipios(premiacoes: list[dict]) -> int:
     """Cidade das escolas que vieram sem ela (a OBQ publica só nome e estado). Altera a lista.
 
     Se o mesmo nome de escola (as palavras da chave) aparece numa única cidade daquele estado nas outras
-    listas, a premiação adota essa cidade e cai na mesma escola. Com duas ou mais cidades possíveis, ou
-    nenhuma, fica sem cidade. Devolve quantas premiações ganharam cidade.
+    listas, a premiação adota essa cidade e cai na mesma escola. Senão, se o nome traz o campus e ele é uma
+    cidade conhecida do estado ("IFES - CAMPUS VITORIA"), adota essa cidade. Sem isso, fica sem cidade.
+    Devolve quantas premiações ganharam cidade.
     """
     cidades: dict[tuple[str, str], dict[str, str]] = {}
+    do_estado: dict[str, dict[str, str]] = {}   # UF -> cidade normalizada -> grafia
     for p in premiacoes:
-        if p.get("escola") and p.get("municipio") and p.get("uf"):
-            palavras = indexar_escola(p["escola"], p["municipio"], p["uf"])[1].split("|")[0]
-            cidades.setdefault((palavras, p["uf"]), {}).setdefault(normalizar(p["municipio"]), p["municipio"])
+        if p.get("municipio") and p.get("uf"):
+            do_estado.setdefault(p["uf"], {}).setdefault(normalizar(p["municipio"]), p["municipio"])
+            if p.get("escola"):
+                palavras = indexar_escola(p["escola"], p["municipio"], p["uf"])[1].split("|")[0]
+                cidades.setdefault((palavras, p["uf"]), {}).setdefault(normalizar(p["municipio"]), p["municipio"])
     completadas = 0
     for p in premiacoes:
         if p.get("escola") and not p.get("municipio") and p.get("uf"):
             achadas = cidades.get((indexar_escola(p["escola"], None, p["uf"])[1].split("|")[0], p["uf"]), {})
+            campus = re.search(r"(?:CAMPUS|UNED|UNIDADE)\s+(?:AVANCADO\s+)?(.+)$|\s-\s+([^-]+)$", normalizar(p["escola"]))
+            cidade_do_campus = (campus.group(1) or campus.group(2)).strip() if campus else ""
             if len(achadas) == 1:
                 p["municipio"] = next(iter(achadas.values()))
-                completadas += 1
+            elif cidade_do_campus in do_estado.get(p["uf"], {}):
+                p["municipio"] = do_estado[p["uf"]][cidade_do_campus]
+            else:
+                continue
+            completadas += 1
     return completadas
 
 

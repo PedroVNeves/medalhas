@@ -5,10 +5,11 @@ rankings e define o nível (tier) de alunos e escolas.
 """
 from .olimpiadas import CATALOGO
 
-# Tabela oficial do IMPA Tech: Edital do Processo Seletivo 2026, item 6.1
+# Tabela oficial do IMPA Tech: Edital do Processo Seletivo 2027, item 6.1 (igual à de 2026). Aceita OBMEP e OBM
+# nível 3, OBFEP níveis B/C, OBQ modalidades A/B e OBI programação níveis 1/2.
 FONTE_PONTOS = {
-    "nome": "Edital do Processo Seletivo 2026 do IMPA Tech, item 6.1",
-    "url": "https://impatech.edu.br/wp-content/uploads/2025/10/Edital-IMPA-Tech-2026-versao-final-2025-10-23site.pdf",
+    "nome": "Edital do Processo Seletivo 2027 do IMPA Tech, item 6.1",
+    "url": "https://impatech.edu.br/wp-content/uploads/2026/10/Edital-IMPA_Tech_RJ-NE_2027_vs-1.0_-aprovada_site.pdf",
 }
 TABELAS_IMPA = {
     "matematica": {"Ouro": 18, "Prata": 6, "Bronze": 2},   # OBMEP e OBM
@@ -25,6 +26,9 @@ TABELAS_IMPA = {
 # Degraus sem olimpíada coletada ainda (ENTRADA) ficam prontos para quando entrarem.
 ESCALA_SITE = {
     "ENTRADA": {"Ouro": 20, "Prata": 12, "Bronze": 6},
+    # olimpíadas regionais e estaduais (Itabirana…): um pouco abaixo da OBMEP; menção explícita para não
+    # virar bronze nas que pontuam outros prêmios ("Elas em Destaque" vale bronze)
+    "REGIONAL": {"Ouro": 80, "Prata": 48, "Bronze": 24, "Menção Honrosa": 0},
     "OBMEP": {"Ouro": 100, "Prata": 60, "Bronze": 30},
     "OBM": {"Ouro": 200, "Prata": 150, "Bronze": 110, "Menção Honrosa": 40},
     "CONESUL": {"Ouro": 260, "Prata": 190, "Bronze": 140, "Menção Honrosa": 50},
@@ -68,6 +72,7 @@ def _verificar_escala() -> None:
     assert e["IMO"]["Bronze"] > e["IBERO"]["Prata"], "bronze IMO deve valer mais que prata Ibero"
     assert e["OBM"]["Ouro"] < e["CONESUL"]["Ouro"] < e["IBERO"]["Ouro"], "Cone Sul fica entre OBM e Ibero"
     assert e["ENTRADA"]["Ouro"] < e["OBMEP"]["Bronze"], "olimpíadas de entrada valem menos que a OBMEP"
+    assert e["ENTRADA"]["Ouro"] < e["REGIONAL"]["Ouro"] < e["OBMEP"]["Ouro"], "regionais: entre entrada e OBMEP"
     for tabela in e.values():
         assert tabela["Ouro"] > tabela["Prata"] > tabela["Bronze"]
     for o in CATALOGO.values():

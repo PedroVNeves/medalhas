@@ -49,6 +49,30 @@ def _alto_nivel(premiacoes: Iterable[Premiacao]) -> bool:
     return any(e_alto_nivel(p["competicao"]) for p in premiacoes)
 
 
+def _estimador_de_homonimos(nomes: Iterable[str]):
+    """Função nome -> número esperado de pessoas com esse nome, pela frequência de cada palavra entre os
+    nomes distintos (nomes já normalizados)."""
+    distintos = set(nomes)
+    total = len(distintos) or 1
+    frequencia: dict[str, int] = {}
+    for nome in distintos:
+        for palavra in set(nome.split()) - PARTICULAS:
+            frequencia[palavra] = frequencia.get(palavra, 0) + 1
+
+    def homonimos_esperados(nome: str) -> float:
+        esperado = float(total)
+        for palavra in set(nome.split()) - PARTICULAS:
+            esperado *= frequencia.get(palavra, 1) / total
+        return esperado
+    return homonimos_esperados
+
+
+def _pode_usar_o_nome(p: Premiacao, homonimos_esperados) -> bool:
+    """Premiação sem UF pode ir para a única pessoa com o mesmo nome? Em olimpíada de alto nível (IMO…) sim:
+    quem chega lá é raro. Nas demais (regionais, com muitos alunos), só se o próprio nome for raro."""
+    return e_alto_nivel(p["competicao"]) or homonimos_esperados(normalizar(p["nome"])) < LIMITE_HOMONIMOS
+
+
 def completar_identidades(premiacoes: list[Premiacao]) -> tuple[int, int]:
     """Para quem veio sem UF (IMO, IMC…), descobre a pessoa nos outros registros. Altera a lista.
 
@@ -57,8 +81,11 @@ def completar_identidades(premiacoes: list[Premiacao]) -> tuple[int, int]:
        alto nível (OBM ou internacionais) -> adota o nome completo (a UF sai em atribuir_alunos). Nas
        internacionais de informática (EGOI, IOAI), os medalhistas da OBI também contam: é de lá que vêm.
 
+    Fora das olimpíadas de alto nível, o passo 1 só vale para nome raro (ver _pode_usar_o_nome).
+
     Devolve (UFs inferidas pelo nome exato, nomes abreviados completados).
     """
+    homonimos_esperados = _estimador_de_homonimos(normalizar(p["nome"]) for p in premiacoes)
     ufs_do_nome: dict[str, set[str]] = {}
     for p in premiacoes:
         if p.get("uf"):
@@ -79,7 +106,7 @@ def completar_identidades(premiacoes: list[Premiacao]) -> tuple[int, int]:
         if p.get("uf"):
             continue
         chave = normalizar(p["nome"])
-        if len(ufs_do_nome.get(chave, ())) == 1:
+        if len(ufs_do_nome.get(chave, ())) == 1 and _pode_usar_o_nome(p, homonimos_esperados):
             p["uf"] = next(iter(ufs_do_nome[chave]))
             exatos += 1
             continue
@@ -104,24 +131,12 @@ def atribuir_alunos(premiacoes: list[Premiacao]) -> int:
       - as premiações cabem numa carreira escolar (≤ MAX_ANOS_CARREIRA anos);
       - o nome é raro: o número esperado de pessoas com esse nome, estimado pela frequência de cada
         palavra entre todos os nomes, fica abaixo de LIMITE_HOMONIMOS.
-    Premiações sem UF entram na pessoa quando ela é única.
+    Premiações sem UF entram na pessoa quando ela é única (e, fora do alto nível, o nome é raro).
     """
     por_nome: dict[str, list[Premiacao]] = {}
     for p in premiacoes:
         por_nome.setdefault(normalizar(p["nome"]), []).append(p)
-
-    # em quantos nomes distintos cada palavra aparece -> estimativa de homônimos
-    total = len(por_nome)
-    frequencia: dict[str, int] = {}
-    for nome in por_nome:
-        for palavra in set(nome.split()) - PARTICULAS:
-            frequencia[palavra] = frequencia.get(palavra, 0) + 1
-
-    def homonimos_esperados(nome: str) -> float:
-        esperado = float(total)
-        for palavra in set(nome.split()) - PARTICULAS:
-            esperado *= frequencia[palavra] / total
-        return esperado
+    homonimos_esperados = _estimador_de_homonimos(por_nome)
 
     unidos = 0
     for nome, registros in por_nome.items():
@@ -153,5 +168,6 @@ def atribuir_alunos(premiacoes: list[Premiacao]) -> int:
             for p in grupo:
                 p["aluno_id"] = ident
         for p in sem_uf:
-            p["aluno_id"] = ids[0] if len(ids) == 1 else f"{nome}|"
+            unico = len(ids) == 1 and _pode_usar_o_nome(p, homonimos_esperados)
+            p["aluno_id"] = ids[0] if unico else f"{nome}|"
     return unidos

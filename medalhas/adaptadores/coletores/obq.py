@@ -8,7 +8,6 @@ sempre saem na ordem certa no texto do PDF, então a leitura usa a posição de 
 Resultados publicados assim: 2025 e 2026 (o arquivo de 2024 não está mais no ar). O PDF é lido com pypdf,
 importado só aqui: sem ele, só a OBQ falha e as outras olimpíadas entram normalmente.
 """
-import io
 import re
 import time
 
@@ -16,6 +15,7 @@ from ...dominio.premiacao import BRONZE, MENCAO, OURO, PRATA, Premiacao
 from ...dominio.texto import normalizar
 from .html import texto
 from .http import baixar, baixar_bytes
+from .pdf import linhas, paginas
 
 SITE = "https://obquimica.org"
 NOTICIAS = (f"{SITE}/noticias/resultado-obq-{{ano}}", f"{SITE}/noticias/resultado-final-obq-{{ano}}")
@@ -30,33 +30,7 @@ UF_POR_NOME = {
     "RORAIMA": "RR", "RIO GRANDE DO SUL": "RS", "SANTA CATARINA": "SC", "SERGIPE": "SE", "SAO PAULO": "SP",
     "TOCANTINS": "TO"}
 _NOTA = re.compile(r"\d{1,3},\d{1,2}")
-_TOLERANCIA_Y = 2.0      # trechos da mesma linha podem variar alguns décimos na altura
 _DISTANCIA_QUEBRA = 16.0  # o resto de um nome de escola quebrado fica até isto abaixo da linha do aluno
-
-
-def _trechos(pagina) -> list[tuple[float, float, str]]:
-    """(y de cima para baixo, x, texto) de cada trecho da página, já na posição real (matriz de texto × CTM)."""
-    altura = float(pagina.mediabox.height)
-    trechos = []
-
-    def visitar(t, cm, tm, _fonte, _tamanho):
-        t = t.strip()
-        if t:
-            x = tm[4] * cm[0] + tm[5] * cm[2] + cm[4]
-            y = tm[4] * cm[1] + tm[5] * cm[3] + cm[5]
-            trechos.append((round(altura - y, 1), round(x, 1), t))
-    pagina.extract_text(visitor_text=visitar)
-    return sorted(trechos)
-
-
-def _linhas(trechos: list[tuple[float, float, str]]) -> list[tuple[float, list[tuple[float, str]]]]:
-    """Agrupa os trechos por altura: (y, [(x, texto) da esquerda para a direita]) de cada linha."""
-    linhas: list[tuple[float, list[tuple[float, str]]]] = []
-    for y, x, t in trechos:
-        if not linhas or y - linhas[-1][0] > _TOLERANCIA_Y:
-            linhas.append((y, []))
-        linhas[-1][1].append((x, t))
-    return [(y, sorted(itens)) for y, itens in linhas]
 
 
 def _limpar_nome(nome: str) -> str:
@@ -106,7 +80,7 @@ def ler_pdf(paginas) -> list[dict]:
     for pagina in paginas:
         da_pagina: list[tuple[float, dict]] = []
         soltos: list[tuple[float, str]] = []
-        for y, linha in _linhas(_trechos(pagina)):
+        for y, linha in linhas(pagina):
             rotulo = normalizar(" ".join(t for _, t in linha))
             if rotulo in FAIXAS:
                 faixa = FAIXAS[rotulo]
@@ -144,15 +118,13 @@ def _pdfs_do_ano(ano: int) -> list[tuple[str, str]]:
 
 
 def coletar(log=print) -> list[Premiacao]:
-    from pypdf import PdfReader   # só quem gera a base precisa: pip install pypdf
-
     premiacoes: list[Premiacao] = []
     for ano in range(PRIMEIRO_ANO, time.localtime().tm_year + 1):
         for modalidade, url in _pdfs_do_ano(ano):
             conteudo = baixar_bytes(url)
             if not conteudo:
                 continue
-            for r in ler_pdf(PdfReader(io.BytesIO(conteudo)).pages):
+            for r in ler_pdf(paginas(conteudo)):
                 if r["faixa"] in (None, "?"):
                     continue   # demais participantes (ou linha antes do primeiro rótulo)
                 premiacoes.append({

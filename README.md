@@ -30,6 +30,8 @@ python server.py     # abre a busca em http://localhost:8000
 | Internacionais (OBM) | `www.obm.org.br/resultados-…/` | nome, cidade/UF, prêmio: Ibero (OIM), Cone Sul, EGMO, APMO, IMC, PAGMO, OMCPLP, IGO, IMSC, OIMU, CIIM, Olimpíada de Maio, OMOP, Galois-Noether |
 | EGOI | `stats.egoi.org/countries/BRA/results/` (2021–2026) | nome, pontos, medalha (pela cor da linha); UF inferida pelo nome |
 | IOAI | `ioai-official.org/…/results-<ano>/` (2025–2026; 2024 só por equipe) | nome, pontos, medalha, menção honrosa; UF inferida pelo nome |
+| OMIF | `omif.com.br/imprensa/<ano>` → PDFs de medalhistas (2018, 2020–2026) | nome, instituição, medalha; UF pela sigla do instituto |
+| OITM (Itabirana) | `olimpiadaitabirana.com.br/noticias/premiados<ano>/` → PDF (2018–2025, sem 2023) | nome, nível, escola, faixa (inclui "Elas em Destaque"); cidade só em 2018–2019 |
 | OBQ | `obquimica.org/noticias/resultado[-final]-obq-<ano>` → PDF por modalidade (2025–2026) | estado, nome, série, escola, nota, faixa (ouro…menção); lido com `pypdf` (`pip install pypdf`, só para gerar a base) |
 
 As edições são descobertas automaticamente nas páginas de índice de cada fonte, então anos novos entram

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Medalhas · Medalhistas da OBMEP, OBM, OBI e IMO: busca e rankings</title>
-<meta name="description" content="Busque qualquer aluno ou escola e veja as medalhas na OBMEP, OBM, OBI, IMO e mais 17 olimpíadas científicas desde 1979. Rankings de alunos, escolas e estados, API e dados abertos.">
+<meta name="description" content="Busque qualquer aluno ou escola e veja as medalhas na OBMEP, OBM, OBI, IMO e mais 19 olimpíadas científicas desde 1979. Rankings de alunos, escolas e estados, API e dados abertos.">
 <link rel="canonical" href="https://medalhas.online/">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="theme-color" content="#070a14">
@@ -16,7 +16,7 @@
 <meta property="og:site_name" content="Medalhas">
 <meta property="og:url" content="https://medalhas.online/">
 <meta property="og:title" content="Medalhas · Hall da Fama das Olimpíadas de Conhecimento do Brasil">
-<meta property="og:description" content="Mais de 130 mil premiações da OBMEP, OBM, OBI, IMO e mais 17 olimpíadas. Busque alunos e escolas e veja os rankings.">
+<meta property="og:description" content="Mais de 130 mil premiações da OBMEP, OBM, OBI, IMO e mais 19 olimpíadas. Busque alunos e escolas e veja os rankings.">
 <!-- imagem do cartão (1200×630, desenhada pelo servidor: adaptadores/http/imagens.py); aluno e escola têm a sua -->
 <meta property="og:image" content="https://medalhas.online/og/site.png">
 <meta property="og:image:width" content="1200">
@@ -198,7 +198,7 @@
       <h1 class="font-display mt-5 text-4xl font-bold leading-[1.02] sm:text-6xl lg:text-7xl">
         Quem <span class="text-gold-grad">brilhou</span><br>nas olimpíadas<br>de conhecimento<br>do Brasil.
       </h1>
-      <p class="mt-5 max-w-xl text-lg text-slate-400">Os medalhistas brasileiros da OBMEP, OBM, OBI, IMO e de mais <span x-text="ov ? ov.olimpiadas.length - 4 : 17">17</span> olimpíadas em um só lugar. Encontre alunos e escolas, confira as premiações nas fontes oficiais e veja quem lidera os rankings.</p>
+      <p class="mt-5 max-w-xl text-lg text-slate-400">Os medalhistas brasileiros da OBMEP, OBM, OBI, IMO e de mais <span x-text="ov ? ov.olimpiadas.length - 4 : 19">19</span> olimpíadas em um só lugar. Encontre alunos e escolas, confira as premiações nas fontes oficiais e veja quem lidera os rankings.</p>
 
       <div class="relative mt-8" @click.outside="sug.onde==='home' && fecharSugestoes()">
       <div class="search-shell">
@@ -1333,6 +1333,8 @@
         <li>Ibero, Cone Sul, EGMO, APMO e as demais competições internacionais: resultados publicados em <a class="link" href="https://www.obm.org.br/" target="_blank" rel="noopener">obm.org.br</a> (cidade e estado, sem escola).</li>
         <li>EGOI (meninas, informática) e IOAI (inteligência artificial): resultados do Brasil em <a class="link" href="https://stats.egoi.org/countries/BRA/results/" target="_blank" rel="noopener">stats.egoi.org</a> e <a class="link" href="https://ioai-official.org/" target="_blank" rel="noopener">ioai-official.org</a> (sem estado: deduzido pelo nome, como na IMO).</li>
         <li>OBQ (química): resultado final em PDF em <a class="link" href="https://obquimica.org/" target="_blank" rel="noopener">obquimica.org</a>, modalidades A e B, de 2025 em diante (os resultados de anos anteriores não estão mais publicados).</li>
+        <li>OMIF (institutos federais): medalhistas em PDF em <a class="link" href="https://omif.com.br/" target="_blank" rel="noopener">omif.com.br</a>, 2018 e 2020–2026 (2019 só publicou classificados; não houve edição em 2024). O estado vem da sigla do instituto.</li>
+        <li>Olimpíada Itabirana de Matemática (MG): resultados em PDF em <a class="link" href="https://www.olimpiadaitabirana.com.br/noticias/medalhistas/" target="_blank" rel="noopener">olimpiadaitabirana.com.br</a>, 2018–2025 (o PDF de 2023 é escaneado e não pôde ser lido). Vale um pouco menos que a OBMEP na nossa pontuação; a etapa “Elas em Destaque” vale como bronze. Sem estado na lista, ele é deduzido pelo nome só quando o nome é raro.</li>
         <li>Alunos são identificados por nome + estado. Nomes abreviados de forma diferente entre as listas podem aparecer separados.</li>
         <li>Filtro meninas: nenhuma lista oficial informa o sexo, e adivinhar pelo nome erraria. Por isso o filtro inclui só as alunas premiadas em olimpíadas exclusivas para meninas (EGMO, PAGMO e EGOI), com todas as medalhas delas (OBMEP, OBM, OBI…). Outras meninas medalhistas ficam de fora do filtro, mas aparecem normalmente no ranking geral.</li>
         <li>Toda premiação tem o link da página oficial para conferência.</li>

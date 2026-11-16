@@ -3,7 +3,7 @@ import unittest
 from unittest import mock
 
 from medalhas.adaptadores import coletores
-from medalhas.adaptadores.coletores import egoi, ioai, obm, obmep, obq
+from medalhas.adaptadores.coletores import egoi, ioai, itabirana, obm, obmep, obq, omif
 from medalhas.adaptadores.http import limites
 from medalhas.adaptadores.http.api_v1 import ParametroInvalido, parametros
 from medalhas.dominio.olimpiadas import CATALOGO
@@ -53,6 +53,20 @@ class TestColetores(unittest.TestCase):
         self.assertEqual((r["uf"], obq._limpar_nome(r["nome"]), r["escola"], r["nota"]),
                          ("MS", "BIA REIS", "INSTITUTO FEDERAL CAMPUS", "61,40"))
         self.assertIsNone(obq._registro([(395, "NILOPOLIS")]))   # resto do nome da escola, linha de baixo
+
+    def test_estado_da_instituicao_federal(self):
+        self.assertEqual(omif.uf_da_instituicao("IFES - CAMPUS VITORIA"), "ES")
+        self.assertEqual(omif.uf_da_instituicao("IF Sudeste MG - Campus Muriaé"), "MG")
+        self.assertEqual(omif.uf_da_instituicao("IFSUL - CAMPUS PASSO FUNDO"), "RS")      # não confunde com IFS (SE)
+        self.assertEqual(omif.uf_da_instituicao("IFPE CAMPUS RECIFE"), "PE")
+        self.assertEqual(omif.uf_da_instituicao("INSTITUTO FEDERAL DE SERGIPE - ITABAIANA"), "SE")
+        self.assertIsNone(omif.uf_da_instituicao("ESCOLA X"))
+
+    def test_faixas_da_itabirana(self):
+        self.assertEqual(itabirana._faixa("MEDALHAS DE OURO"), "Ouro")
+        self.assertEqual(itabirana._faixa("Medalha de Prata"), "Prata")
+        self.assertEqual(itabirana._faixa("Medalha Elas em Destaque"), "Elas em Destaque")
+        self.assertIsNone(itabirana._faixa("Nível 1"))
 
     def test_resultados_da_ioai_so_do_brasil(self):
         pagina = """<table><tr><th>rank</th><th>name</th><th>team</th><th>total</th><th>award</th></tr>

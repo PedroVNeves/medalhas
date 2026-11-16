@@ -1,13 +1,15 @@
-"""Filtro "meninas": alunas reconhecidas por ter premiação em uma olimpíada só para meninas.
+"""Filtro "meninas": alunas reconhecidas por ter premiação em uma olimpíada (ou etapa) só para meninas.
 
 As listas oficiais não informam o sexo, e estimá-lo pelo nome erra (nomes usados pelos dois sexos, grafias
-raras). Por isso o filtro só inclui quem tem certeza de ser menina: quem foi premiada na EGMO, na PAGMO ou na
-EGOI. Para essas alunas, todas as premiações contam (OBMEP, OBM, OBI…), não só as das olimpíadas femininas.
+raras). Por isso o filtro só inclui quem tem certeza de ser menina: quem foi premiada na EGMO, na PAGMO, na
+EGOI ou na etapa "Elas em Destaque" da Olimpíada Itabirana. Para essas alunas, todas as premiações contam
+(OBMEP, OBM, OBI…), não só as das olimpíadas femininas.
 """
 from .premiacao import Premiacao
 
 FEMININO = "F"
 COMPETICOES_SO_MENINAS = frozenset({"EGMO", "PAGMO", "EGOI"})
+PREMIOS_SO_MENINAS = frozenset({"Elas em Destaque"})   # etapa feminina da Olimpíada Itabirana
 
 
 def marcar_meninas(premiacoes: list[Premiacao]) -> int:
@@ -15,7 +17,8 @@ def marcar_meninas(premiacoes: list[Premiacao]) -> int:
 
     Devolve quantas alunas foram reconhecidas.
     """
-    meninas = {p["aluno_id"] for p in premiacoes if p["competicao"] in COMPETICOES_SO_MENINAS}
+    meninas = {p["aluno_id"] for p in premiacoes
+               if p["competicao"] in COMPETICOES_SO_MENINAS or p.get("premio") in PREMIOS_SO_MENINAS}
     for p in premiacoes:
         p["sexo"] = FEMININO if p["aluno_id"] in meninas else None
     return len(meninas)

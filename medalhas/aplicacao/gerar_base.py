@@ -48,7 +48,7 @@ def gerar_base(coletores: Iterable[Coletor], repositorio: RepositorioPremiacoes,
     unidos = identidade.atribuir_alunos(premiacoes)
     log(f"Identidades: {unidos} pessoas reunidas entre estados diferentes")
     meninas = sexo.marcar_meninas(premiacoes)
-    log(f"Meninas: {meninas} alunas premiadas em olimpíadas só para meninas (EGMO, PAGMO, EGOI)")
+    log(f"Meninas: {meninas} alunas premiadas em olimpíadas ou etapas só para meninas")
 
     registros = [indexar(p) for p in premiacoes]
     repositorio.substituir(registros, atualizado_em=time.strftime("%Y-%m-%d %H:%M"))

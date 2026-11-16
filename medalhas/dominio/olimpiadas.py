@@ -74,6 +74,12 @@ CATALOGO: dict[str, Olimpiada] = {o.sigla: o for o in [
     # aceita pelo IMPA Tech (tabela das "outras": OBFEP, OBQ, OBI); modalidades A e B são a fase nacional
     Olimpiada("OBQ", "Olimpíada Brasileira de Química", "Química", "https://obquimica.org", escala="OBMEP",
               tabela_impa="outras", niveis_impa=frozenset({"Modalidade A", "Modalidade B"})),
+    # só para alunos da rede federal (institutos federais, CEFETs, Colégio Pedro II); conta como as outras
+    Olimpiada("OMIF", "Olimpíada de Matemática das Instituições Federais", "Matemática", "https://omif.com.br",
+              escala="OBMEP"),
+    # regional (MG), com alunos do país todo; "Elas em Destaque" (só meninas) vale como bronze
+    Olimpiada("OITM", "Olimpíada Itabirana de Matemática", "Matemática", "https://www.olimpiadaitabirana.com.br",
+              escala="REGIONAL", pontua_outros_premios=True),
 ]}
 
 

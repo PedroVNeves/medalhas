@@ -120,6 +120,14 @@ class TestIdentidade(unittest.TestCase):
         self.assertEqual(ps[1]["nome"], "Talita Ribeiro de Rezende")
         self.assertEqual(ps[3]["nome"], "Ana Rezende")   # matemática não procura na OBI
 
+    def test_sem_uf_em_regional_so_vai_para_nome_raro(self):
+        comuns = [premiacao(f"Maria Silva {i}", "SP") for i in range(40)] + [premiacao(f"Ana Silva {i}", "RJ") for i in range(40)]
+        ps = comuns + [premiacao("Maria Silva", "MG"), premiacao("Maria Silva", None, "OITM"),
+                       premiacao("Zebedeu Quintanilha", "PI"), premiacao("Zebedeu Quintanilha", None, "OITM")]
+        identidade.completar_identidades(ps)
+        self.assertIsNone(ps[-3]["uf"])     # nome comum: pode ser outra Maria Silva
+        self.assertEqual(ps[-1]["uf"], "PI")   # nome raro: é a mesma pessoa
+
     def test_grafia_corrigida_a_mao_une_os_perfis(self):
         ps = [premiacao("ISAIAS GOUVEIA GONCALVES", "DF", ano=2018), premiacao("Isaias Gouveia Gonçalves", "DF", "OBM", 2019),
               premiacao("Isaías Gouvêa Gonçalves", "PR", "OBM", 2020), premiacao("ISAIAS GOUVEIA GONCALVES", "SP")]
