@@ -23,6 +23,9 @@ GRAFIAS_CORRIGIDAS: dict[tuple[str, str], str] = {
     ("ISAIAS GOUVEIA GONCALVES", "DF"): "Isaías Gouvêa Gonçalves",
     # OBMEP 2018 escreveu "Edigard"; 2019, 2021 e 2022 trazem Edgard (mesma escola, em Cocal dos Alves)
     ("EDIGARD JUNIO DA SILVA VIANA", "PI"): "Edgard Junio da Silva Viana",
+    # OBMEP 2017 ("Moteiro") e 2019 ("Azevedo"); nas outras listas, Azeredo de Moura Monteiro (Colégio Militar do RJ)
+    ("SOFIA AZEREDO DE MOURA MOTEIRO", "RJ"): "Sofia Azeredo de Moura Monteiro",
+    ("SOFIA AZEVEDO DE MOURA MONTEIRO", "RJ"): "Sofia Azeredo de Moura Monteiro",
 }
 
 
