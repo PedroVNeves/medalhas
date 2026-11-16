@@ -1,7 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- mesmo desenho de _medalha() em medalhas/adaptadores/http/imagens.py (favicon.ico e imagens de compartilhamento) -->
+  <defs>
+    <radialGradient id="ouro" cx="38%" cy="30%" r="75%">
+      <stop offset="0" stop-color="#fff3c4"/>
+      <stop offset=".45" stop-color="#f5c542"/>
+      <stop offset="1" stop-color="#b8860b"/>
+    </radialGradient>
+  </defs>
   <path d="M18 2h12l6 22H24z" fill="#4f6bd8"/>
+  <path d="M22.5 2h3l6 22h-3z" fill="#9aa8ff" opacity=".5"/>
   <path d="M46 2H34l-6 22h12z" fill="#e0475b"/>
-  <circle cx="32" cy="40" r="21" fill="#b8860b"/>
-  <circle cx="32" cy="40" r="17" fill="#f5c542"/>
-  <path d="M32 28.5l3.4 7 7.6 1-5.5 5.3 1.3 7.6L32 45.8l-6.8 3.6 1.3-7.6L21 36.5l7.6-1z" fill="#fff3c4"/>
+  <path d="M41.5 2h-3l-6 22h3z" fill="#ff9aa8" opacity=".45"/>
+  <circle cx="32" cy="40" r="21" fill="#9a6b05"/>
+  <circle cx="32" cy="40" r="17.5" fill="url(#ouro)"/>
+  <circle cx="32" cy="40" r="17" fill="none" stroke="#fff3c4" stroke-opacity=".4"/>
+  <path d="M32 28.5l3.4 7 7.6 1-5.5 5.3 1.3 7.6L32 45.8l-6.8 3.6 1.3-7.6L21 36.5l7.6-1z" fill="#fff8dc"/>
 </svg>

@@ -131,12 +131,15 @@ def _estrela(d: "ImageDraw.ImageDraw", cx: float, cy: float, raio: float, cor) -
 def _medalha(d: "ImageDraw.ImageDraw", x: int, y: int, tamanho: int) -> None:
     """O ícone do site (web/favicon.svg) em tamanho × tamanho."""
     k = tamanho / 64
-    d.polygon([(x + 18 * k, y + 2 * k), (x + 30 * k, y + 2 * k), (x + 36 * k, y + 24 * k), (x + 24 * k, y + 24 * k)],
-              fill=(79, 107, 216))
-    d.polygon([(x + 46 * k, y + 2 * k), (x + 34 * k, y + 2 * k), (x + 28 * k, y + 24 * k), (x + 40 * k, y + 24 * k)],
-              fill=(224, 71, 91))
-    d.ellipse((x + 11 * k, y + 19 * k, x + 53 * k, y + 61 * k), fill=(184, 134, 11))
-    d.ellipse((x + 15 * k, y + 23 * k, x + 49 * k, y + 57 * k), fill=OURO)
+    def fita(x0, x1, x2, x3, cor):   # topo de x0 a x1, base de x2 a x3 (em 1/64 do tamanho)
+        d.polygon([(x + x0 * k, y + 2 * k), (x + x1 * k, y + 2 * k), (x + x3 * k, y + 24 * k), (x + x2 * k, y + 24 * k)],
+                  fill=cor)
+    fita(18, 30, 24, 36, (79, 107, 216))
+    fita(22.5, 25.5, 28.5, 31.5, (140, 160, 240))
+    fita(34, 46, 28, 40, (224, 71, 91))
+    fita(38.5, 41.5, 32.5, 35.5, (240, 140, 155))
+    d.ellipse((x + 11 * k, y + 19 * k, x + 53 * k, y + 61 * k), fill=(154, 107, 5))
+    d.ellipse((x + 14.5 * k, y + 22.5 * k, x + 49.5 * k, y + 57.5 * k), fill=OURO)
     _estrela(d, x + 32 * k, y + 40 * k, 11 * k, (255, 243, 196))
 
 
