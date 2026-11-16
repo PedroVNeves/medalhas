@@ -173,8 +173,9 @@ def _moedas(d: "ImageDraw.ImageDraw", y: int, tipos: list[tuple]) -> None:
         x += _largura(palavra, rotulo) + 48
 
 
-def _cartao(rotulo: str, titulo: str, subtitulo: str | None, medalhas: dict, rodape: str,
+def _cartao(rotulo: str, titulo: str, subtitulo: str | None, medalhas: dict, rodape: list[str],
             destaque: str | None) -> bytes:
+    """rodape: partes separadas por " · "; as do fim saem inteiras quando não cabem."""
     img = _fundo()
     d = ImageDraw.Draw(img)
     _cabecalho(d)
@@ -200,7 +201,10 @@ def _cartao(rotulo: str, titulo: str, subtitulo: str | None, medalhas: dict, rod
         forte = _fonte("inter", 700, 24)
         d.text((x_fim, 578), destaque, font=forte, fill=OURO_CLARO, anchor="rm")
         x_fim -= _largura(destaque, forte) + 32
-    d.text((MARGEM, 578), _cortar(rodape, base, x_fim - MARGEM), font=base, fill=TEXTO_3, anchor="lm")
+    partes = [p for p in rodape if p]
+    while len(partes) > 1 and _largura(" · ".join(partes), base) > x_fim - MARGEM:
+        partes.pop()
+    d.text((MARGEM, 578), _cortar(" · ".join(partes), base, x_fim - MARGEM), font=base, fill=TEXTO_3, anchor="lm")
 
     saida = io.BytesIO()
     img.save(saida, "PNG", optimize=True)
@@ -234,7 +238,7 @@ def aluno(d: dict) -> bytes:
                if m.get("mencao") else None)
     if not (m.get("ouro") or m.get("prata") or m.get("bronze")):
         mencoes = None   # já estão nas moedas
-    rodape = " · ".join(p for p in (" · ".join(siglas[:5]), periodo, mencoes) if p)
+    rodape = [periodo, *siglas[:5], mencoes]   # o período primeiro: é o que não pode faltar
     destaque = _posicao(d.get("rank"), "º no ranking nacional")
     rotulo = "Medalhista" + (f" · {d['uf']}" if d.get("uf") else "")
     with _trava:
@@ -246,7 +250,7 @@ def escola(d: dict) -> bytes:
     lugar = ", ".join(p for p in (capitalizar_nome(d["municipio"]) if d.get("municipio") else None, d.get("uf")) if p)
     plural = "aluno premiado" if d["alunos"] == 1 else "alunos premiados"
     siglas = _siglas(d.get("recentes") or [])
-    rodape = f"{numero(d['alunos'])} {plural}" + (f" · {' · '.join(siglas[:4])}" if siglas else "")
+    rodape = [f"{numero(d['alunos'])} {plural}", *siglas[:4]]
     destaque = _posicao(d.get("rank"), "ª no ranking de escolas")
     rotulo = "Escola" + (f" · {lugar}" if lugar else "")
     with _trava:
@@ -255,8 +259,8 @@ def escola(d: dict) -> bytes:
 
 def site(visao: dict) -> bytes:
     t = visao["totais"]
-    rodape = (f"{numero(t['total'])} premiações · {numero(t['alunos'])} alunos · {numero(t['escolas'])} escolas"
-              f" · {t['de']}–{t['ate']}")
+    rodape = [f"{numero(t['total'])} premiações", f"{numero(t['alunos'])} alunos", f"{numero(t['escolas'])} escolas",
+              f"{t['de']}–{t['ate']}"]
     outras = len(visao.get("olimpiadas") or []) - 4
     subtitulo = f"OBMEP, OBM, OBI, IMO e mais {outras} olimpíadas em um só lugar" if outras > 0 else None
     with _trava:
