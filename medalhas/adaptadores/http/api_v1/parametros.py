@@ -16,6 +16,7 @@ MAX_CARACTERES = 100   # buscas por texto: protege a base de consultas caras
 MAX_PALAVRAS = 8
 _VERDADEIRO = ("1", "true", "sim", "s", "yes")
 _REDES = {"publica": "Pública", "privada": "Privada"}
+_SEXOS = {"F": "F", "M": "M", "FEMININO": "F", "MASCULINO": "M", "MENINAS": "F", "MENINOS": "M"}
 # Campos de texto que cada rota aceita: parâmetro da URL -> campo pesquisado
 TEXTO_PREMIACOES = (("nome", "nome"), ("escola", "escola"), ("busca", "tudo"))
 
@@ -106,6 +107,11 @@ def filtros(params: dict, sessao: SessaoDeLeitura) -> dict:
         if not rede:
             raise ParametroInvalido("rede deve ser 'publica' ou 'privada'")
         f["rede"] = rede
+    if params.get("sexo"):
+        sexo = _SEXOS.get(normalizar(params["sexo"]))
+        if not sexo:
+            raise ParametroInvalido("sexo deve ser 'F' (meninas) ou 'M' (meninos)")
+        f["sexo"] = sexo
     if params.get("municipio"):
         f["municipio"] = params["municipio"][:MAX_CARACTERES]
     if params.get("escola_id"):

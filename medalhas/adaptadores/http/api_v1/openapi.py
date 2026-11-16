@@ -34,6 +34,8 @@ FILTROS = [
     _parametro("ano_de", "A partir do ano", "integer"),
     _parametro("ano_ate", "Até o ano", "integer"),
     _parametro("rede", "publica ou privada"),
+    _parametro("sexo", "F (meninas) ou M (meninos), estimado pelo primeiro nome (Censo 2010 do IBGE); "
+                       "nomes ambíguos ficam de fora dos dois"),
 ]
 PAGINA = [_parametro("limite", "Itens por página", "integer"),
           _parametro("offset", "Quantos itens pular", "integer")]

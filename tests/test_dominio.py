@@ -1,7 +1,7 @@
 """Regras de negócio: pontuação, escolas, identidade de alunos, ranking e gamificação."""
 import unittest
 
-from medalhas.dominio import enderecos, escolas, gamificacao, identidade, pontuacao, ranking
+from medalhas.dominio import enderecos, escolas, gamificacao, identidade, pontuacao, ranking, sexo
 from medalhas.dominio.texto import capitalizar_nome, normalizar
 
 
@@ -118,6 +118,23 @@ class TestIdentidade(unittest.TestCase):
         ps += [premiacao(f"Pessoa {i} Silva", "SP") for i in range(50)]
         identidade.atribuir_alunos(ps)
         self.assertEqual({p["aluno_id"] for p in ps[:3]}, {"ISAIAS GOUVEA GONCALVES|PR"})
+
+
+class TestSexo(unittest.TestCase):
+    def test_so_classifica_nomes_quase_exclusivos(self):
+        self.assertEqual(sexo.classificar(0.99), "F")
+        self.assertEqual(sexo.classificar(0.02), "M")
+        self.assertIsNone(sexo.classificar(0.5))    # Ariel, Darcy…
+        self.assertIsNone(sexo.classificar(None))   # nome fora do Censo
+
+    def test_estima_por_aluno_e_olimpiada_so_de_meninas_decide(self):
+        ps = [premiacao("Maria Souza", "SP"), premiacao("Ariel Lima", "RJ"), premiacao("Ariel Lima", "RJ", "EGMO", 2021),
+              premiacao("Joao Reis", "CE"), premiacao("Zuleica Neri", "PI")]
+        for p in ps:
+            p["aluno_id"] = normalizar(p["nome"]) + "|" + p["uf"]
+        contagem = sexo.estimar(ps, {"MARIA": 0.995, "ARIEL": 0.4, "JOAO": 0.003})
+        self.assertEqual([p["sexo"] for p in ps], ["F", "F", "F", "M", None])
+        self.assertEqual(contagem, {"F": 2, "M": 1, None: 1})
 
 
 class TestRanking(unittest.TestCase):

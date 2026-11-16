@@ -33,9 +33,9 @@ function app() {
     q: "", campo: "nome", busca: { loading: false, total: 0, grupos: [] }, _t: null,
     // sugestões enquanto digita (início e barra do topo): onde = qual campo mostra a lista; ativo = item do teclado
     sug: { lista: [], onde: "", ativo: -1, q: "" }, _ts: null,
-    bf: { uf: "", area: "", competicao: "", medalha: "", ano: "", nivel: "", rede: "" },
+    bf: { uf: "", area: "", competicao: "", medalha: "", ano: "", nivel: "", rede: "", sexo: "" },
     // ranking
-    rk: { tipo: "alunos", itens: [], total: 0, loading: false, f: { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", ordem: "xp" } },
+    rk: { tipo: "alunos", itens: [], total: 0, loading: false, f: { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", sexo: "", ordem: "xp" } },
     // perfis
     aluno: null, escola: null, loadingPerfil: false,
     // exportação e documentação da API
@@ -142,7 +142,7 @@ function app() {
         if (!this.q) this.$nextTick(() => this.$refs.qBusca?.focus());   // veio pelo menu: já pode digitar
       }
       if (r.name === "ranking" && !r.param) { history.replaceState(null, "", this.rankLink("alunos")); this._rotaAtual = location.pathname + location.search; r.param = "alunos"; }
-      if (r.name === "ranking") { this.rk.tipo = r.param || "alunos"; Object.assign(this.rk.f, { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", ordem: "xp" }, Object.fromEntries(Object.entries(query).filter(([k]) => k !== "metodo"))); this.loadRanking(); }
+      if (r.name === "ranking") { this.rk.tipo = r.param || "alunos"; Object.assign(this.rk.f, { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", sexo: "", ordem: "xp" }, Object.fromEntries(Object.entries(query).filter(([k]) => k !== "metodo"))); this.loadRanking(); }
       if (r.name === "estados") { this.mapSel = ""; this.$nextTick(() => this.drawMap()); }
       if (r.name === "dados") this.loadDoc();
       if (r.name === "aluno") this.loadAluno(r.param);
@@ -342,7 +342,7 @@ function app() {
     get rkLeader() { return this.rk.itens.length ? Math.max(1, this.rk.itens[0].xp) : 1; },
     get rkPodio() { return this.rk.tipo !== "estados" ? this.rk.itens.slice(0, 3) : []; },
     get filtrosAtivos() { return Object.entries(this.rk.f).filter(([k, v]) => v && k !== "ordem").length; },
-    limparFiltros() { Object.assign(this.rk.f, { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "" }); this.pushRanking(); },
+    limparFiltros() { Object.assign(this.rk.f, { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", sexo: "" }); this.pushRanking(); },
 
     // ------------------------------------------------ estados
     drawMap() {

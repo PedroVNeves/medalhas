@@ -431,6 +431,11 @@
         <button @click="toggleMulti('busca', 'nivel', n.id)" :class="[temValor(nivelEfetivo(bf.nivel), n.id) && 'on', impa3 && !niveisAceitos.includes(n.id) && 'opacity-40']" :title="impa3 && !niveisAceitos.includes(n.id) ? 'Fora do edital: travado pela pontuação IMPA N3' : `${fmt(n.n)} premiações · ${n.competicoes.join(', ')}`"><span x-text="nivelCurto(n.id)"></span><i x-show="impa3 && !niveisAceitos.includes(n.id)" x-icon="'lock'" class="ml-1 h-3 w-3"></i></button>
       </template>
     </div>
+    <div class="seg" title="Meninas e meninos estimados pelo primeiro nome (Censo 2010 do IBGE). Nomes ambíguos ficam de fora dos dois.">
+      <button @click="setBuscaFilter('sexo', '')" :class="!bf.sexo && 'on'">Todos</button>
+      <button @click="setBuscaFilter('sexo', 'F')" :class="bf.sexo==='F' && 'on'">Meninas</button>
+      <button @click="setBuscaFilter('sexo', 'M')" :class="bf.sexo==='M' && 'on'">Meninos</button>
+    </div>
     <select class="select" @change="setBuscaFilter('rede', $event.target.value)">
       <option value="">Pública + privada</option><option value="Pública" :selected="bf.rede==='Pública'">Escola pública</option><option value="Privada" :selected="bf.rede==='Privada'">Escola privada</option>
     </select>
@@ -578,6 +583,11 @@
         <button @click="toggleMulti('rk', 'nivel', n.id)" :class="[temValor(nivelEfetivo(rk.f.nivel), n.id) && 'on', impa3 && !niveisAceitos.includes(n.id) && 'opacity-40']" :title="impa3 && !niveisAceitos.includes(n.id) ? 'Fora do edital: travado pela pontuação IMPA N3' : `${fmt(n.n)} premiações · ${n.competicoes.join(', ')}`"><span x-text="nivelCurto(n.id)"></span><i x-show="impa3 && !niveisAceitos.includes(n.id)" x-icon="'lock'" class="ml-1 h-3 w-3"></i></button>
       </template>
     </div>
+    <div class="seg" title="Meninas e meninos estimados pelo primeiro nome (Censo 2010 do IBGE). Nomes ambíguos ficam de fora dos dois.">
+      <button @click="setFilter('sexo', '')" :class="!rk.f.sexo && 'on'">Todos</button>
+      <button @click="setFilter('sexo', 'F')" :class="rk.f.sexo==='F' && 'on'">Meninas</button>
+      <button @click="setFilter('sexo', 'M')" :class="rk.f.sexo==='M' && 'on'">Meninos</button>
+    </div>
     <select class="select" x-show="rk.tipo!=='estados'" @change="setFilter('rede', $event.target.value)">
       <option value="">Pública + privada</option><option value="Pública" :selected="rk.f.rede==='Pública'">Escola pública</option><option value="Privada" :selected="rk.f.rede==='Privada'">Escola privada</option>
     </select>
@@ -586,6 +596,10 @@
       <button @click="setFilter('ordem','xp')" :class="rk.f.ordem==='xp' && 'on'" title="Soma de pontos (XP)">Pontos</button>
       <button @click="setFilter('ordem','medalhas')" :class="rk.f.ordem==='medalhas' && 'on'" title="Ouro, depois prata, depois bronze">Quadro de medalhas</button>
       <button @click="setFilter('ordem','total')" :class="rk.f.ordem==='total' && 'on'" title="Total de medalhas">Total</button>
+    </div>
+    <div x-show="rk.f.sexo" x-cloak class="filtros-fixo flex w-full items-center gap-2 rounded-xl border border-pink-400/25 bg-pink-400/5 px-3 py-2 text-xs text-pink-100">
+      <i x-icon="'info'" class="h-3.5 w-3.5 flex-none"></i>
+      <span class="flex-1">As listas oficiais não informam o sexo: <span x-text="rk.f.sexo==='F' ? 'meninas são estimadas' : 'meninos são estimados'"></span> pelo primeiro nome, com o Censo 2010 do IBGE. Nomes usados pelos dois sexos (Ariel, Darcy…) ficam de fora. <a href="/sobre#como-funciona" class="underline">Como funciona</a> · viu um erro? <a href="/sobre#contato" class="underline">Avise</a></span>
     </div>
 
     <div x-show="impa3" class="filtros-fixo flex w-full items-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-200">
@@ -1215,7 +1229,9 @@
         <li>OBI: quadros de mérito em <a class="link" href="https://olimpiada.ic.unicamp.br/" target="_blank" rel="noopener">olimpiada.ic.unicamp.br</a> (2005 em diante, com escola e honra ao mérito).</li>
         <li>IMO: resultados do Brasil em <a class="link" href="https://www.imo-official.org/" target="_blank" rel="noopener">imo-official.org</a> (não informa o estado: ele é deduzido pelo nome nas outras olimpíadas).</li>
         <li>Ibero, Cone Sul, EGMO, APMO e as demais competições internacionais: resultados publicados em <a class="link" href="https://www.obm.org.br/" target="_blank" rel="noopener">obm.org.br</a> (cidade e estado, sem escola).</li>
+        <li>EGOI (meninas, informática) e IOAI (inteligência artificial): resultados do Brasil em <a class="link" href="https://stats.egoi.org/countries/BRA/results/" target="_blank" rel="noopener">stats.egoi.org</a> e <a class="link" href="https://ioai-official.org/" target="_blank" rel="noopener">ioai-official.org</a> (sem estado: deduzido pelo nome, como na IMO).</li>
         <li>Alunos são identificados por nome + estado. Nomes abreviados de forma diferente entre as listas podem aparecer separados.</li>
+        <li>Filtro meninas/meninos: nenhuma lista oficial informa o sexo. Ele é estimado pelo primeiro nome, com a proporção de mulheres e homens com aquele nome no Censo 2010 do <a class="link" href="https://censo2010.ibge.gov.br/nomes/" target="_blank" rel="noopener">IBGE</a>: só entra em um dos filtros quem tem um nome usado por pelo menos 90% de um sexo. Nomes usados pelos dois (Ariel, Darcy, Elis…) ou desconhecidos ficam de fora dos dois filtros, e quem tem premiação em olimpíada só para meninas (EGMO, PAGMO, EGOI) conta como menina. O sexo estimado serve só para filtrar: não aparece nos perfis, na API nem nos dados exportados.</li>
         <li>Toda premiação tem o link da página oficial para conferência.</li>
       </ul>
       <p class="mt-3 text-xs text-slate-500" x-show="ov?.atualizado_em">Base atualizada em <span x-text="ov?.atualizado_em"></span>.</p>

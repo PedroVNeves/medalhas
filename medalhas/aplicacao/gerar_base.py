@@ -3,10 +3,10 @@ import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 
-from ..dominio import escolas, identidade, olimpiadas, pontuacao
+from ..dominio import escolas, identidade, olimpiadas, pontuacao, sexo
 from ..dominio.premiacao import Premiacao
 from ..dominio.texto import capitalizar_nome, normalizar
-from .portas import Coletor, RepositorioPremiacoes
+from .portas import Coletor, NomesPorSexo, RepositorioPremiacoes
 
 Log = Callable[[str], None]
 
@@ -26,11 +26,14 @@ def indexar(p: Premiacao) -> dict:
         "nome_busca": normalizar(nome), "escola_busca": normalizar(p.get("escola")),
         "escola_termos": termos, "escola_chave": chave, "municipio_busca": normalizar(p.get("municipio")),
         **pontuacao.pontuar(p["competicao"], p["medalha"], p.get("nivel")),
-        "area": olimpiadas.area(p["competicao"]),
+        "area": olimpiadas.area(p["competicao"]), "sexo": p.get("sexo"),
     }
 
 
-def gerar_base(coletores: Iterable[Coletor], repositorio: RepositorioPremiacoes, log: Log = print) -> Relatorio:
+def gerar_base(coletores: Iterable[Coletor], repositorio: RepositorioPremiacoes, log: Log = print,
+               nomes: NomesPorSexo | None = None) -> Relatorio:
+    """nomes: fonte da fração de mulheres por primeiro nome; sem ela, só as olimpíadas só para meninas
+    definem o sexo estimado."""
     relatorio = Relatorio()
     premiacoes: list[Premiacao] = []
     for coletor in coletores:
@@ -45,6 +48,11 @@ def gerar_base(coletores: Iterable[Coletor], repositorio: RepositorioPremiacoes,
     log(f"Identidades: UF inferida pelo nome em {exatos} registros; {abreviados} nomes abreviados completados")
     unidos = identidade.atribuir_alunos(premiacoes)
     log(f"Identidades: {unidos} pessoas reunidas entre estados diferentes")
+    primeiros = {sexo.primeiro_nome(p["aluno_id"]) for p in premiacoes}
+    fracao = nomes.fracao_feminina(primeiros, log) if nomes else {}
+    contagem = sexo.estimar(premiacoes, fracao)
+    log(f"Sexo estimado: {contagem.get('F', 0)} meninas, {contagem.get('M', 0)} meninos, "
+        f"{contagem.get(None, 0)} sem classificação (nome ambíguo ou desconhecido)")
 
     registros = [indexar(p) for p in premiacoes]
     repositorio.substituir(registros, atualizado_em=time.strftime("%Y-%m-%d %H:%M"))

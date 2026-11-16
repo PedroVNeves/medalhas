@@ -45,13 +45,18 @@ class ColetorFalso:
         return [dict(x) for x in self._premiacoes]
 
 
+class NomesFalsos:
+    def fracao_feminina(self, nomes, log):
+        return {"MARIA": 0.99, "ANA": 0.98, "JOAO": 0.01}
+
+
 class TestPontaAPonta(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.pasta = tempfile.TemporaryDirectory()
         caminho = Path(cls.pasta.name) / "medalhas.db"
         cls.relatorio = gerar_base([ColetorFalso("OBMEP", PREMIACOES), ColetorFalso("OBI", [], falhar=True)],
-                                   RepositorioSqlite(caminho), log=lambda _: None)
+                                   RepositorioSqlite(caminho), log=lambda _: None, nomes=NomesFalsos())
         cls.servidor = Servidor(("127.0.0.1", 0), LeituraSqlite(caminho))
         cls.base = f"http://127.0.0.1:{cls.servidor.server_address[1]}"
         threading.Thread(target=cls.servidor.serve_forever, daemon=True).start()
@@ -118,6 +123,14 @@ class TestPontaAPonta(unittest.TestCase):
         self.assertEqual(self.json("/api/sugestoes?q=m"), {"alunos": [], "escolas": []})   # curto demais
         _, cab, _ = self.get("/api/sugestoes?q=maria")
         self.assertIn("s-maxage", cab["Cache-Control"])   # o CDN guarda: sem consulta a cada letra repetida
+
+    def test_filtro_de_meninas(self):
+        r = self.json("/api/v1/ranking/alunos?sexo=F&metodo=site")
+        self.assertEqual(sorted(i["nome"] for i in r["itens"]), ["Ana Costa", "Maria Souza Lima"])
+        self.assertEqual([i["nome"] for i in self.json("/api/ranking?tipo=alunos&sexo=M")["itens"]], ["Joao Pereira"])
+        self.assertIn("sexo", self.json("/api/v1/ranking/alunos?sexo=x", 400)["erro"])
+        aluno = self.json("/api/v1/alunos?nome=maria+lima")["alunos"][0]
+        self.assertNotIn("sexo", json.dumps(aluno))   # só filtra: não é publicado por pessoa
 
     def test_exportacao_filtrada_em_csv(self):
         status, cab, corpo = self.get("/api/v1/exportar?aluno_id=" + quote("MARIA SOUZA LIMA|AL", safe=""))

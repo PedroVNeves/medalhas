@@ -13,7 +13,7 @@ AGREGADOS = """SUM(medalha='Ouro') AS ouro, SUM(medalha='Prata') AS prata, SUM(m
          MIN(ano) AS de, MAX(ano) AS ate"""
 
 # Chaves de filtro reconhecidas (as demais chaves da URL são ignoradas)
-CHAVES_FILTRO = ("competicao", "area", "medalha", "uf", "rede", "nivel", "escola_chave", "esfera", "ano", "ano_de",
+CHAVES_FILTRO = ("competicao", "area", "medalha", "uf", "rede", "nivel", "escola_chave", "esfera", "sexo", "ano", "ano_de",
                  "ano_ate", "municipio", "sem_mencao")
 
 # Campos pesquisáveis por texto. Os espaços à esquerda fazem "% PALAVRA%" casar no início de palavra.
@@ -33,7 +33,7 @@ def condicoes(filtros: dict) -> tuple[list[str], list]:
         if valores:
             where.append(f"{chave} IN ({','.join('?' * len(valores))})")
             args += valores
-    for chave in ("medalha", "uf", "rede", "escola_chave", "esfera"):
+    for chave in ("medalha", "uf", "rede", "escola_chave", "esfera", "sexo"):
         if filtros.get(chave):
             where.append(f"{chave} = ?")
             args.append(filtros[chave])

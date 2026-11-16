@@ -12,7 +12,7 @@ CAMPOS_ORIGINAIS = ["competicao", "ano", "nivel", "nome", "escola", "rede", "esf
                     "municipio", "uf", "premio", "medalha", "pontos", "fonte"]
 # Campos derivados ao indexar (aplicacao.gerar_base.indexar)
 CAMPOS_DERIVADOS = ["nome_busca", "escola_busca", "escola_termos", "escola_chave", "municipio_busca",
-                    "aluno_id", *PONTOS, "area"]
+                    "aluno_id", *PONTOS, "area", "sexo"]
 CAMPOS_PREMIACAO = CAMPOS_ORIGINAIS + CAMPOS_DERIVADOS
 
 PREMIACOES = """
@@ -40,7 +40,8 @@ CREATE TABLE medalhas (
     p_impa          INTEGER NOT NULL,   -- IMPA, todos os níveis
     p_impa3         INTEGER NOT NULL,   -- IMPA oficial, só Nível 3
     p_site          INTEGER NOT NULL,   -- nossa versão
-    area            TEXT
+    area            TEXT,
+    sexo            TEXT                -- F, M ou NULL: estimado pelo primeiro nome (dominio.sexo)
 );
 CREATE INDEX idx_aluno  ON medalhas(aluno_id);
 CREATE INDEX idx_chave  ON medalhas(escola_chave);

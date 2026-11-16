@@ -40,7 +40,7 @@ CAMPOS_RANKING_FIM = ["ouro", "prata", "bronze", "mencao_honrosa", "total", "pon
                       "pontos_impa_n3", "pontos_nossa", "de", "ate"]
 # Qualquer um destes faz da exportação um recorte (e não a base inteira)
 FILTROS = ("uf", "municipio", "competicao", "area", "medalha", "nivel", "ano", "ano_de", "ano_ate", "rede",
-           "escola_id", "aluno_id", "nome", "escola", "busca")
+           "sexo", "escola_id", "aluno_id", "nome", "escola", "busca")
 # Parâmetros que entram no nome do arquivo, nesta ordem
 _PARTES_DO_NOME = ("aluno_id", "escola_id", "nome", "escola", "busca", "uf", "competicao", "ano", "ano_de",
                    "ano_ate", "nivel", "medalha")

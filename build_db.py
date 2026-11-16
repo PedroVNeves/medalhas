@@ -12,6 +12,7 @@ from pathlib import Path
 
 from medalhas import config
 from medalhas.adaptadores import coletores
+from medalhas.adaptadores.coletores.nomes_ibge import NomesIbge
 from medalhas.adaptadores.sqlite import RepositorioSqlite
 from medalhas.aplicacao.gerar_base import gerar_base
 
@@ -23,7 +24,7 @@ def main(argv: list[str] | None = None, caminho: Path = config.CAMINHO_BASE) -> 
     if args.refresh and config.PASTA_CACHE.exists():
         shutil.rmtree(config.PASTA_CACHE)
 
-    relatorio = gerar_base(coletores.todos(), RepositorioSqlite(caminho))
+    relatorio = gerar_base(coletores.todos(), RepositorioSqlite(caminho), nomes=NomesIbge())
 
     print(f"\n{relatorio.premiacoes} registros gravados em {caminho}")
     if relatorio.falhas:

@@ -152,6 +152,7 @@ const FILTROS = [
   P("nivel", "lista", "Um ou mais níveis. Ex.: 3 ou 1,2,3,Universitário"),
   P("ano · ano_de · ano_ate", "inteiro", "Ano exato ou intervalo"),
   P("rede", "texto", "publica ou privada (só OBMEP)"),
+  P("sexo", "texto", "F (meninas) ou M (meninos), estimado pelo primeiro nome"),
 ];
 FILTROS.forEach(f => (f.comum = true));  // marcados para a referência mostrar "aceita os filtros comuns"
 const OFFSET = P("offset", "inteiro", "Quantos itens pular (paginação)");

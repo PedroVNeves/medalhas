@@ -29,6 +29,12 @@ class Coletor(Protocol):
     def coletar(self, log: Callable[[str], None]) -> list[Premiacao]: ...
 
 
+class NomesPorSexo(Protocol):
+    """Fração de mulheres entre as pessoas com cada primeiro nome (para estimar o sexo dos alunos)."""
+
+    def fracao_feminina(self, nomes: set[str], log: Callable[[str], None]) -> dict[str, float]: ...
+
+
 class RepositorioPremiacoes(Protocol):
     """Guarda a base pesquisável."""
 
