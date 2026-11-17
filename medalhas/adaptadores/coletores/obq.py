@@ -11,9 +11,9 @@ importado só aqui: sem ele, só a OBQ falha e as outras olimpíadas entram norm
 import re
 import time
 
-from ...dominio.premiacao import BRONZE, MENCAO, OURO, PRATA, Premiacao
+from ...dominio.premiacao import BRONZE, MENCAO, NOMES_UF, OURO, PRATA, Premiacao
 from ...dominio.texto import normalizar
-from .html import texto
+from .html import registrar_periodo, texto
 from .http import baixar, baixar_bytes
 from .pdf import linhas, paginas
 
@@ -22,15 +22,11 @@ NOTICIAS = (f"{SITE}/noticias/resultado-obq-{{ano}}", f"{SITE}/noticias/resultad
 PRIMEIRO_ANO = 2025
 FAIXAS = {"OURO": OURO, "OIRO": OURO, "PRATA": PRATA, "BRONZE": BRONZE, "MENCAO HONROSA": MENCAO,
           "DEMAIS PARTICIPANTES": None}
-UF_POR_NOME = {
-    "ACRE": "AC", "ALAGOAS": "AL", "AMAZONAS": "AM", "AMAPA": "AP", "BAHIA": "BA", "CEARA": "CE",
-    "DISTRITO FEDERAL": "DF", "ESPIRITO SANTO": "ES", "GOIAS": "GO", "MARANHAO": "MA", "MINAS GERAIS": "MG",
-    "MATO GROSSO DO SUL": "MS", "MATO GROSSO": "MT", "PARA": "PA", "PARAIBA": "PB", "PERNAMBUCO": "PE",
-    "PIAUI": "PI", "PARANA": "PR", "RIO DE JANEIRO": "RJ", "RIO GRANDE DO NORTE": "RN", "RONDONIA": "RO",
-    "RORAIMA": "RR", "RIO GRANDE DO SUL": "RS", "SANTA CATARINA": "SC", "SERGIPE": "SE", "SAO PAULO": "SP",
-    "TOCANTINS": "TO"}
+UF_POR_NOME = {normalizar(nome): uf for uf, nome in NOMES_UF.items()}   # "MATO GROSSO DO SUL" -> "MS"
 _NOTA = re.compile(r"\d{1,3},\d{1,2}")
-_DISTANCIA_QUEBRA = 16.0  # o resto de um nome de escola quebrado fica até isto abaixo da linha do aluno
+_DISTANCIA_QUEBRA = 16.0  # o resto de um nome (de escola ou de aluno) quebrado fica até isto da linha do aluno
+_CELULA_SERIE = re.compile(r"^\d\s*[ºo°ªa]?\s*(ano|s[eé]rie)\b|^\?$", re.I)   # "2o Ano EM", "?"
+_MARGEM_COLUNA = 5.0      # folga ao decidir, pela posição x, se um trecho solto está na coluna do nome
 
 
 def _limpar_nome(nome: str) -> str:
@@ -48,15 +44,22 @@ def _registro(linha: list[tuple[float, str]]) -> dict | None:
 
     Em geral cada coluna é um trecho. Quando a escola não cabe na célula, o PDF às vezes junta estado, nome,
     série e escola num trecho só (e as duas notas em outro): aí os campos saem do próprio texto.
+
+    Um nome comprido ocupa duas linhas da célula, uma acima e outra abaixo da linha do aluno: nesta a célula do
+    nome fica vazia e o segundo trecho já é a série. O nome volta vazio e ler_pdf o remonta pelos trechos soltos;
+    x_serie (posição da coluna da série) diz quais trechos soltos estão na coluna do nome.
     """
     textos = [t for _, t in linha]
     notas = [n for t in textos for n in _NOTA.findall(t)]
     uf = UF_POR_NOME.get(normalizar(textos[0]))
     if uf and len(linha) >= 3:
-        meio = [t for t in textos[2:] if not _NOTA.fullmatch(t)]
-        serie = next((t for t in meio if re.search(r"ano|^\?$", t, re.I)), None)
-        return {"uf": uf, "nome": textos[1], "serie": serie,
-                "escola": " ".join(t for t in meio if t != serie), "nota": notas[0] if notas else None}
+        sem_nome = bool(_CELULA_SERIE.search(textos[1]))
+        meio = [(x, t) for x, t in linha[1 if sem_nome else 2:] if not _NOTA.fullmatch(t)]
+        serie = next(((x, t) for x, t in meio if _CELULA_SERIE.search(t)), None)
+        return {"uf": uf, "nome": "" if sem_nome else textos[1], "serie": serie[1] if serie else None,
+                "x_serie": serie[0] if serie else None,
+                "escola": " ".join(t for x, t in meio if (x, t) != serie and t != "?"),   # "?": não informada
+                "nota": notas[0] if notas else None}
     corrido = " ".join(t for t in textos if not _SO_NOTAS.fullmatch(t))
     normalizado = normalizar(corrido)
     estado = next((e for e in _ESTADOS_DO_MAIS_LONGO if normalizado.startswith(e + " ")), None)
@@ -65,21 +68,24 @@ def _registro(linha: list[tuple[float, str]]) -> dict | None:
         return None
     palavras_do_estado = len(estado.split())
     nome = " ".join(corrido[:serie.start()].split()[palavras_do_estado:])
-    return {"uf": UF_POR_NOME[estado], "nome": nome, "serie": serie.group(1),
+    return {"uf": UF_POR_NOME[estado], "nome": nome, "serie": serie.group(1), "x_serie": None,
             "escola": corrido[serie.end():].strip(), "nota": notas[0] if notas else None}
 
 
 def ler_pdf(paginas) -> list[dict]:
     """Premiados de um PDF (lista de páginas do pypdf), na ordem do arquivo.
 
-    Quando o nome da escola não cabe na célula, o resto vem numa linha solta logo abaixo da linha do aluno:
-    cada pedaço solto vai para a linha de aluno imediatamente acima dele, na mesma página.
+    Quando um nome não cabe na célula, o resto vem em trechos soltos perto da linha do aluno, na mesma página:
+    - na coluna do nome (à esquerda da série): pedaços do nome do aluno, acima e abaixo da linha; vão para a
+      linha de aluno mais próxima;
+    - nas outras colunas: resto do nome da escola; vai para a linha de aluno imediatamente acima.
+    Linha que termina sem nome (não deu para remontar) fica de fora.
     """
     registros: list[dict] = []
     faixa = "?"
     for pagina in paginas:
         da_pagina: list[tuple[float, dict]] = []
-        soltos: list[tuple[float, str]] = []
+        soltos: list[tuple[float, float, str]] = []
         for y, linha in linhas(pagina):
             rotulo = normalizar(" ".join(t for _, t in linha))
             if rotulo in FAIXAS:
@@ -87,17 +93,29 @@ def ler_pdf(paginas) -> list[dict]:
                 continue
             r = _registro(linha)
             if r:
-                r.update(nome=_limpar_nome(r["nome"]), faixa=faixa, partes=[(y, r.pop("escola"))])
+                r.update(faixa=faixa, partes=[(y, 0.0, r.pop("escola"))], partes_do_nome=[(y, 0.0, r.pop("nome"))])
                 da_pagina.append((y, r))
             else:
-                soltos.append((y, " ".join(t for _, t in linha)))
-        for y, texto_solto in soltos:
+                soltos += [(y, x, t) for x, t in linha]
+        colunas_da_serie = [r["x_serie"] for _, r in da_pagina if r["x_serie"] is not None]
+        x_serie = min(colunas_da_serie) if colunas_da_serie else None
+        for y, x, texto_solto in soltos:
+            if re.match(r"p[aá]gina \d", texto_solto, re.I):
+                continue
+            if x_serie is not None and x < x_serie - _MARGEM_COLUNA:   # coluna do nome
+                perto = [(abs(y - y_aluno), r) for y_aluno, r in da_pagina if abs(y - y_aluno) <= _DISTANCIA_QUEBRA]
+                if perto and not UF_POR_NOME.get(normalizar(texto_solto)):
+                    min(perto, key=lambda item: item[0])[1]["partes_do_nome"].append((y, x, texto_solto))
+                continue
             acima = [(y_aluno, r) for y_aluno, r in da_pagina if 0 < y - y_aluno <= _DISTANCIA_QUEBRA]
-            if acima and not re.match(r"p[aá]gina \d", texto_solto, re.I):   # cabeçalho/rodapé ficam longe
-                max(acima, key=lambda item: item[0])[1]["partes"].append((y, texto_solto))
+            if acima:   # cabeçalho/rodapé ficam longe
+                max(acima, key=lambda item: item[0])[1]["partes"].append((y, x, texto_solto))
         for _, r in da_pagina:
-            r["escola"] = " ".join(t for _, t in sorted(r.pop("partes")) if t) or None
-            registros.append(r)
+            r["escola"] = " ".join(t for _, _, t in sorted(r.pop("partes")) if t) or None
+            r["nome"] = _limpar_nome(" ".join(t for _, _, t in sorted(r.pop("partes_do_nome")) if t))
+            del r["x_serie"]
+            if r["nome"]:
+                registros.append(r)
     return registros
 
 
@@ -134,6 +152,5 @@ def coletar(log=print) -> list[Premiacao]:
                     "escola": r["escola"], "rede": None, "esfera": None, "municipio": None, "uf": r["uf"],
                     "premio": r["faixa"], "medalha": r["faixa"], "pontos": r["nota"], "fonte": url,
                 })
-    anos = sorted({p["ano"] for p in premiacoes})
-    log(f"OBQ: {len(premiacoes)} premiações, {anos[0] if anos else '-'}–{anos[-1] if anos else '-'}")
+    registrar_periodo(log, "OBQ", premiacoes)
     return premiacoes

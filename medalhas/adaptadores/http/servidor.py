@@ -12,9 +12,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
 from ...aplicacao.portas import FonteDeLeitura
-from ...config import PASTA_WEB, URL_SITE
-from ...dominio.enderecos import ALUNO, ESCOLA, TIPOS as TIPOS_DE_PAGINA
+from ...config import HOSTS_PUBLICOS, PASTA_WEB, URL_SITE
 from ...dominio import pontuacao
+from ...dominio.enderecos import ALUNO, ESCOLA
+from ...dominio.enderecos import TIPOS as TIPOS_DE_PAGINA
 from ...dominio.ranking import ORDENACOES, TIPOS
 from . import api_v1, imagens, limites, paginas
 from .pedido import Pedido
@@ -113,9 +114,16 @@ class Handler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------ dados do cliente
     def _ip(self) -> str:
-        """IP do cliente: o primeiro de X-Forwarded-For atrás do proxy (confiar_proxy), senão o da conexão."""
-        if self.server.confiar_proxy and self.headers.get("X-Forwarded-For"):
-            return self.headers["X-Forwarded-For"].split(",")[0].strip()
+        """IP do cliente: atrás do proxy (confiar_proxy), o de X-Forwarded-For; senão, o da conexão.
+
+        Cada proxy acrescenta à direita o IP de quem falou com ele, e o que vem à esquerda é o que o cliente
+        mandou (forjável). Por isso o IP é contado da direita: o último valor com um proxy (saltos_proxy=1), o
+        penúltimo com dois. Com menos valores que saltos, vale o primeiro."""
+        if self.server.confiar_proxy:
+            repassados = ",".join(self.headers.get_all("X-Forwarded-For") or [])
+            ips = [ip.strip() for ip in repassados.split(",") if ip.strip()]
+            if ips:
+                return ips[max(len(ips) - self.server.saltos_proxy, 0)]
         return self.client_address[0]
 
     def _aceita_gzip(self) -> bool:
@@ -124,13 +132,19 @@ class Handler(BaseHTTPRequestHandler):
 
     def _base(self) -> str:
         """URL pública do site, para os links da API. Atrás de um proxy (Firebase Hosting), o Host que chega
-        é o do servidor interno (Cloud Run); o domínio que o usuário digitou vem em X-Forwarded-Host."""
-        def repassado(nome: str) -> str | None:
-            valor = self.headers.get(nome) if self.server.confiar_proxy else None
-            return valor.split(",")[0].strip() if valor else None
-        protocolo = repassado("X-Forwarded-Proto") or "http"
-        host = repassado("X-Forwarded-Host") or self.headers.get("Host") or "localhost"
-        return f"{protocolo}://{host}"
+        é o do servidor interno (Cloud Run); o domínio que o usuário digitou vem em X-Forwarded-Host.
+
+        O cabeçalho também pode ser forjado por quem chama o servidor direto: só vale se for um dos domínios
+        do site (URL_SITE e config.HOSTS_PUBLICOS). Outro valor cai no endereço oficial."""
+        if not self.server.confiar_proxy:
+            return f"http://{self.headers.get('Host') or 'localhost'}"
+        host = (self.headers.get("X-Forwarded-Host") or "").split(",")[0].strip().lower()
+        nome = host.rsplit(":", 1)[0] if host.count(":") == 1 else host
+        aceitos = self.server.hosts_publicos
+        if not host or not any(nome == h or (h.startswith(".") and nome.endswith(h)) for h in aceitos):
+            return URL_SITE
+        protocolo = (self.headers.get("X-Forwarded-Proto") or "").split(",")[0].strip().lower()
+        return f"{protocolo if protocolo in ('http', 'https') else 'https'}://{host}"
 
     # ------------------------------------------------ API
     def _api(self, caminho: str, params: dict) -> None:
@@ -138,7 +152,7 @@ class Handler(BaseHTTPRequestHandler):
 
         A vaga de consulta é liberada antes do envio. Rotas com cache_cdn saem com Cache-Control público e sem
         os X-RateLimit-* (que valem para um IP só)."""
-        if caminho.startswith("/api/v1"):
+        if caminho == "/api/v1" or caminho.startswith("/api/v1/"):
             rota = api_v1.rota(caminho)
             if not rota:
                 self._json({"erro": f"rota inexistente: {caminho}. Veja as rotas em /api/v1"}, 404)
@@ -149,7 +163,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"erro": f"rota inexistente: {caminho}"}, 404)
             return
 
-        permitido, cabecalhos = limites.limitador.consumir(rota.grupo, self._ip())
+        ip = self._ip()
+        permitido, cabecalhos = limites.limitador.consumir(rota.grupo, ip)
         if not permitido:
             self._recusar(cabecalhos)
             return
@@ -162,6 +177,9 @@ class Handler(BaseHTTPRequestHandler):
             pedido = Pedido(params, self._base(), self._aceita_gzip(), leitura.versao())
             with leitura.sessao() as sessao:
                 dados = rota.funcao(sessao, pedido)
+        except (api_v1.ParametroInvalido, api_v1.NaoEncontrado):
+            limites.limitador.devolver(rota.grupo, ip)   # pedido recusado antes de consultar: não gasta a cota
+            raise
         finally:
             limites.consultas.release()   # o envio acontece depois, sem ocupar vaga de consulta
 
@@ -266,9 +284,8 @@ class Handler(BaseHTTPRequestHandler):
         self._enviar(corpo.encode("utf-8"), "text/html; charset=utf-8", status, cabecalhos)
 
     def _sitemap(self, nome: str) -> None:
-        """sitemap.xml ou um dos arquivos de /sitemaps/, gerados uma vez por versão da base; 404 se não existe."""
-        versao = self.server.leitura.versao()
-        resultado = self._com_sessao(lambda s: [paginas.sitemap(s, nome, URL_SITE, versao)])
+        """sitemap.xml ou um dos arquivos de /sitemaps/, montados quando pedidos; 404 se não existe."""
+        resultado = self._com_sessao(lambda s: [paginas.sitemap(s, nome, URL_SITE)])
         if resultado is None:   # recusado: a resposta já foi enviada
             return
         if resultado[0] is None:
@@ -280,9 +297,13 @@ class Handler(BaseHTTPRequestHandler):
     def _arquivo(self, caminho_url: str) -> None:
         """Arquivo estático de web/ (/ é o index.html). Fora de web/, pasta ou erro.html: a página 404."""
         relativo = "index.html" if caminho_url in ("/", "") else unquote(caminho_url.lstrip("/"))
-        alvo = (PASTA_WEB / relativo).resolve()
+        try:
+            alvo = (PASTA_WEB / relativo).resolve()
+            existe = alvo.is_file()
+        except (ValueError, OSError):   # %00 ou outro caractere que o sistema de arquivos não aceita
+            existe = False
         # bloqueia ../, pastas e o modelo das páginas de erro (sem os marcadores preenchidos)
-        if PASTA_WEB.resolve() not in alvo.parents or not alvo.is_file() or alvo.name == "erro.html":
+        if not existe or PASTA_WEB.resolve() not in alvo.parents or alvo.name == "erro.html":
             self._nao_encontrado()
             return
         tipo = mimetypes.guess_type(alvo.name)[0] or "application/octet-stream"
@@ -329,11 +350,15 @@ class Handler(BaseHTTPRequestHandler):
                 self._arquivo(url.path)
         except api_v1.NaoEncontrado as e:
             self._json({"erro": str(e)}, 404)
-        except ValueError as e:   # ParametroInvalido e conversões como ano=abc na API do site
+        except api_v1.ParametroInvalido as e:
             self._json({"erro": f"parâmetro inválido: {e}"}, 400)
         except (BrokenPipeError, ConnectionResetError, TimeoutError):
             pass   # o cliente desistiu no meio do envio
         except Exception as e:  # noqa: BLE001 — bug do servidor: registra o traceback e responde 500
+            if isinstance(e, ValueError) and eh_api and not caminho.startswith("/api/v1"):
+                # API do site: conversões como ano=abc (sqlite.filtros.inteiro) chegam como ValueError
+                self._json({"erro": f"parâmetro inválido: {e}"}, 400)
+                return
             traceback.print_exc()
             if eh_api:
                 self._json({"erro": f"erro interno do servidor ({type(e).__name__})"}, 500)
@@ -351,10 +376,16 @@ class Servidor(ThreadingHTTPServer):
     daemon_threads = True
     request_queue_size = 64
 
-    def __init__(self, endereco: tuple[str, int], leitura: FonteDeLeitura, confiar_proxy: bool = False):
+    def __init__(self, endereco: tuple[str, int], leitura: FonteDeLeitura, confiar_proxy: bool = False,
+                 saltos_proxy: int = 1):
         self.leitura = leitura
         # atrás de um proxy reverso o IP real vem em X-Forwarded-For; sem proxy, o cabeçalho é forjável
         self.confiar_proxy = confiar_proxy
+        # quantos proxies seus há na frente do servidor: o IP do visitante é o N-ésimo de X-Forwarded-For,
+        # contado da direita (Handler._ip)
+        self.saltos_proxy = max(saltos_proxy, 1)
+        # domínios aceitos em X-Forwarded-Host (Handler._base)
+        self.hosts_publicos = (URL_SITE.split("://", 1)[-1].lower(), *HOSTS_PUBLICOS)
         super().__init__(endereco, Handler)
 
     def verify_request(self, request, client_address) -> bool:

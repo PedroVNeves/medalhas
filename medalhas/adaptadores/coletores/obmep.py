@@ -1,7 +1,10 @@
-"""Coletor da OBMEP: relatórios de premiados em premiacao.obmep.org.br, por edição, medalha e rede."""
+"""Coletor da OBMEP: relatórios de premiados em premiacao.obmep.org.br, por edição, medalha e rede.
+
+As menções honrosas ficam em listas por estado (verRelatorioPremiadosMencao-UF), fora da página nacional de
+premiados; são cerca de 50 mil por edição. Só entram com mencoes=True (ver docs/mencoes-obmep.md)."""
 import re
 
-from ...dominio.premiacao import BRONZE, OURO, PRATA, Premiacao
+from ...dominio.premiacao import BRONZE, MENCAO, OURO, PRATA, UFS, Premiacao
 from .html import texto
 from .http import baixar
 
@@ -16,7 +19,7 @@ COLUNAS = {"nome": "nome", "escola": "escola", "tipo": "tipo", "municipio": "mun
 
 def pastas_das_edicoes() -> list[str]:
     """Pasta de cada edição, na ordem em que aparecem na página de premiados ('2014', '16aobmep'…)."""
-    pagina = baixar(INDICE) or ""
+    pagina = baixar(INDICE, esperado="premiacao.obmep.org.br") or ""
     return list(dict.fromkeys(re.findall(r"premiacao\.obmep\.org\.br/([^/\"]+)/mapa", pagina)))
 
 
@@ -51,7 +54,8 @@ def ler_relatorio(pagina: str) -> tuple[int | None, list[dict]]:
             continue
         if not colunas:
             continue
-        celulas = [texto(c.split("</td>")[0]) for c in re.split(r"<td\b[^>]*>", trecho, flags=re.I)[1:]]
+        celulas = [texto(re.split(r"</td>", c, flags=re.I)[0])
+                   for c in re.split(r"<td\b[^>]*>", trecho, flags=re.I)[1:]]
         registro = {col: celulas[i] for i, col in enumerate(colunas) if col and i < len(celulas)}
         if registro.get("nome"):
             registro["nivel"] = nivel
@@ -59,29 +63,55 @@ def ler_relatorio(pagina: str) -> tuple[int | None, list[dict]]:
     return ano, linhas
 
 
-def coletar(log=print) -> list[Premiacao]:
+def _premiacoes(url: str, pasta: str, rede: str, medalha: str) -> tuple[int | None, list[Premiacao]]:
+    """(ano, premiações) de um relatório; (None, []) se ele não existe ou vem sem tabela."""
+    pagina = baixar(url)
+    if not pagina or "<table" not in pagina.lower():
+        return None, []
+    ano, linhas = ler_relatorio(pagina)
+    ano = ano or ano_da_pasta(pasta)
+    premiacoes: list[Premiacao] = []
+    for r in linhas:
+        tipo = (r.get("tipo") or "").strip().upper()
+        premiacoes.append({
+            "competicao": "OBMEP", "ano": ano, "nivel": r.get("nivel"), "nome": r["nome"],
+            "escola": r.get("escola") or None, "rede": rede, "esfera": ESFERAS.get(tipo, tipo or None),
+            "municipio": r.get("municipio") or None, "uf": (r.get("uf") or "").upper() or None,
+            "premio": medalha if medalha == MENCAO else (r.get("medalha") or medalha), "medalha": medalha,
+            "pontos": None, "fonte": url,
+        })
+    return ano, premiacoes
+
+
+def coletar(log=print, mencoes: bool = False) -> list[Premiacao]:
     """Premiações de todas as edições: um relatório por medalha (ouro, prata, bronze) e rede (pública, privada).
+    Com mencoes=True, também as menções honrosas, numa lista por estado e rede.
 
     Relatórios que não existem ou vêm sem tabela são pulados. O ano vem do título do relatório ou, sem ele,
     do nome da pasta; a esfera (E, M, F, P) vira o nome por extenso."""
     premiacoes: list[Premiacao] = []
     for pasta in pastas_das_edicoes():
+        redes_da_edicao = set()
         for medalha in MEDALHAS:
             for sufixo, rede in REDES:
                 url = f"{BASE}/{pasta}/verRelatorioPremiados{medalha}{sufixo}"
-                pagina = baixar(url)
-                if not pagina or "<table" not in pagina.lower():
+                ano, achadas = _premiacoes(url, pasta, rede, medalha)
+                if ano is None:
                     continue
-                ano, linhas = ler_relatorio(pagina)
-                ano = ano or ano_da_pasta(pasta)
-                for r in linhas:
-                    tipo = (r.get("tipo") or "").strip().upper()
-                    premiacoes.append({
-                        "competicao": "OBMEP", "ano": ano, "nivel": r.get("nivel"), "nome": r["nome"],
-                        "escola": r.get("escola") or None, "rede": rede,
-                        "esfera": ESFERAS.get(tipo, tipo or None),
-                        "municipio": r.get("municipio") or None, "uf": (r.get("uf") or "").upper() or None,
-                        "premio": r.get("medalha") or medalha, "medalha": medalha, "pontos": None, "fonte": url,
-                    })
-                log(f"OBMEP {ano} {medalha:6} {rede:7} {len(linhas):5} linhas  ({pasta})")
+                redes_da_edicao.add(sufixo)
+                premiacoes += achadas
+                log(f"OBMEP {ano} {medalha:6} {rede:7} {len(achadas):5} linhas  ({pasta})")
+        if not mencoes:
+            continue
+        # só nas redes que a edição premiou (escolas privadas entraram em 2017): sem pedir 27 listas inexistentes
+        for sufixo, rede in REDES:
+            if sufixo not in redes_da_edicao:
+                continue
+            n, ano = 0, None
+            for uf in UFS:
+                ano_uf, achadas = _premiacoes(f"{BASE}/{pasta}/verRelatorioPremiadosMencao-{uf}{sufixo}", pasta, rede,
+                                              MENCAO)
+                ano, n = ano or ano_uf, n + len(achadas)
+                premiacoes.extend(achadas)
+            log(f"OBMEP {ano or ano_da_pasta(pasta)} Menção {rede:7} {n:5} linhas  ({pasta})")
     return premiacoes

@@ -5,8 +5,16 @@ OURO, PRATA, BRONZE, MENCAO = "Ouro", "Prata", "Bronze", "Menção Honrosa"
 MEDALHAS = (OURO, PRATA, BRONZE)             # medalhas propriamente ditas
 PREMIOS = (OURO, PRATA, BRONZE, MENCAO)      # categorias aceitas nos filtros
 
-UFS = ("AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT", "PA", "PB", "PE", "PI",
-       "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO")
+# Sigla -> nome do estado. A única tabela de estados do sistema: as outras (nomes sem acento para ler PDFs,
+# expansão de siglas de escola) são derivadas dela.
+NOMES_UF = {
+    "AC": "Acre", "AL": "Alagoas", "AM": "Amazonas", "AP": "Amapá", "BA": "Bahia", "CE": "Ceará",
+    "DF": "Distrito Federal", "ES": "Espírito Santo", "GO": "Goiás", "MA": "Maranhão", "MG": "Minas Gerais",
+    "MS": "Mato Grosso do Sul", "MT": "Mato Grosso", "PA": "Pará", "PB": "Paraíba", "PE": "Pernambuco",
+    "PI": "Piauí", "PR": "Paraná", "RJ": "Rio de Janeiro", "RN": "Rio Grande do Norte", "RO": "Rondônia",
+    "RR": "Roraima", "RS": "Rio Grande do Sul", "SC": "Santa Catarina", "SE": "Sergipe", "SP": "São Paulo",
+    "TO": "Tocantins"}
+UFS = tuple(NOMES_UF)
 
 
 class Premiacao(TypedDict):
@@ -16,7 +24,7 @@ class Premiacao(TypedDict):
     `premio` é o texto original publicado; `pontos` é a nota na prova, quando divulgada.
     """
     competicao: str
-    ano: int | None
+    ano: int                 # premiação sem ano é descartada ao gerar a base (aplicacao.gerar_base)
     nivel: str | None
     nome: str
     escola: str | None

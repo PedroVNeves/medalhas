@@ -11,9 +11,10 @@ import unittest
 import urllib.error
 import urllib.request
 from pathlib import Path
+from unittest import mock
 from urllib.parse import quote
 
-from medalhas.adaptadores.http import imagens
+from medalhas.adaptadores.http import imagens, limites
 from medalhas.adaptadores.http.servidor import Servidor
 from medalhas.adaptadores.sqlite import LeituraSqlite, RepositorioSqlite
 from medalhas.aplicacao.gerar_base import gerar_base
@@ -74,7 +75,7 @@ class TestPontaAPonta(unittest.TestCase):
         cls.pasta = tempfile.TemporaryDirectory()
         caminho = Path(cls.pasta.name) / "medalhas.db"
         cls.relatorio = gerar_base([ColetorFalso("OBMEP", PREMIACOES), ColetorFalso("OBI", [], falhar=True)],
-                                   RepositorioSqlite(caminho), log=lambda _: None)
+                                   RepositorioSqlite(caminho), log=lambda _: None, permitir_parcial=True)
         cls.servidor = Servidor(("127.0.0.1", 0), LeituraSqlite(caminho))
         cls.base = f"http://127.0.0.1:{cls.servidor.server_address[1]}"
         threading.Thread(target=cls.servidor.serve_forever, daemon=True).start()
@@ -170,11 +171,18 @@ class TestPontaAPonta(unittest.TestCase):
         cabecalhos = {"X-Forwarded-Host": "medalhas.exemplo.com.br", "X-Forwarded-Proto": "https"}
         pedido = urllib.request.Request(self.base + caminho, headers=cabecalhos)
         self.servidor.confiar_proxy = True
+        aceitos = self.servidor.hosts_publicos
+        self.servidor.hosts_publicos = (*aceitos, "medalhas.exemplo.com.br")
         try:
             with urllib.request.urlopen(pedido, timeout=10) as r:
                 corpo = r.read().decode()
+            # domínio que não é do site (cabeçalho forjado por quem chama o servidor direto): endereço oficial
+            forjado = urllib.request.Request(self.base + caminho, headers={"X-Forwarded-Host": "malicioso.example"})
+            with urllib.request.urlopen(forjado, timeout=10) as r:
+                self.assertNotIn("malicioso.example", r.read().decode())
         finally:
             self.servidor.confiar_proxy = False
+            self.servidor.hosts_publicos = aceitos
         self.assertIn("https://medalhas.exemplo.com.br/api/v1/alunos/", corpo)
         # sem --trust-proxy o cabeçalho é ignorado (qualquer um poderia forjá-lo)
         with urllib.request.urlopen(urllib.request.Request(self.base + caminho, headers=cabecalhos)) as r:
@@ -244,6 +252,17 @@ class TestPontaAPonta(unittest.TestCase):
         self.assertEqual(r["id"], "MARIA SOUZA LIMA|AL")
         self.assertEqual(r["endereco"], "/aluno/maria-souza-lima-al")
 
+    def test_sitemap_dividido_em_fatias(self):
+        from medalhas.adaptadores.http import paginas
+        with mock.patch.object(paginas, "URLS_POR_SITEMAP", 1):   # um endereço por arquivo
+            indice = self.get("/sitemap.xml")[2].decode()
+            arquivos = re.findall(r"<loc>https://medalhas.online/(sitemaps/alunos-\d+\.xml)</loc>", indice)
+            enderecos = [re.findall(r"<loc>([^<]+)</loc>", self.get("/" + a)[2].decode()) for a in arquivos]
+        self.assertGreater(len(arquivos), 1)
+        self.assertTrue(all(len(e) == 1 for e in enderecos))
+        todos = [e[0] for e in enderecos]
+        self.assertEqual(todos, sorted(set(todos)))   # em ordem, sem repetir nem pular
+
     def test_sitemap(self):
         status, cab, corpo = self.get("/sitemap.xml")
         self.assertEqual(status, 200)
@@ -251,7 +270,8 @@ class TestPontaAPonta(unittest.TestCase):
         arquivos = re.findall(r"<loc>https://medalhas.online/([^<]+)</loc>", corpo.decode())
         self.assertEqual(arquivos, ["sitemaps/paginas.xml", "sitemaps/alunos-1.xml", "sitemaps/escolas-1.xml",
                                     "sitemaps/cidades-1.xml"])
-        self.assertIn("<loc>https://medalhas.online/cidade/maceio-al</loc>", self.get("/sitemaps/cidades-1.xml")[2].decode())
+        self.assertIn("<loc>https://medalhas.online/cidade/maceio-al</loc>",
+                      self.get("/sitemaps/cidades-1.xml")[2].decode())
         alunos = self.get("/sitemaps/alunos-1.xml")[2].decode()
         self.assertIn("<loc>https://medalhas.online/aluno/maria-souza-lima-al</loc>", alunos)
         self.assertEqual(self.get("/sitemaps/nada.xml")[0], 404)
@@ -278,6 +298,7 @@ class TestPontaAPonta(unittest.TestCase):
 
     def test_pagina_de_erro_em_enderecos_de_pagina(self):
         from unittest import mock
+
         from medalhas.adaptadores.http import paginas
         with mock.patch.object(paginas, "tela", side_effect=RuntimeError("bug")):
             status, cab, corpo = self.get("/sobre")
@@ -354,7 +375,8 @@ class TestPontaAPonta(unittest.TestCase):
             self.assertEqual((largura, altura), (1200, 630))
             self.assertIn("s-maxage", cab["Cache-Control"])
         escola = self.json("/api/v1/escolas?nome=etec")["escolas"][0]
-        self.assertEqual(self.get("/og/escola/" + re.sub(r"[^a-z0-9]+", "-", escola["id"].lower()).strip("-") + ".png")[0],
+        endereco = re.sub(r"[^a-z0-9]+", "-", escola["id"].lower()).strip("-")
+        self.assertEqual(self.get(f"/og/escola/{endereco}.png")[0],
                          200)
         self.assertEqual(self.get("/og/aluno/ninguem-xx.png")[0], 404)
         # story do Instagram: vertical, 1080×1920
@@ -373,6 +395,195 @@ class TestPontaAPonta(unittest.TestCase):
             self.assertIn('href="/css/site.css"', html)
             self.assertNotIn("cdn.tailwindcss.com", html)
 
+
+class TestRevisao(TestPontaAPonta):
+    """Comportamentos que entraram com a revisão do back-end, de ponta a ponta."""
+
+    def test_busca_devolve_os_grupos_ja_somados(self):
+        d = self.json("/api/busca?q=maria&metodo=site")
+        self.assertEqual((d["total"], d["total_grupos"]), (3, 1))
+        maria = d["grupos"][0]
+        self.assertEqual((maria["id"], maria["ouro"], maria["prata"], maria["bronze"], maria["total"]),
+                         ("MARIA SOUZA LIMA|AL", 1, 1, 1, 3))
+        self.assertEqual((maria["nome"], maria["uf"]), ("Maria Souza Lima", "AL"))   # da ficha do aluno
+        self.assertEqual(len({r["id"] for r in maria["premiacoes"]}), 3)   # id da premiação: chave das listas da tela
+        self.assertEqual([r["ano"] for r in maria["premiacoes"]], sorted((r["ano"] for r in maria["premiacoes"]),
+                                                                          reverse=True))   # mais recentes primeiro
+        # só o que a linha do cartão mostra: nada de pontos, rede, campos de busca
+        usados = {"id", "ano", "competicao", "medalha", "premio", "nivel", "fonte", "escola", "escola_chave",
+                  "municipio", "uf"}
+        self.assertTrue(all(set(r) <= usados for r in maria["premiacoes"]))
+        self.assertNotIn("xp", maria)
+        escolas = self.json("/api/busca?q=ifal&campo=escola")
+        self.assertEqual([g["total"] for g in escolas["grupos"]], [3])   # as três grafias, uma escola só
+
+    def test_busca_pagina_os_cartoes(self):
+        from medalhas.adaptadores.sqlite import consultas_site
+        with mock.patch.object(consultas_site, "GRUPOS_POR_PAGINA_BUSCA", 1):
+            todos = self.json("/api/busca?uf=AL")
+            seguinte = self.json("/api/busca?uf=AL&offset=1")
+        self.assertEqual(len(todos["grupos"]), 1)
+        self.assertGreater(todos["total_grupos"], 1)
+        self.assertFalse({g["id"] for g in todos["grupos"]} & {g["id"] for g in seguinte["grupos"]})
+
+    def test_limite_negativo_nao_devolve_o_ranking_inteiro(self):
+        self.assertEqual(self.json("/api/ranking?tipo=alunos&limite=-1")["itens"], [])
+        self.json("/api/ranking?limite=abc", 400)
+        self.json("/api/v1/premiacoes?ano=99999999999999999999999", 400)
+        self.assertEqual(self.json("/api/v1/premiacoes?offset=999999999999")["premiacoes"], [])
+
+    def test_exportar_ranking_recusa_filtro_que_nao_se_aplica(self):
+        erro = self.json("/api/v1/exportar?conjunto=estados&nome=maria", 400)["erro"]
+        self.assertIn("conjunto=premiacoes", erro)
+
+    def test_ip_do_visitante_e_contado_da_direita(self):
+        self.servidor.confiar_proxy, self.servidor.saltos_proxy = True, 2
+        try:
+            with mock.patch.dict(limites.GRUPOS, {"v1": {"quantidade": 2, "janela": 3600, "por_dia": None}}):
+                def chamar(forjado: str) -> int:
+                    pedido = urllib.request.Request(
+                        self.base + "/api/v1/olimpiadas",
+                        headers={"X-Forwarded-For": f"{forjado}, 203.0.113.9, 10.0.0.1"})
+                    try:
+                        with urllib.request.urlopen(pedido, timeout=10) as r:
+                            return r.status
+                    except urllib.error.HTTPError as e:
+                        return e.code
+                # trocar o valor da esquerda (o que o cliente manda) não dá cota nova
+                self.assertEqual([chamar("1.1.1.1"), chamar("2.2.2.2"), chamar("3.3.3.3")], [200, 200, 429])
+        finally:
+            self.servidor.confiar_proxy, self.servidor.saltos_proxy = False, 1
+
+    def test_base_nao_e_gravada_com_fonte_faltando(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / "medalhas.db"
+            relatorio = gerar_base([ColetorFalso("OBMEP", PREMIACOES), ColetorFalso("OBI", [])],
+                                   RepositorioSqlite(caminho), log=lambda _: None)
+            self.assertFalse(relatorio.gravada)
+            self.assertIn("OBI", relatorio.falhas[0])   # fonte que não devolve nada também é falha
+            self.assertFalse(caminho.exists())
+
+    def test_base_nao_e_gravada_se_uma_olimpiada_encolhe_muito(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            repositorio = RepositorioSqlite(Path(pasta) / "medalhas.db")
+            self.assertEqual(repositorio.premiacoes_por_olimpiada(), {})   # ainda não há base
+            completa = [ColetorFalso("OBMEP", PREMIACOES)]
+            self.assertTrue(gerar_base(completa, repositorio, log=lambda _: None).gravada)
+            total = repositorio.premiacoes_por_olimpiada()["OBMEP"]
+
+            pela_metade = [ColetorFalso("OBMEP", PREMIACOES[:len(PREMIACOES) // 2])]
+            relatorio = gerar_base(pela_metade, repositorio, log=lambda _: None)
+            self.assertFalse(relatorio.gravada)
+            self.assertIn("queda", relatorio.falhas[0])
+            self.assertEqual(repositorio.premiacoes_por_olimpiada()["OBMEP"], total)   # a base anterior ficou
+            # perder uma linha ou outra (correção da lista oficial) não é falha; e dá para forçar
+            self.assertTrue(gerar_base(pela_metade, repositorio, log=lambda _: None, permitir_parcial=True).gravada)
+
+    def test_posicao_do_perfil_e_a_da_lista(self):
+        lista = {i["id"]: i["pos"] for i in self.json("/api/ranking?tipo=alunos&metodo=site")["itens"]}
+        for ident, pos in lista.items():
+            self.assertEqual(self.json("/api/aluno?metodo=site&id=" + quote(ident))["rank"], pos)
+
+
+
+class TestPerfisSoComMencao(unittest.TestCase):
+    """Perfis só com menções da OBMEP existem e aparecem na busca, mas ficam fora do sitemap e com noindex."""
+
+    def test_fora_do_google(self):
+        from medalhas.adaptadores.http import paginas
+        premiacoes = [p("BIA MEDALHA COSTA", "AL", "OBMEP", 2020, "Ouro", escola="EE Um", municipio="Maceió"),
+                      p("CAIO SO MENCAO", "AL", "OBMEP", 2020, "Menção Honrosa", escola="EE Dois", municipio="Maceió")]
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / "medalhas.db"
+            gerar_base([ColetorFalso("OBMEP", premiacoes)], RepositorioSqlite(caminho), log=lambda _: None)
+            with LeituraSqlite(caminho).sessao() as s:
+                medalhista = paginas.perfil(s, "aluno", "bia-medalha-costa-al", "https://x").corpo.decode()
+                so_mencao = paginas.perfil(s, "aluno", "caio-so-mencao-al", "https://x").corpo.decode()
+                sitemap = paginas.sitemap(s, "sitemaps/alunos-1.xml", "https://x").decode()
+                escolas = paginas.sitemap(s, "sitemaps/escolas-1.xml", "https://x").decode()
+        self.assertIn('content="index, follow"', medalhista)
+        self.assertIn('content="noindex"', so_mencao)
+        self.assertIn("bia-medalha-costa-al", sitemap)
+        self.assertNotIn("caio-so-mencao-al", sitemap)
+        self.assertEqual(escolas.count("<loc>"), 1)   # a escola só com menção também fica de fora
+
+
+class TestRankingPeloBanco(unittest.TestCase):
+    """O ranking que o banco ordena e pagina (consultas_ranking) dá as mesmas posições que a definição de
+    referência em Python (dominio.ranking.ordenar e posicionar), com empates de propósito."""
+
+    @classmethod
+    def setUpClass(cls):
+        import random
+        sorteio = random.Random(7)
+        cidades = [("Maceió", "AL"), ("Arapiraca", "AL"), ("Recife", "PE"), ("Sobral", "CE")]
+        premiacoes = []
+        for i in range(400):
+            municipio, uf = sorteio.choice(cidades)
+            competicao = sorteio.choice(["OBMEP", "OBMEP", "OBM"])
+            premiacoes.append(p(f"ALUNO {sorteio.randrange(60)} SILVA", uf, competicao,
+                                sorteio.randrange(2010, 2016),
+                                sorteio.choice(["Ouro", "Prata", "Bronze", "Menção Honrosa"]),
+                                escola=f"Escola {sorteio.randrange(12)}", municipio=municipio,
+                                nivel=sorteio.choice(["1", "2", "3"])))
+        cls.pasta = tempfile.TemporaryDirectory()
+        caminho = Path(cls.pasta.name) / "medalhas.db"
+        gerar_base([ColetorFalso("OBMEP", [x for x in premiacoes if x["competicao"] == "OBMEP"]),
+                    ColetorFalso("OBM", [x for x in premiacoes if x["competicao"] == "OBM"])],
+                   RepositorioSqlite(caminho), log=lambda _: None)
+        cls.leitura = LeituraSqlite(caminho)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.pasta.cleanup()
+
+    def referencia(self, sessao, tipo, ordem, metodo, uf=None):
+        """id -> posição, calculada em Python a partir das premiações do recorte."""
+        from medalhas.dominio import pontuacao, ranking
+        _, coluna = pontuacao.resolver_metodo(metodo)
+        niveis = (pontuacao.restringir_niveis(metodo, None) or "").split(",")
+        chave = {"alunos": "aluno_id", "escolas": "escola_chave", "estados": "uf",
+                 "cidades": "municipio_busca || '|' || uf"}[tipo]
+        itens: dict = {}
+        for r in sessao._con.execute(f"SELECT {chave} AS id, medalha, nivel, uf, municipio_busca, escola_chave, "
+                                     f"p_impa3, {coluna} AS pts FROM medalhas"):
+            if (uf and r["uf"] != uf) or not r["id"] or (tipo == "cidades" and not r["municipio_busca"]):
+                continue
+            if metodo == "impa3" and (r["p_impa3"] <= 0 or r["nivel"] not in niveis):
+                continue
+            it = itens.setdefault(r["id"], {"id": r["id"], "nome": "", "p": 0, "ouro": 0, "prata": 0, "bronze": 0})
+            it["p"] += r["pts"] or 0
+            campo = {"Ouro": "ouro", "Prata": "prata", "Bronze": "bronze"}.get(r["medalha"])
+            if campo:
+                it[campo] += 1
+        ordenados = ranking.ordenar(list(itens.values()), ordem, "p")
+        return {i["id"]: pos for pos, i in ranking.posicionar(ordenados, ranking.chave_de_ordenacao(ordem, "p"))}
+
+    def test_mesmas_posicoes_que_a_referencia(self):
+        from medalhas.adaptadores.sqlite import consultas_ranking
+        with self.leitura.sessao() as s:
+            for tipo in ("alunos", "escolas", "estados", "cidades"):
+                for ordem in ("xp", "medalhas", "total"):
+                    for metodo in ("impa", "impa3", "site"):
+                        for uf in (None, "AL"):
+                            with self.subTest(tipo=tipo, ordem=ordem, metodo=metodo, uf=uf):
+                                params = {"tipo": tipo, "ordem": ordem, "metodo": metodo, "uf": uf}
+                                pagina = consultas_ranking.pagina(s._con, params, 0, 500)
+                                esperado = self.referencia(s, tipo, ordem, metodo, uf)
+                                self.assertEqual({i["id"]: i["pos"] for i in pagina.itens}, esperado)
+                                self.assertEqual(pagina.total, len(esperado))
+                                # paginar não muda nada: a 2ª página continua de onde a 1ª parou
+                                dividida = (consultas_ranking.pagina(s._con, params, 0, 7).itens
+                                            + consultas_ranking.pagina(s._con, params, 7, 500).itens)
+                                self.assertEqual([i["id"] for i in dividida], [i["id"] for i in pagina.itens])
+
+    def test_tela_recebe_so_os_campos_que_mostra(self):
+        from medalhas.adaptadores.sqlite import consultas_site
+        with self.leitura.sessao() as s:
+            item = consultas_site.ranking(s._con, {"tipo": "alunos"})["itens"][0]
+            self.assertEqual(set(item), {"id", "pos", "xp", "ouro", "prata", "bronze", "mencao", "nome", "uf",
+                                         "escola", "municipio", "de", "ate", "tier"})
+            self.assertEqual(set(item["tier"]), {"nome", "cor"})
 
 if __name__ == "__main__":
     unittest.main()

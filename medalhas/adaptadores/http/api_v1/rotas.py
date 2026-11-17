@@ -10,7 +10,6 @@ from urllib.parse import quote, unquote
 from ....aplicacao.portas import Criterios, SessaoDeLeitura
 from ....dominio import pontuacao
 from ....dominio.premiacao import PREMIOS, UFS
-from ....dominio.ranking import com_posicoes
 from .. import limites
 from ..pedido import Pedido
 from . import apresentacao as ap
@@ -163,20 +162,15 @@ def premiacoes(s: SessaoDeLeitura, pedido: Pedido) -> dict:
 
 
 def ranking(s: SessaoDeLeitura, pedido: Pedido, tipo: str) -> dict:
-    """GET /api/v1/ranking/{tipo}: uma página do ranking; alunos sem escola no recorte levam a mais recente."""
+    """GET /api/v1/ranking/{tipo}: uma página do ranking. Nome, UF, escola e cidade são os do perfil (a escola
+    é a mais recente do aluno), mesmo com filtros."""
     params = pedido.params
     limite, offset = parametros.paginacao(params, "ranking")
-    r = s.ranking_ordenado(parametros.ranking(params, tipo, s))
-    itens = list(com_posicoes(r, offset, limite))
-    if tipo == "alunos":   # rankings filtrados não trazem a escola: completa com a mais recente
-        ultima_escola = s.ultima_escola_dos_alunos()
-        for item in itens:
-            if not item.get("escola"):
-                item["escola"], item["municipio"] = ultima_escola.get(item["id"], (None, None))
+    r = s.ranking_pagina(parametros.ranking(params, tipo, s), offset, limite)
     links = ap.Links(pedido.base)
     return {"consulta": ap.consulta(params), "tipo": tipo, "metodo": r.metodo, "ordem": r.ordem,
-            "niveis_considerados": r.niveis, "total": len(r.itens), "offset": offset, "limite": limite,
-            "itens": [ap.item_ranking(item, tipo, links) for item in itens]}
+            "niveis_considerados": r.niveis, "total": r.total, "offset": offset, "limite": limite,
+            "itens": [ap.item_ranking(item, tipo, links) for item in r.itens]}
 
 
 # ---------------------------------------------------------------- roteamento

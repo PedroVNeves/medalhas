@@ -2,7 +2,7 @@
 import re
 
 from ...dominio.premiacao import BRONZE, MENCAO, OURO, PRATA, Premiacao
-from .html import corpo_do_artigo, nota, texto
+from .html import celulas_das_linhas, corpo_do_artigo, nota, texto
 from .http import baixar
 
 INDICE = "https://www.obm.org.br/quem-somos/premiados-da-obm/"
@@ -25,7 +25,7 @@ _NIVEIS = [
 
 def paginas_dos_anos() -> list[str]:
     """Endereços das páginas premiados-obm-AAAA linkadas no índice da OBM, sem repetição."""
-    pagina = baixar(INDICE) or ""
+    pagina = baixar(INDICE, esperado="premiados-obm-") or ""
     return sorted(set(re.findall(r"https://www\.obm\.org\.br/premiados-obm-\d{4}/", pagina)))
 
 
@@ -77,11 +77,7 @@ def ler_pagina(pagina: str) -> tuple[int | None, list[dict]]:
         nivel = nivel_no_texto(texto(corpo[fim_anterior:tabela.start()]))
         fim_anterior = tabela.end()
         colunas = None
-        for trecho in re.split(r"<tr\b", tabela.group(0), flags=re.I)[1:]:
-            trecho = re.split(r"</tr>", trecho, flags=re.I)[0]
-            celulas = [texto(c) for c in re.split(r"<t[dh]\b[^>]*>", trecho, flags=re.I)[1:]]
-            if not any(celulas):
-                continue
+        for celulas in celulas_das_linhas(tabela.group(0)):
             minusculas = [c.lower() for c in celulas]
             if "nome" in minusculas:
                 colunas = [COLUNAS.get(c) for c in minusculas]

@@ -8,7 +8,7 @@ import re
 
 from ...dominio.olimpiadas import CATALOGO
 from ...dominio.premiacao import Premiacao
-from .html import corpo_do_artigo, nota, texto
+from .html import celulas_das_linhas, corpo_do_artigo, nota, registrar_periodo, texto
 from .http import baixar
 from .obm import COLUNAS as COLUNAS_OBM
 from .obm import categoria_do_premio, nivel_no_texto, separar_cidade
@@ -41,11 +41,7 @@ def ler_pagina(pagina: str, nivel_fixo: str | None) -> list[dict]:
         ano = _ano(antes) or ano   # tabela sem título herda o ano da anterior (ex.: os 2 níveis da Maio)
         nivel = nivel_fixo or nivel_no_texto(antes[-200:])
         colunas = None
-        for trecho in re.split(r"<tr\b", tabela.group(0), flags=re.I)[1:]:
-            trecho = re.split(r"</tr>", trecho, flags=re.I)[0]
-            celulas = [texto(c) for c in re.split(r"<t[dh]\b[^>]*>", trecho, flags=re.I)[1:]]
-            if not any(celulas):
-                continue
+        for celulas in celulas_das_linhas(tabela.group(0)):
             minusculas = [c.lower() for c in celulas]
             if "nome" in minusculas or "participante" in minusculas:
                 colunas = [COLUNAS.get(c) for c in minusculas]
@@ -81,6 +77,5 @@ def coletar(sigla: str, log=print) -> list[Premiacao]:
             "municipio": municipio, "uf": uf, "premio": premio or None,
             "medalha": categoria_do_premio(premio), "pontos": nota(r.get("pontos")), "fonte": url,
         })
-    anos = sorted({p["ano"] for p in premiacoes})
-    log(f"{sigla}: {len(premiacoes)} premiações, {anos[0] if anos else '-'}–{anos[-1] if anos else '-'}")
+    registrar_periodo(log, sigla, premiacoes)
     return premiacoes

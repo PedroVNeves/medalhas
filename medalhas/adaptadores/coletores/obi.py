@@ -7,7 +7,7 @@ Cada edição (olimpiada.ic.unicamp.br/passadas/OBIAAAA/) aponta para o quadro d
 import re
 
 from ...dominio.premiacao import MENCAO, Premiacao
-from .html import nota, texto
+from .html import nota, registrar_periodo, texto
 from .http import baixar
 
 BASE = "https://olimpiada.ic.unicamp.br"
@@ -25,7 +25,7 @@ NIVEIS = {
 
 def edicoes() -> list[tuple[int, str]]:
     """(ano, página da edição) de cada OBI listada em /passadas/, em ordem de ano."""
-    pagina = baixar(f"{BASE}/passadas/") or ""
+    pagina = baixar(f"{BASE}/passadas/", esperado="/passadas/OBI") or ""
     return sorted({(int(a), f"{BASE}/passadas/OBI{a}/") for a in re.findall(r'href="/passadas/OBI(\d{4})/"', pagina)})
 
 
@@ -87,6 +87,5 @@ def coletar(log=print) -> list[Premiacao]:
                     "premio": "Honra ao Mérito" if r["medalha"] == MENCAO else r["medalha"],
                     "medalha": r["medalha"], "pontos": nota(r.get("pontos")), "fonte": url_quadro,
                 })
-    anos = sorted({p["ano"] for p in premiacoes})
-    log(f"OBI: {len(premiacoes)} premiações, {anos[0] if anos else '-'}–{anos[-1] if anos else '-'}")
+    registrar_periodo(log, "OBI", premiacoes)
     return premiacoes

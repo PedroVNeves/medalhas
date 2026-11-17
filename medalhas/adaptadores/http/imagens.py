@@ -9,6 +9,7 @@ poucas vezes. Precisa do Pillow (requirements.txt); sem ele o servidor responde 
 sem imagem, mas o resto do site funciona.
 """
 import io
+import math
 import threading
 from functools import lru_cache
 from pathlib import Path
@@ -122,7 +123,6 @@ def _fundo(largura: int = LARGURA, altura: int = ALTURA) -> "Image.Image":
 
 def _estrela(d: "ImageDraw.ImageDraw", cx: float, cy: float, raio: float, cor) -> None:
     """Estrela de cinco pontas centrada em (cx, cy)."""
-    import math
     pontos = []
     for i in range(10):
         r = raio if i % 2 == 0 else raio * 0.45
@@ -135,8 +135,8 @@ def _medalha(d: "ImageDraw.ImageDraw", x: int, y: int, tamanho: int) -> None:
     """O ícone do site (web/favicon.svg) em tamanho × tamanho."""
     k = tamanho / 64
     def fita(x0, x1, x2, x3, cor):   # topo de x0 a x1, base de x2 a x3 (em 1/64 do tamanho)
-        d.polygon([(x + x0 * k, y + 2 * k), (x + x1 * k, y + 2 * k), (x + x3 * k, y + 24 * k), (x + x2 * k, y + 24 * k)],
-                  fill=cor)
+        d.polygon([(x + x0 * k, y + 2 * k), (x + x1 * k, y + 2 * k), (x + x3 * k, y + 24 * k),
+                   (x + x2 * k, y + 24 * k)], fill=cor)
     fita(18, 30, 24, 36, (79, 107, 216))
     fita(22.5, 25.5, 28.5, 31.5, (140, 160, 240))
     fita(34, 46, 28, 40, (224, 71, 91))
@@ -263,7 +263,7 @@ def escola(d: dict) -> bytes:
     m = d["medalhas"]
     lugar = ", ".join(p for p in (capitalizar_nome(d["municipio"]) if d.get("municipio") else None, d.get("uf")) if p)
     plural = "aluno premiado" if d["alunos"] == 1 else "alunos premiados"
-    siglas = _siglas(d.get("recentes") or [])
+    siglas = [o["sigla"] for o in d.get("olimpiadas") or []]
     rodape = [f"{numero(d['alunos'])} {plural}", *siglas[:4]]
     destaque = _posicao(d.get("rank"), "ª no ranking de escolas")
     rotulo = "Escola" + (f" · {lugar}" if lugar else "")
@@ -425,7 +425,7 @@ def story_escola(d: dict) -> bytes:
     """Story da escola, a partir do perfil: alunos premiados e as olimpíadas."""
     lugar = ", ".join(p for p in (capitalizar_nome(d["municipio"]) if d.get("municipio") else None, d.get("uf")) if p)
     plural = "aluno premiado" if d["alunos"] == 1 else "alunos premiados"
-    etiquetas = _siglas(d.get("recentes") or [])
+    etiquetas = [o["sigla"] for o in d.get("olimpiadas") or []]
     with _trava:
         return _story("Escola" + (f" · {lugar}" if lugar else ""), nome_de_exibicao(d["nome"]),
                       f"{numero(d['alunos'])} {plural}", d["medalhas"], etiquetas,

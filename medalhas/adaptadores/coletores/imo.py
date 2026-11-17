@@ -3,7 +3,7 @@ import re
 import time
 
 from ...dominio.premiacao import Premiacao
-from .html import texto
+from .html import registrar_periodo, texto
 from .http import baixar
 
 URL = "https://www.imo-official.org/results/team/year/{ano}/country/BRA/"
@@ -46,6 +46,5 @@ def coletar(log=print) -> list[Premiacao]:
                 "pontos": r["pontos"] if re.fullmatch(r"\d+", r["pontos"] or "") else None,
                 "fonte": url,
             })
-    anos = sorted({p["ano"] for p in premiacoes})
-    log(f"IMO: {len(premiacoes)} premiações, {anos[0] if anos else '-'}–{anos[-1] if anos else '-'}")
+    registrar_periodo(log, "IMO", premiacoes)
     return premiacoes

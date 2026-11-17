@@ -5,6 +5,7 @@ para os dados quanto para o que o usuário digita na busca.
 """
 import re
 
+from .premiacao import NOMES_UF
 from .texto import normalizar
 
 PARTICULAS = {"DE", "DA", "DO", "DAS", "DOS", "E", "D"}
@@ -20,14 +21,8 @@ ESCOLAS_RENOMEADAS: dict[str, str] = {
     "INSTITUTO ORT TECNOLOGIA|RIO DE JANEIRO|RJ": "ESCOLA ORT|RIO DE JANEIRO|RJ",
 }
 
-UF_NOMES = {
-    "AC": "ACRE", "AL": "ALAGOAS", "AM": "AMAZONAS", "AP": "AMAPA", "BA": "BAHIA", "CE": "CEARA",
-    "DF": "DISTRITO FEDERAL", "ES": "ESPIRITO SANTO", "GO": "GOIAS", "MA": "MARANHAO",
-    "MG": "MINAS GERAIS", "MS": "MATO GROSSO SUL", "MT": "MATO GROSSO", "PA": "PARA",
-    "PB": "PARAIBA", "PE": "PERNAMBUCO", "PI": "PIAUI", "PR": "PARANA", "RJ": "RIO JANEIRO",
-    "RN": "RIO GRANDE NORTE", "RO": "RONDONIA", "RR": "RORAIMA", "RS": "RIO GRANDE SUL",
-    "SC": "SANTA CATARINA", "SE": "SERGIPE", "SP": "SAO PAULO", "TO": "TOCANTINS",
-}
+# Sigla -> nome do estado como entra na chave da escola: sem acento e sem partículas ("RIO JANEIRO")
+UF_NOMES = {uf: " ".join(p for p in normalizar(nome).split() if p not in PARTICULAS) for uf, nome in NOMES_UF.items()}
 
 # Palavra abreviada -> palavra completa
 ABREVIACOES = {
@@ -172,17 +167,20 @@ def indexar_escola(escola: str | None, municipio: str | None, uf: str | None) ->
     return termos, chave
 
 
-def completar_municipios(premiacoes: list[dict]) -> int:
+def completar_municipios(premiacoes: list[dict], provas: list[dict] | None = None) -> int:
     """Cidade das escolas que vieram sem ela (a OBQ publica só nome e estado). Altera a lista.
 
     Se o mesmo nome de escola (as palavras da chave) aparece numa única cidade daquele estado nas outras
     listas, a premiação adota essa cidade e cai na mesma escola. Senão, se o nome traz o campus e ele é uma
-    cidade conhecida do estado ("IFES - CAMPUS VITORIA"), adota essa cidade. Sem isso, fica sem cidade.
+    cidade conhecida do estado ("IFES - CAMPUS VITORIA"), ou termina com a cidade depois de um hífen
+    ("IFBA - SALVADOR"), adota essa cidade. Sem isso, fica sem cidade.
+    provas: as premiações que servem de prova (padrão: todas). As menções da OBMEP ficam de fora, para não
+    mudarem a escola das demais premiações (ver identidade.de_massa).
     Devolve quantas premiações ganharam cidade.
     """
     cidades: dict[tuple[str, str], dict[str, str]] = {}
     do_estado: dict[str, dict[str, str]] = {}   # UF -> cidade normalizada -> grafia
-    for p in premiacoes:
+    for p in premiacoes if provas is None else provas:
         if p.get("municipio") and p.get("uf"):
             do_estado.setdefault(p["uf"], {}).setdefault(normalizar(p["municipio"]), p["municipio"])
             if p.get("escola"):
@@ -195,10 +193,13 @@ def completar_municipios(premiacoes: list[dict]) -> int:
             # normalizar tira hífens: "IFES - CAMPUS VITORIA" vira "IFES CAMPUS VITORIA"
             campus = re.search(r"(?:CAMPUS|UNED|UNIDADE)\s+(?:AVANCADO\s+)?(.+)$", normalizar(p["escola"]))
             cidade_do_campus = campus.group(1).strip() if campus else ""
+            depois_do_hifen = normalizar(re.split(r"\s[-–—]\s*|\s*[-–—]\s", p["escola"])[-1])
             if len(achadas) == 1:
                 p["municipio"] = next(iter(achadas.values()))
             elif cidade_do_campus in do_estado.get(p["uf"], {}):
                 p["municipio"] = do_estado[p["uf"]][cidade_do_campus]
+            elif depois_do_hifen != normalizar(p["escola"]) and depois_do_hifen in do_estado.get(p["uf"], {}):
+                p["municipio"] = do_estado[p["uf"]][depois_do_hifen]
             else:
                 continue
             completadas += 1

@@ -1,11 +1,16 @@
 """Adaptadores isolados: leitura das páginas oficiais, registro de coletores, limites por IP e validação da API."""
+import os
+import tempfile
+import time
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from medalhas.adaptadores import coletores
 from medalhas.adaptadores.coletores import egoi, ioai, itabirana, obm, obmep, obq, omif
 from medalhas.adaptadores.http import limites
 from medalhas.adaptadores.http.api_v1 import ParametroInvalido, parametros
+from medalhas.adaptadores.sqlite import conexao
 from medalhas.dominio.olimpiadas import CATALOGO
 
 
@@ -25,6 +30,22 @@ class TestColetores(unittest.TestCase):
             <tr><td>ANA&nbsp;LIMA</td><td>EE X</td><td>Natal</td><td>RN</td></tr></table>"""
         esperado = {"nome": "ANA LIMA", "escola": "EE X", "municipio": "Natal", "uf": "RN", "nivel": "1"}
         self.assertEqual(obmep.ler_relatorio(pagina), (2019, [esperado]))
+
+    def test_tabelas_da_obm_e_das_internacionais(self):
+        tabela = ('<table><tr><th>Nome</th><th>Prêmio</th><th>Cidade – Estado</th></tr>'
+                  '<tr><td>Ana <b>Lima</b></td><td>Ouro</td><td>Fortaleza – CE</td></tr><tr><td> </td></tr>'
+                  '<TR><TD>Bia Souza</TD><TD>Prata</TD><TD>Recife – PE</TD></TR></table>')
+        pagina = f'<title>Premiados – OBM – 2023</title><div class="post-body"><p>Nível 1</p>{tabela}</main>'
+        ano, linhas = obm.ler_pagina(pagina)
+        self.assertEqual(ano, 2023)
+        self.assertEqual(linhas, [
+            {"nome": "Ana Lima", "premio": "Ouro", "cidade": "Fortaleza – CE", "nivel": "1"},
+            {"nome": "Bia Souza", "premio": "Prata", "cidade": "Recife – PE", "nivel": "1"}])
+        from medalhas.adaptadores.coletores import obm_internacional
+        pagina = f'<div class="post-body"><p>41ª OIM, Buenos Aires (2026)</p>{tabela}</main>'
+        linhas = obm_internacional.ler_pagina(pagina, None)
+        self.assertEqual([(r["nome"], r["ano"], r["premio"]) for r in linhas],
+                         [("Ana Lima", 2026, "Ouro"), ("Bia Souza", 2026, "Prata")])
 
     def test_cidade_e_premio_da_obm(self):
         self.assertEqual(obm.separar_cidade("Fortaleza – CE"), ("Fortaleza", "CE"))
@@ -47,7 +68,7 @@ class TestColetores(unittest.TestCase):
         colunas = [(60, "MATO GROSSO DO SUL"), (143, "ANA LIMA(1)"), (354, "2º ANO EM"), (395, "COLÉGIO X"),
                    (701, "64,60"), (749, "77,83")]
         self.assertEqual(obq._registro(colunas), {"uf": "MS", "nome": "ANA LIMA(1)", "serie": "2º ANO EM",
-                                                  "escola": "COLÉGIO X", "nota": "64,60"})
+                                                  "x_serie": 354, "escola": "COLÉGIO X", "nota": "64,60"})
         junto = [(60, "MATO GROSSO DO SUL BIA REIS (PCD) 3º ANO EM INSTITUTO FEDERAL CAMPUS"), (701, "61,40 72,28")]
         r = obq._registro(junto)
         self.assertEqual((r["uf"], obq._limpar_nome(r["nome"]), r["escola"], r["nota"]),
@@ -154,6 +175,99 @@ class TestParametros(unittest.TestCase):
         with self.assertRaises(ParametroInvalido):
             parametros.texto({"nome": "ana bia caio davi eva fabio gil hugo ivo"}, "nome")
         self.assertEqual(parametros.paginacao({"limite": "9999", "offset": "-3"}, "alunos"), (100, 0))
+
+
+class TestRevisao(unittest.TestCase):
+    """Comportamentos que entraram com a revisão do back-end."""
+
+    def test_pedido_recusado_devolve_a_ficha(self):
+        with mock.patch.dict(limites.GRUPOS, {"teste": {"quantidade": 2, "janela": 3600, "por_dia": 2}}):
+            limitador = limites.Limitador()
+            for _ in range(5):   # cada pedido inválido gasta e devolve: a cota não acaba
+                self.assertTrue(limitador.consumir("teste", "1.1.1.1")[0])
+                limitador.devolver("teste", "1.1.1.1")
+            self.assertTrue(limitador.consumir("teste", "1.1.1.1")[0])
+            self.assertTrue(limitador.consumir("teste", "1.1.1.1")[0])
+            self.assertFalse(limitador.consumir("teste", "1.1.1.1")[0])
+
+    def test_inteiros_fora_da_faixa_sao_ajustados(self):
+        self.assertEqual(parametros.paginacao({"offset": "9" * 18}, "premiacoes")[1], parametros.OFFSET_MAXIMO)
+        with self.assertRaises(ParametroInvalido):
+            parametros.inteiro({"ano": "9" * 30}, "ano")
+        self.assertEqual(parametros.inteiro({"ano": "99999"}, "ano", None, *parametros.ANOS), parametros.ANOS[1])
+
+    def test_cache_limita_pelo_tamanho_e_descarta_o_menos_usado(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            base = Path(pasta) / "base.db"
+            base.write_text("v1")
+            cache = conexao.Cache(base)
+            with mock.patch.object(conexao, "_MAX_LINHAS_CACHE", 10):
+                cache.obter("a", lambda: [0] * 4)
+                cache.obter("b", lambda: [0] * 4)
+                cache.obter("a", lambda: self.fail("a estava no cache"))   # usar "a" o deixa por último na fila
+                cache.obter("c", lambda: [0] * 4)                          # 12 linhas: sai "b", o menos usado
+                cache.obter("a", lambda: self.fail("a deveria ter ficado"))
+                self.assertEqual(cache.obter("b", lambda: "recalculado"), "recalculado")
+                cache.obter("d", lambda: [0] * 80, leve=True)              # lista leve: 80 linhas pesam 10
+
+    def test_cache_usa_a_versao_da_base_que_a_conexao_abriu(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            base = Path(pasta) / "base.db"
+            base.write_text("v1")
+            cache = conexao.Cache(base)
+            versao_antiga = cache.versao()
+            depois = time.time() + 5
+            base.write_text("v2")
+            os.utime(base, (depois, depois))   # a base foi trocada no meio da requisição
+            self.assertEqual(cache.obter("k", lambda: "dado antigo", versao_antiga), "dado antigo")
+            self.assertEqual(cache.obter("k", lambda: "dado novo"), "dado novo")   # não herdou o antigo
+
+    def test_ioai_ignora_tabela_sem_as_colunas_esperadas(self):
+        pagina = ("<table><tr><th>Name</th><th>Score</th></tr><tr><td>Team A</td><td>9</td></tr></table>"
+                  "<table><tr><th>Name</th><th>Team</th><th>Award</th></tr>"
+                  "<tr><td>Ana Lima</td><td>Brazil</td><td>Gold</td></tr></table>")
+        self.assertEqual([r["nome"] for r in ioai.ler_resultados(pagina)], ["Ana Lima"])
+
+
+class TestDownload(unittest.TestCase):
+    """Uma resposta 200 sem o conteúdo esperado (manutenção, erro) não pode ficar no cache."""
+
+    def baixar_com(self, respostas, pasta, **kw):
+        from medalhas.adaptadores.coletores import http
+
+        class Resposta:
+            def __init__(self, corpo):
+                self.corpo = corpo
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self):
+                return self.corpo
+        fila = iter(respostas)
+        with (mock.patch.object(http, "PASTA_CACHE", Path(pasta)),
+              mock.patch.object(http, "PAUSA_ENTRE_DOWNLOADS", 0),
+              mock.patch.object(http.urllib.request, "urlopen", lambda *a, **k: Resposta(next(fila)))):
+            return http.baixar("https://exemplo.org/indice", **kw)
+
+    def test_pagina_sem_o_conteudo_esperado_nao_entra_no_cache(self):
+        from medalhas.adaptadores.coletores.http import RespostaInesperada
+        with tempfile.TemporaryDirectory() as pasta:
+            with self.assertRaises(RespostaInesperada):
+                self.baixar_com([b"<h1>Em manutencao</h1>"], pasta, esperado="premiados-")
+            self.assertEqual(list(Path(pasta).iterdir()), [])
+            boa = b'<a href="premiados-2024">2024</a>'
+            self.assertIn("premiados-2024", self.baixar_com([boa], pasta, esperado="premiados-"))
+            self.assertIn("premiados-2024", self.baixar_com([], pasta, esperado="premiados-"))   # veio do cache
+
+    def test_cache_antigo_de_pagina_ruim_e_baixado_de_novo(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            self.baixar_com([b"<h1>Em manutencao</h1>"], pasta)   # sem conferência: fica guardada (como antes)
+            boa = b'<a href="premiados-2024">2024</a>'
+            self.assertIn("premiados-2024", self.baixar_com([boa], pasta, esperado="premiados-"))
 
 
 if __name__ == "__main__":

@@ -116,6 +116,17 @@ class Limitador:
             cab["X-RateLimit-Remaining"] = str(restantes)
             return True, cab
 
+    def devolver(self, grupo: str, ip: str) -> None:
+        """Devolve a ficha gasta por um pedido que nem chegou a ser atendido (parâmetro inválido, id que não
+        existe): errar o nome de um parâmetro não deve custar uma das poucas exportações por hora."""
+        chave = (grupo, ip)
+        with self._lock:
+            balde, dia = self._baldes.get(chave), self._dia.get(chave)
+            if balde:
+                balde[0] = min(GRUPOS[grupo]["quantidade"], balde[0] + 1)
+            if dia and dia[1] > 0:
+                dia[1] -= 1
+
     def _limpar(self, agora: float, hoje: str) -> None:
         """Esquece IPs inativos para a memória não crescer sem limite."""
         maior_janela = max(g["janela"] for g in GRUPOS.values())

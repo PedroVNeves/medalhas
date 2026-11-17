@@ -14,7 +14,9 @@ import re
 import time
 
 from ...dominio.premiacao import BRONZE, MENCAO, OURO, PRATA, Premiacao
+from ...dominio.sexo import MENCAO_ELAS
 from ...dominio.texto import normalizar
+from .html import registrar_periodo
 from .http import baixar, baixar_bytes
 from .pdf import linhas, paginas
 
@@ -87,7 +89,9 @@ def coletar(log=print) -> list[Premiacao]:
     """Premiações de todas as edições desde 2018: cada PDF linkado na página de premiados do ano.
 
     A UF só é preenchida (MG) quando o PDF traz a cidade; nos outros anos fica para dominio.identidade.
-    O PDF escaneado de 2023 não tem texto e não rende ninguém."""
+    O PDF escaneado de 2023 não tem texto e não rende ninguém. No PDF da etapa "Elas em Destaque" a menção
+    honrosa é a da etapa: fica com prêmio próprio (sexo.MENCAO_ELAS), para não se confundir com a menção do
+    resultado principal e para a aluna entrar no filtro de meninas."""
     premiacoes: list[Premiacao] = []
     for ano in range(PRIMEIRO_ANO, time.localtime().tm_year + 1):
         pagina = baixar(f"{SITE}/noticias/premiados{ano}/") or ""
@@ -95,13 +99,14 @@ def coletar(log=print) -> list[Premiacao]:
             conteudo = baixar_bytes(SITE + href)
             if not conteudo:
                 continue
+            etapa_feminina = "elas" in href.lower()
             for r in ler_pdf(paginas(conteudo)):
                 medalha = r["faixa"]
+                premio = MENCAO_ELAS if etapa_feminina and medalha == MENCAO else medalha
                 premiacoes.append({
                     "competicao": "OITM", "ano": ano, "nivel": r["nivel"], "nome": r["nome"], "escola": r["escola"],
                     "rede": r["rede"], "esfera": None, "municipio": r["cidade"], "uf": "MG" if r["cidade"] else None,
-                    "premio": medalha, "medalha": medalha, "pontos": None, "fonte": SITE + href,
+                    "premio": premio, "medalha": medalha, "pontos": None, "fonte": SITE + href,
                 })
-    anos = sorted({p["ano"] for p in premiacoes})
-    log(f"OITM: {len(premiacoes)} premiações, {anos[0] if anos else '-'}–{anos[-1] if anos else '-'}")
+    registrar_periodo(log, "OITM", premiacoes)
     return premiacoes

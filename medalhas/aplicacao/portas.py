@@ -15,7 +15,7 @@ from typing import Any, Protocol
 from ..dominio.enderecos import Enderecos
 from ..dominio.escolas import Expansao
 from ..dominio.premiacao import Premiacao
-from ..dominio.ranking import RankingOrdenado
+from ..dominio.ranking import PaginaDoRanking
 
 Linha = Mapping[str, Any]   # registro lido da base, indexável pelo nome da coluna
 
@@ -36,6 +36,9 @@ class RepositorioPremiacoes(Protocol):
 
     def substituir(self, registros: list[dict], atualizado_em: str) -> None:
         """Troca a base inteira pelos registros (premiações indexadas por gerar_base.indexar)."""
+
+    def premiacoes_por_olimpiada(self) -> dict[str, int]:
+        """Quantas premiações de cada olimpíada (sigla) a base atual tem; vazio se ainda não há base."""
 
 
 # ---------------------------------------------------------------- leitura
@@ -58,7 +61,8 @@ class SessaoDeLeitura(Protocol):
     # ------------------------------------------------ páginas do site
     # Recebem os parâmetros crus da URL; valor desconhecido vira o padrão (a validação é tolerante).
     def busca(self, params: dict) -> dict:
-        """Premiações que casam com o texto (q, campo nome|escola|tudo) e os filtros."""
+        """Alunos (ou escolas, no campo escola) que mais pontuam entre as premiações que casam com o texto
+        (q, campo nome|escola|tudo) e os filtros: as contagens de cada um e as premiações que a tela mostra."""
 
     def sugestoes(self, params: dict) -> dict:
         """Até 8 alunos e escolas mais premiados que casam com o texto digitado (lista enquanto digita)."""
@@ -71,6 +75,9 @@ class SessaoDeLeitura(Protocol):
 
     def perfil_escola(self, escola_id: str, params: dict) -> dict:
         """Perfil completo da escola, ou {"erro": ...} se o id não existe."""
+
+    def premiacoes_recentes_da_escola(self, escola_id: str, limite: int) -> list[Linha]:
+        """As premiações mais recentes da escola (ano, competicao, premio, medalha, nivel, nome do aluno)."""
 
     def perfil_cidade(self, cidade_id: str, params: dict) -> dict:
         """Resumo da cidade (id MUNICIPIO|UF), ou {"erro": ...} se ela não tem premiações."""
@@ -92,11 +99,12 @@ class SessaoDeLeitura(Protocol):
     def niveis(self) -> set[str]:
         """Todos os níveis que aparecem na base (para validar o filtro nivel)."""
 
-    def ranking_ordenado(self, params: dict) -> RankingOrdenado:
-        """O ranking inteiro do recorte, já ordenado (a API e a exportação paginam por cima)."""
+    def ranking_pagina(self, params: dict, offset: int, limite: int) -> PaginaDoRanking:
+        """Uma página do ranking do recorte com todos os campos públicos (posição, nome, lugar, medalhas, pontos
+        nos três métodos, anos). Só as linhas da página saem da base."""
 
-    def ultima_escola_dos_alunos(self) -> dict[str, tuple[str | None, str | None]]:
-        """aluno_id -> (escola, município) mais recentes, para completar rankings filtrados."""
+    def iterar_ranking(self, params: dict) -> tuple[PaginaDoRanking, Iterator[Linha]]:
+        """O ranking inteiro do recorte em fluxo, com os mesmos campos (exportação): (informações, linhas)."""
 
     def buscar_alunos(self, criterios: Criterios, nome: str, coluna: str, offset: int,
                       limite: int) -> tuple[int, list[tuple[Linha, list[Linha]]]]:

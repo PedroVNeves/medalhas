@@ -2,14 +2,16 @@
 
 As listas oficiais não informam o sexo, e estimá-lo pelo nome erra (nomes usados pelos dois sexos, grafias
 raras). Por isso o filtro só inclui quem tem certeza de ser menina: quem foi premiada na EGMO, na PAGMO, na
-EGOI ou na etapa "Elas em Destaque" da Olimpíada Itabirana. Para essas alunas, todas as premiações contam
-(OBMEP, OBM, OBI…), não só as das olimpíadas femininas.
+EGOI ou na etapa "Elas em Destaque" da Olimpíada Itabirana (medalha ou menção honrosa da etapa). Para essas
+alunas, todas as premiações contam (OBMEP, OBM, OBI…), não só as das olimpíadas femininas.
 """
 from .premiacao import Premiacao
 
 FEMININO = "F"
 COMPETICOES_SO_MENINAS = frozenset({"EGMO", "PAGMO", "EGOI"})
-PREMIOS_SO_MENINAS = frozenset({"Elas em Destaque"})   # etapa feminina da Olimpíada Itabirana
+# etapa feminina da Olimpíada Itabirana: a medalha e a menção honrosa dela
+MENCAO_ELAS = "Menção Honrosa (Elas em Destaque)"
+PREMIOS_SO_MENINAS = frozenset({"Elas em Destaque", MENCAO_ELAS})
 # Alunas que pediram para entrar no filtro (pelo contato do site): ids "NOME|UF", como em dominio.identidade
 MENINAS_CONFIRMADAS: frozenset[str] = frozenset()
 

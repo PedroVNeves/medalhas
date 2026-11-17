@@ -20,7 +20,6 @@ from typing import IO, BinaryIO
 
 from ....aplicacao.portas import Linha, SessaoDeLeitura
 from ....config import PASTA_EXPORTACAO
-from ....dominio.ranking import com_posicoes
 from ....dominio.texto import normalizar
 from ..pedido import Pedido
 from . import parametros
@@ -42,6 +41,8 @@ CAMPOS_RANKING_FIM = ["ouro", "prata", "bronze", "mencao_honrosa", "total", "pon
 # Qualquer um destes faz da exportação um recorte (e não a base inteira)
 FILTROS = ("uf", "municipio", "competicao", "area", "medalha", "nivel", "ano", "ano_de", "ano_ate", "rede",
            "sexo", "escola_id", "aluno_id", "nome", "escola", "busca")
+# Buscas por texto e aluno só existem nas premiações: num ranking (conjunto=alunos…) não filtrariam nada
+SO_PREMIACOES = ("nome", "escola", "busca", "aluno_id")
 # Parâmetros que entram no nome do arquivo, nesta ordem
 _PARTES_DO_NOME = ("aluno_id", "escola_id", "nome", "escola", "busca", "uf", "competicao", "ano", "ano_de",
                    "ano_ate", "nivel", "medalha")
@@ -93,17 +94,14 @@ def _linha_premiacao(r: Linha, nomes: dict) -> dict:
             "fonte": r["fonte"]}
 
 
-def _linha_ranking(r: dict, tipo: str, ultima_escola: dict) -> dict:
-    """Um item de ranking nos campos de CAMPOS_RANKING; aluno sem escola no recorte leva a mais recente."""
-    d = {"posicao": r["pos"], "id": r["id"], "nome": r["nome"], "uf": r.get("uf") if tipo != "estados" else r["id"],
-         "escola": r.get("escola"), "municipio": r.get("municipio"), "rede": r.get("rede"),
-         "alunos_premiados": r.get("alunos"), "escolas": r.get("escolas"),
-         "ouro": r["ouro"], "prata": r["prata"], "bronze": r["bronze"], "mencao_honrosa": r["mencao"],
-         "total": r["total"], "pontos": r["xp"], "pontos_impa": r["p_impa"], "pontos_impa_n3": r["p_impa3"],
-         "pontos_nossa": r["p_site"], "de": r.get("de"), "ate": r.get("ate")}
-    if tipo == "alunos" and not d["escola"]:
-        d["escola"], d["municipio"] = ultima_escola.get(r["id"], (None, None))
-    return d
+def _linha_ranking(r: dict, tipo: str) -> dict:
+    """Um item de ranking nos campos de CAMPOS_RANKING (escola e cidade do aluno são as mais recentes do perfil)."""
+    return {"posicao": r["pos"], "id": r["id"], "nome": r["nome"], "uf": r.get("uf") if tipo != "estados" else r["id"],
+            "escola": r.get("escola"), "municipio": r.get("municipio"), "rede": r.get("rede"),
+            "alunos_premiados": r.get("alunos"), "escolas": r.get("escolas"),
+            "ouro": r["ouro"], "prata": r["prata"], "bronze": r["bronze"], "mencao_honrosa": r["mencao"],
+            "total": r["total"], "pontos": r["xp"], "pontos_impa": r["p_impa"], "pontos_impa_n3": r["p_impa3"],
+            "pontos_nossa": r["p_site"], "de": r.get("de"), "ate": r.get("ate")}
 
 
 # ---------------------------------------------------------------- escrita em fluxo
@@ -141,10 +139,9 @@ def _gerar(s: SessaoDeLeitura, params: dict, conjunto: str, formato: str, separa
         linhas = (_linha_premiacao(r, nomes) for r in s.iterar_premiacoes(parametros.criterios(params, s)))
         campos = CAMPOS_PREMIACAO
     else:
-        ranking = s.ranking_ordenado(parametros.ranking(params, conjunto, s))
-        meta.update({"metodo": ranking.metodo, "ordem": ranking.ordem})
-        ultima_escola = s.ultima_escola_dos_alunos() if conjunto == "alunos" else {}
-        linhas = (_linha_ranking(r, conjunto, ultima_escola) for r in com_posicoes(ranking))
+        info, itens = s.iterar_ranking(parametros.ranking(params, conjunto, s))
+        meta.update({"metodo": info.metodo, "ordem": info.ordem})
+        linhas = (_linha_ranking(r, conjunto) for r in itens)
         campos = CAMPOS_RANKING[conjunto] + CAMPOS_RANKING_FIM
     return _escrever(saida, linhas, campos, formato, separador, meta)
 
@@ -194,7 +191,14 @@ def exportar(s: SessaoDeLeitura, pedido: Pedido) -> Download:
     conjunto = (params.get("conjunto") or "premiacoes").lower()
     if conjunto not in CONJUNTOS:
         raise ParametroInvalido("conjunto deve ser premiacoes, alunos, escolas, estados ou cidades")
-    parametros.criterios(params, s)   # valida tudo antes de começar a gerar o arquivo
+    if conjunto == "premiacoes":   # valida tudo antes de começar a gerar o arquivo
+        parametros.criterios(params, s)
+    else:
+        ignorados = [k for k in SO_PREMIACOES if params.get(k)]
+        if ignorados:
+            raise ParametroInvalido(f"{', '.join(ignorados)} só vale(m) para conjunto=premiacoes: o ranking de "
+                                    f"{conjunto} aceita os filtros comuns (uf, competicao, ano, nivel…)")
+        parametros.ranking(params, conjunto, s)
 
     nome = _nome_do_arquivo(params, conjunto, formato)
     tipo = "text/csv; charset=utf-8" if formato == "csv" else "application/json; charset=utf-8"

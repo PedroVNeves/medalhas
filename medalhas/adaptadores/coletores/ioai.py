@@ -7,7 +7,7 @@ resultados por equipe e não traz brasileiros nos certificados individuais: a le
 import re
 
 from ...dominio.premiacao import BRONZE, MENCAO, OURO, PRATA, Premiacao
-from .html import texto
+from .html import registrar_periodo, texto
 from .http import baixar
 
 SITE = "https://ioai-official.org/"
@@ -26,11 +26,13 @@ def ler_resultados(pagina: str) -> list[dict]:
         chaves = [c.lower() for c in celulas]
         if "name" in chaves:
             colunas = {"nome": chaves.index("name"),
-                       "pais": next(i for i, c in enumerate(chaves) if c in ("team", "country or region")),
-                       "premio": next(i for i, c in enumerate(chaves) if c in ("award", "medal")),
+                       "pais": next((i for i, c in enumerate(chaves) if c in ("team", "country or region")), None),
+                       "premio": next((i for i, c in enumerate(chaves) if c in ("award", "medal")), None),
                        "pontos": next((i for i, c in enumerate(chaves) if "total" in c), None)}
+            if colunas["pais"] is None or colunas["premio"] is None:
+                colunas = None   # tabela de outro tipo (resultado por equipes): fica de fora
             continue
-        if not colunas or len(celulas) <= colunas["premio"]:
+        if not colunas or len(celulas) <= max(colunas["premio"], colunas["pais"]):
             continue
         if not re.match(r"brazil\b", celulas[colunas["pais"]], re.I):
             continue
@@ -44,7 +46,7 @@ def ler_resultados(pagina: str) -> list[dict]:
 
 def edicoes() -> dict[int, str]:
     """Ano -> página de resultados, a partir dos links do menu do site (o ano está no endereço)."""
-    pagina = baixar(SITE) or ""
+    pagina = baixar(SITE, esperado="ioai-official.org") or ""
     achadas = {}
     for url in re.findall(r"""href=["'](https://ioai-official\.org/[^"']*results?[^"']*)["']""", pagina, re.I):
         ano = re.search(r"(20\d{2})", url)
@@ -65,6 +67,5 @@ def coletar(log=print) -> list[Premiacao]:
                 "premio": r["medalha"], "medalha": r["medalha"],
                 "pontos": r["pontos"].replace(",", ".") if r["pontos"] else None, "fonte": url,
             })
-    anos = sorted({p["ano"] for p in premiacoes})
-    log(f"IOAI: {len(premiacoes)} premiações, {anos[0] if anos else '-'}–{anos[-1] if anos else '-'}")
+    registrar_periodo(log, "IOAI", premiacoes)
     return premiacoes

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from ...aplicacao.portas import Criterios
 from . import consultas_api as api
+from . import consultas_ranking as ranking
 from . import consultas_site as site
 from .conexao import Cache, Conexao
 from .gravacao import RepositorioSqlite
@@ -38,6 +39,9 @@ class SessaoSqlite:
     def perfil_escola(self, escola_id: str, params: dict) -> dict:
         return site.perfil_escola(self._con, escola_id, params)
 
+    def premiacoes_recentes_da_escola(self, escola_id: str, limite: int) -> list[dict]:
+        return site.premiacoes_recentes_da_escola(self._con, escola_id, limite)
+
     def perfil_cidade(self, cidade_id: str, params: dict) -> dict:
         return site.perfil_cidade(self._con, cidade_id, params)
 
@@ -47,8 +51,11 @@ class SessaoSqlite:
     def enderecos(self):
         return site.enderecos(self._con)
 
-    def ranking_ordenado(self, params: dict):
-        return site.ranking_ordenado(self._con, params)
+    def ranking_pagina(self, params: dict, offset: int, limite: int):
+        return ranking.pagina(self._con, params, offset, limite, ranking.CAMPOS_COMPLETOS)
+
+    def iterar_ranking(self, params: dict):
+        return ranking.todos(self._con, params)
 
     # API pública
     def resumo_base(self) -> dict:
@@ -59,9 +66,6 @@ class SessaoSqlite:
 
     def niveis(self) -> set[str]:
         return api.niveis(self._con)
-
-    def ultima_escola_dos_alunos(self) -> dict:
-        return api.ultima_escola_dos_alunos(self._con)
 
     def buscar_alunos(self, criterios: Criterios, nome: str, coluna: str, offset: int, limite: int):
         return api.buscar_alunos(self._con, criterios, nome, coluna, offset, limite)

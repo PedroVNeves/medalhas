@@ -23,13 +23,14 @@ TABELAS_IMPA = {
 #   - olimpíadas de entrada (Canguru e similares) valem bem menos que a OBMEP
 #   - brasileiras aceitas pelo IMPA Tech (OBI, OBQ, OBFEP) usam a escala da OBMEP; as fora do edital,
 #     a escala de entrada
+#   - menção honrosa pontua em todos os degraus, sempre menos que o bronze do mesmo degrau
 # Degraus sem olimpíada coletada ainda (ENTRADA) ficam prontos para quando entrarem.
 ESCALA_SITE = {
-    "ENTRADA": {"Ouro": 20, "Prata": 12, "Bronze": 6},
-    # olimpíadas regionais e estaduais (Itabirana…): um pouco abaixo da OBMEP; menção explícita para não
-    # virar bronze nas que pontuam outros prêmios ("Elas em Destaque" vale bronze)
-    "REGIONAL": {"Ouro": 80, "Prata": 48, "Bronze": 24, "Menção Honrosa": 0},
-    "OBMEP": {"Ouro": 100, "Prata": 60, "Bronze": 30},
+    "ENTRADA": {"Ouro": 20, "Prata": 12, "Bronze": 6, "Menção Honrosa": 2},
+    # olimpíadas regionais e estaduais (Itabirana…): um pouco abaixo da OBMEP. A menção precisa estar na
+    # tabela também para não virar bronze nas que pontuam outros prêmios ("Elas em Destaque" vale bronze)
+    "REGIONAL": {"Ouro": 80, "Prata": 48, "Bronze": 24, "Menção Honrosa": 8},
+    "OBMEP": {"Ouro": 100, "Prata": 60, "Bronze": 30, "Menção Honrosa": 10},
     "OBM": {"Ouro": 200, "Prata": 150, "Bronze": 110, "Menção Honrosa": 40},
     "CONESUL": {"Ouro": 260, "Prata": 190, "Bronze": 140, "Menção Honrosa": 50},
     "IBERO": {"Ouro": 320, "Prata": 240, "Bronze": 170, "Menção Honrosa": 60},
@@ -56,8 +57,8 @@ METODOS = {
         "nome": "Medalhas (nossa versão)",
         "curto": "Nossa",
         "descricao": "Escala por dificuldade: ouro OBMEP 100, bronze OBM 110, ouro OBM 200; Ibero e IMO acima; "
-                     "regionais um pouco abaixo da OBMEP e olimpíadas de entrada bem abaixo. Menções e prêmios "
-                     "antigos da OBM pontuam.",
+                     "regionais um pouco abaixo da OBMEP e olimpíadas de entrada bem abaixo. Menções honrosas "
+                     "pontuam (sempre menos que o bronze) e prêmios antigos da OBM valem como bronze.",
         "coluna": "p_site",
     },
 }
@@ -77,7 +78,8 @@ def _verificar_escala() -> None:
     assert e["ENTRADA"]["Ouro"] < e["OBMEP"]["Bronze"], "olimpíadas de entrada valem menos que a OBMEP"
     assert e["ENTRADA"]["Ouro"] < e["REGIONAL"]["Ouro"] < e["OBMEP"]["Ouro"], "regionais: entre entrada e OBMEP"
     for tabela in e.values():
-        assert tabela["Ouro"] > tabela["Prata"] > tabela["Bronze"]
+        assert tabela["Ouro"] > tabela["Prata"] > tabela["Bronze"] > tabela["Menção Honrosa"] > 0, \
+            "em cada degrau: ouro > prata > bronze > menção honrosa > 0"
     for o in CATALOGO.values():
         assert o.escala in e, f"{o.sigla}: escala desconhecida {o.escala!r}"
         assert o.tabela_impa in (None, *TABELAS_IMPA), f"{o.sigla}: tabela do IMPA desconhecida"
@@ -101,7 +103,8 @@ def pontos_impa_oficial(competicao: str, medalha: str, nivel: str | None) -> int
 
 
 def pontos_site(competicao: str, medalha: str) -> int:
-    """Nossa versão. Prêmios antigos da OBM ("1º Prêmio"…) valem como bronze."""
+    """Nossa versão. Menção honrosa pontua menos que o bronze; prêmios antigos da OBM ("1º Prêmio"…) valem
+    como bronze."""
     o = CATALOGO.get(competicao)
     if not o:
         return 0

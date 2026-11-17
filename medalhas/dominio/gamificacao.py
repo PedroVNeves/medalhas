@@ -108,20 +108,26 @@ def conquistas_aluno(premiacoes: list[dict]) -> list[dict]:
 
 def conquistas_escola(premiacoes: list[dict], posicao: int | None, posicao_uf: int | None) -> list[dict]:
     """Conquistas da escola a partir das premiações e da posição nacional e estadual dela."""
-    ouros = sum(r["medalha"] == OURO for r in premiacoes)
-    anos = {r["ano"] for r in premiacoes if r["ano"]}
-    alunos = {r["aluno_id"] for r in premiacoes}
     niveis_com_ouro: dict[int, set] = {}
     for r in premiacoes:
         if r["medalha"] == OURO:
             niveis_com_ouro.setdefault(r["ano"], set()).add(r["nivel"])
-    grand_slam = any({"1", "2", "3"} <= niveis for niveis in niveis_com_ouro.values())
+    return conquistas_escola_por_totais(
+        len(premiacoes), sum(r["medalha"] == OURO for r in premiacoes), len({r["aluno_id"] for r in premiacoes}),
+        {r["ano"] for r in premiacoes if r["ano"]},
+        any({"1", "2", "3"} <= niveis for niveis in niveis_com_ouro.values()), posicao, posicao_uf)
+
+
+def conquistas_escola_por_totais(premiacoes: int, ouros: int, alunos: int, anos: set[int], grand_slam: bool,
+                                 posicao: int | None, posicao_uf: int | None) -> list[dict]:
+    """As mesmas conquistas, a partir dos totais (quem tem a base soma no banco, sem ler premiação por premiação):
+    nº de premiações, de ouros e de alunos, anos premiados e se houve ouro nos níveis 1, 2 e 3 no mesmo ano."""
     return [
-        _conquista("primeira", "Primeira Medalha", "A escola entrou para o quadro", "sparkles", len(premiacoes), 1),
+        _conquista("primeira", "Primeira Medalha", "A escola entrou para o quadro", "sparkles", premiacoes, 1),
         _conquista("fabrica_ouro", "Fábrica de Ouro", "10 medalhas de ouro", "crown", ouros, 10, "épica"),
-        _conquista("centenaria", "Centenária", "100 premiações", "medal", len(premiacoes), 100, "épica"),
+        _conquista("centenaria", "Centenária", "100 premiações", "medal", premiacoes, 100, "épica"),
         _conquista("celeiro", "Celeiro de Talentos", "50 alunos diferentes premiados", "users",
-                   len(alunos), 50, "rara"),
+                   alunos, 50, "rara"),
         _conquista("tradicao", "Tradição", "Premiada em 10 anos diferentes", "landmark", len(anos), 10, "rara"),
         _conquista("dinastia", "Dinastia", "Premiada 5 anos seguidos", "zap", maior_sequencia(anos), 5, "rara"),
         _conquista("grand_slam", "Grand Slam", "Ouro nos 3 níveis no mesmo ano", "trophy",

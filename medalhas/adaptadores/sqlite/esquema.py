@@ -1,9 +1,17 @@
 """Esquema da base SQLite.
 
-medalhas  uma linha por premiação, com campos de busca normalizados e os pontos nos três métodos
+premiacoes uma linha por premiação, com campos de busca normalizados e os pontos nos três métodos;
+          fontes, grafias e olimpiadas guardam uma vez o que se repete (endereço da lista, escola, área)
+medalhas  visão que junta tudo, com as colunas que as consultas usam
 alunos    resumo por aluno (totais, pontos e posição nacional/estadual em cada método), pré-calculado
 escolas   o mesmo, por escola
+cidades   o mesmo, por cidade (município + UF), com o nome de exibição
+enderecos endereços aceitos além do oficial (que fica na tabela-resumo) -> id
+busca_alunos, busca_escolas  índices de texto das sugestões da busca
 meta      chave/valor (ex.: atualizado_em)
+
+Tudo o que dá para calcular na geração é gravado aqui: o servidor lê só a linha de que precisa, sem montar
+listas da base inteira na memória.
 """
 from ...dominio.pontuacao import COLUNAS as PONTOS
 
@@ -11,69 +19,106 @@ from ...dominio.pontuacao import COLUNAS as PONTOS
 CAMPOS_ORIGINAIS = ["competicao", "ano", "nivel", "nome", "escola", "rede", "esfera",
                     "municipio", "uf", "premio", "medalha", "pontos", "fonte"]
 # Campos derivados ao indexar (aplicacao.gerar_base.indexar)
-CAMPOS_DERIVADOS = ["nome_busca", "escola_busca", "escola_termos", "escola_chave", "municipio_busca",
-                    "aluno_id", *PONTOS, "area", "sexo"]
+CAMPOS_DERIVADOS = ["nome_busca", "escola_termos", "escola_chave", "municipio_busca", "aluno_id", *PONTOS, "area",
+                    "sexo"]
 CAMPOS_PREMIACAO = CAMPOS_ORIGINAIS + CAMPOS_DERIVADOS
 
+# Colunas da tabela premiacoes (o que se repete muito fica em tabelas pequenas, por número): fonte -> fontes,
+# escola/termos/chave -> grafias, area -> olimpiadas; premio fica NULL quando é igual à medalha
+CAMPOS_FISICOS = ["competicao", "ano", "nivel", "nome", "rede", "esfera", "municipio", "uf", "premio", "medalha",
+                  "pontos", "fonte_n", "grafia_n", "nome_busca", "municipio_busca", "aluno_id", *PONTOS, "sexo"]
+
 PREMIACOES = """
-CREATE TABLE medalhas (
+CREATE TABLE premiacoes (
     id              INTEGER PRIMARY KEY,
     competicao      TEXT NOT NULL,
     ano             INTEGER,
     nivel           TEXT,
     nome            TEXT NOT NULL,
-    escola          TEXT,
     rede            TEXT,
     esfera          TEXT,
     municipio       TEXT,
     uf              TEXT,
-    premio          TEXT,
+    premio          TEXT,               -- NULL: igual à medalha (o caso comum); '': a lista não informou
     medalha         TEXT,
     pontos          TEXT,               -- nota na prova, quando publicada
-    fonte           TEXT,
+    fonte_n         INTEGER NOT NULL,   -- fontes.n (endereço da lista oficial)
+    grafia_n        INTEGER NOT NULL,   -- grafias.n (escola como escrita na lista, termos de busca e chave)
     nome_busca      TEXT NOT NULL,      -- campos *_busca/termos: normalizados (sem acento, maiúsculos)
-    escola_busca    TEXT,
-    escola_termos   TEXT,
-    escola_chave    TEXT,               -- identidade da escola (dominio.escolas.indexar_escola)
     municipio_busca TEXT,
     aluno_id        TEXT NOT NULL,      -- identidade do aluno (dominio.identidade.atribuir_alunos)
     p_impa          INTEGER NOT NULL,   -- IMPA, todos os níveis
     p_impa3         INTEGER NOT NULL,   -- IMPA oficial: só o que o edital aceita
     p_site          INTEGER NOT NULL,   -- nossa versão
-    area            TEXT,
     sexo            TEXT                -- F (premiada em olimpíada só para meninas, dominio.sexo) ou NULL
 );
-CREATE INDEX idx_aluno  ON medalhas(aluno_id);
-CREATE INDEX idx_chave  ON medalhas(escola_chave);
-CREATE INDEX idx_nome   ON medalhas(nome_busca);
-CREATE INDEX idx_escola ON medalhas(escola_busca);
-CREATE INDEX idx_ano    ON medalhas(ano);
-CREATE INDEX idx_uf     ON medalhas(uf);
+CREATE TABLE fontes (n INTEGER PRIMARY KEY, url TEXT NOT NULL);
+-- escola como veio na lista + termos de busca + chave da escola (dominio.escolas.indexar_escola); a grafia
+-- "sem escola" tem escola NULL, termos e chave vazios
+CREATE TABLE grafias (n INTEGER PRIMARY KEY, escola TEXT, escola_termos TEXT NOT NULL, escola_chave TEXT NOT NULL);
+CREATE TABLE olimpiadas (competicao TEXT PRIMARY KEY, area TEXT) WITHOUT ROWID;
+CREATE INDEX idx_aluno  ON premiacoes(aluno_id);
+CREATE INDEX idx_grafia ON premiacoes(grafia_n);
+CREATE INDEX idx_ano    ON premiacoes(ano);
+CREATE INDEX idx_uf     ON premiacoes(uf);
+CREATE INDEX idx_cidade ON premiacoes(municipio_busca, uf);
+CREATE INDEX idx_chave  ON grafias(escola_chave);
+-- as consultas leem esta visão, com as mesmas colunas de quando tudo ficava numa tabela só. Toda premiação tem
+-- grafia, mas a junção é LEFT JOIN de propósito: assim o SQLite percorre as premiações e busca a grafia de cada
+-- uma, em vez de partir das grafias e saltar pelas premiações (a busca por nome ficava 20 vezes mais lenta)
+CREATE VIEW medalhas AS
+SELECT p.id, p.competicao, p.ano, p.nivel, p.nome, g.escola, p.rede, p.esfera, p.municipio, p.uf,
+       CASE WHEN p.premio IS NULL THEN p.medalha WHEN p.premio = '' THEN NULL ELSE p.premio END AS premio,
+       p.medalha, p.pontos, f.url AS fonte, p.nome_busca, g.escola_termos, g.escola_chave, p.municipio_busca,
+       p.aluno_id, p.p_impa, p.p_impa3, p.p_site, o.area, p.sexo
+FROM premiacoes p LEFT JOIN grafias g ON g.n = p.grafia_n LEFT JOIN fontes f ON f.n = p.fonte_n
+     LEFT JOIN olimpiadas o ON o.competicao = p.competicao;
 CREATE TABLE meta (chave TEXT PRIMARY KEY, valor TEXT);
 """
 
 POSICOES = [f"{c}_{k}" for c in PONTOS for k in ("pos", "pos_uf")]   # p_impa_pos, p_impa_pos_uf, ...
-CAMPOS_ALUNO = ["id", "nome", "uf", "competicoes", "escola", "escola_chave", "municipio", "ouro", "prata",
-                "bronze", "mencao", "total", "de", "ate", *PONTOS, *POSICOES]
-CAMPOS_ESCOLA = ["id", "nome", "municipio", "uf", "rede", "esfera", "alunos", "ouro", "prata", "bronze",
-                 "mencao", "total", "de", "ate", *PONTOS, *POSICOES]
+CAMPOS_ALUNO = ["id", "endereco", "indexar", "nome", "uf", "competicoes", "escola", "escola_chave", "municipio",
+                "ouro", "prata", "bronze", "mencao", "total", "de", "ate", *PONTOS, *POSICOES]
+CAMPOS_ESCOLA = ["id", "endereco", "indexar", "nome", "municipio", "uf", "rede", "esfera", "alunos", "ouro",
+                 "prata", "bronze", "mencao", "total", "de", "ate", *PONTOS, *POSICOES]
+CAMPOS_CIDADE = ["id", "endereco", "nome", "uf", "alunos", "escolas", "ouro", "prata", "bronze", "mencao", "total",
+                 "de", "ate", *PONTOS, *POSICOES]
 _PONTOS_E_POSICOES = ", ".join(f"{c} INT" for c in PONTOS + POSICOES)
 
 RESUMOS = f"""
+-- n: número fixo da linha, para o índice de texto das sugestões apontar para ela (o VACUUM não o muda);
+-- indexar: 0 quando todas as premiações são menções da OBMEP (fora do sitemap e com noindex)
 CREATE TABLE alunos (
-    id TEXT PRIMARY KEY, nome TEXT, uf TEXT, competicoes TEXT, escola TEXT, escola_chave TEXT,
+    n INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL, endereco TEXT UNIQUE, indexar INT, nome TEXT, uf TEXT,
+    competicoes TEXT,
+    escola TEXT, escola_chave TEXT,
     municipio TEXT, ouro INT, prata INT, bronze INT, mencao INT, total INT, de INT, ate INT,
     {_PONTOS_E_POSICOES}
 );
 CREATE TABLE escolas (
-    id TEXT PRIMARY KEY, nome TEXT, municipio TEXT, uf TEXT, rede TEXT, esfera TEXT, alunos INT,
+    n INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL, endereco TEXT UNIQUE, indexar INT, nome TEXT, municipio TEXT,
+    uf TEXT,
+    rede TEXT, esfera TEXT, alunos INT,
     ouro INT, prata INT, bronze INT, mencao INT, total INT, de INT, ate INT,
     {_PONTOS_E_POSICOES}
 );
-{"".join(f"CREATE INDEX idx_alunos_{c} ON alunos({c} DESC); CREATE INDEX idx_escolas_{c} ON escolas({c} DESC);"
-         for c in PONTOS)}
+-- cidade = município + UF das premiações (id MUNICIPIO|UF, sem acento); nome é a grafia de exibição
+CREATE TABLE cidades (
+    id TEXT PRIMARY KEY, endereco TEXT UNIQUE, nome TEXT, uf TEXT, alunos INT, escolas INT,
+    ouro INT, prata INT, bronze INT, mencao INT, total INT, de INT, ate INT,
+    {_PONTOS_E_POSICOES}
+);
+-- endereços aceitos além do oficial (que fica na tabela-resumo): o montado pelo id, quando é outro, e os de
+-- perfis com grafia corrigida à mão -> id
+CREATE TABLE enderecos (tipo TEXT, endereco TEXT, id TEXT, PRIMARY KEY (tipo, endereco)) WITHOUT ROWID;
+-- sugestões enquanto a pessoa digita: as grafias de cada aluno e escola, pesquisáveis por início de palavra.
+-- Sem cópia do texto (content=''): o rowid de cada linha é o n do aluno ou da escola na tabela-resumo
+CREATE VIRTUAL TABLE busca_alunos USING fts5(texto, content='', prefix='2');
+CREATE VIRTUAL TABLE busca_escolas USING fts5(texto, content='', prefix='2');
+{"".join(f"CREATE INDEX idx_{t}_{c} ON {t}({c} DESC);" for c in PONTOS for t in ("alunos", "escolas", "cidades"))}
 CREATE INDEX idx_alunos_uf ON alunos(uf);
 CREATE INDEX idx_escolas_uf ON escolas(uf);
+CREATE INDEX idx_cidades_uf ON cidades(uf);
 """
 
 

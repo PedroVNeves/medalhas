@@ -1,4 +1,5 @@
-"""Páginas com endereço próprio (/aluno/..., /escola/..., /cidade/..., /ranking/..., /sobre...) e o sitemap, para buscadores e IAs.
+"""Páginas com endereço próprio (/aluno/..., /escola/..., /cidade/..., /ranking/..., /sobre...) e o sitemap,
+para buscadores e IAs.
 
 O site é montado no navegador (Alpine), a partir do mesmo index.html. Aqui o servidor entrega esse
 index.html já com título, descrição, endereço canônico e um resumo em texto do aluno ou da escola:
@@ -16,6 +17,7 @@ from ...aplicacao.portas import SessaoDeLeitura
 from ...config import PASTA_WEB, URL_SITE
 from ...dominio.enderecos import ALUNO, CIDADE, ESCOLA
 from ...dominio.escolas import nome_de_exibicao
+from ...dominio.premiacao import NOMES_UF as UF_NOMES
 from ...dominio.texto import capitalizar_nome
 
 IMAGEM_SITE = "/og/site.png"
@@ -119,7 +121,7 @@ def _lista(itens: list[str]) -> str:
 
 def _linha_premiacao(r: dict, com_aluno: bool) -> str:
     """'2024 · OBMEP · Ouro · nível 3 · Escola X' em HTML escapado; com_aluno troca a escola pelo nome do aluno."""
-    partes = [str(r["ano"] or ""), r["competicao"], r["premio"] or r["medalha"] or ""]
+    partes = [str(r["ano"] or ""), r["competicao"], r.get("premio") or r["medalha"] or ""]
     if r.get("nivel"):
         partes.append(f"nível {r['nivel']}")
     if com_aluno:
@@ -132,7 +134,8 @@ def _linha_premiacao(r: dict, com_aluno: bool) -> str:
 def _rodape(base: str, api: str) -> str:
     """Parágrafo final do resumo: fonte dos dados, o mesmo conteúdo na API e o llms.txt."""
     e = html.escape
-    return (f'<p>Dados das listas oficiais de cada olimpíada. Os mesmos dados em JSON: <a href="{e(api)}">{e(api)}</a>. '
+    return ('<p>Dados das listas oficiais de cada olimpíada. Os mesmos dados em JSON: '
+            f'<a href="{e(api)}">{e(api)}</a>. '
             f'Sobre o site e a API: <a href="{e(base)}/llms.txt">{e(base)}/llms.txt</a>.</p>')
 
 
@@ -148,15 +151,7 @@ def _migalhas(base: str, nome: str, url: str) -> dict:
 # Telas do site com endereço próprio além dos perfis. O título de cada uma também está em web/js/app.js
 # (TITULOS), que o troca ao navegar sem recarregar; o teste confere que os dois batem.
 SOBRE = "/sobre"
-CONTATO = "pedro.vasconcelosneves@gmail.com"
 MAX_RANKING_NO_RESUMO = 100
-UF_NOMES = {
-    "AC": "Acre", "AL": "Alagoas", "AM": "Amazonas", "AP": "Amapá", "BA": "Bahia", "CE": "Ceará",
-    "DF": "Distrito Federal", "ES": "Espírito Santo", "GO": "Goiás", "MA": "Maranhão", "MG": "Minas Gerais",
-    "MS": "Mato Grosso do Sul", "MT": "Mato Grosso", "PA": "Pará", "PB": "Paraíba", "PE": "Pernambuco",
-    "PI": "Piauí", "PR": "Paraná", "RJ": "Rio de Janeiro", "RN": "Rio Grande do Norte", "RO": "Rondônia",
-    "RR": "Roraima", "RS": "Rio Grande do Sul", "SC": "Santa Catarina", "SE": "Sergipe", "SP": "São Paulo",
-    "TO": "Tocantins"}
 
 
 @dataclass(frozen=True)
@@ -304,7 +299,7 @@ def _aluno(d: dict, base: str, url: str) -> bytes:
               + (f"<h2>Escolas</h2><ul>{escolas}</ul>" if escolas else "")
               + _rodape(base, f"{base}/api/v1/alunos/{_quote(d['id'])}"))
     return _montar(titulo, descricao, url, _migalhas(base, d["nome"], url), resumo,
-                   imagem=imagem_de(base, url), imagem_alt=f"{nome_uf}: {medalhas}")
+                   indexar=d.get("indexar", True), imagem=imagem_de(base, url), imagem_alt=f"{nome_uf}: {medalhas}")
 
 
 def _escola(d: dict, sessao: SessaoDeLeitura, base: str, url: str) -> bytes:
@@ -316,7 +311,7 @@ def _escola(d: dict, sessao: SessaoDeLeitura, base: str, url: str) -> bytes:
     municipio = capitalizar_nome(d["municipio"]) if d.get("municipio") else None
     lugar = ", ".join(p for p in (municipio, d.get("uf")) if p)
     nome_lugar = f"{nome} ({lugar})" if lugar else nome
-    siglas = _olimpiadas(d["recentes"])
+    siglas = [o["sigla"] for o in d["olimpiadas"]]
     medalhas = _medalhas(d["medalhas"])
     plural = "aluno premiado" if d["alunos"] == 1 else "alunos premiados"
 
@@ -327,13 +322,14 @@ def _escola(d: dict, sessao: SessaoDeLeitura, base: str, url: str) -> bytes:
     alunos = "".join(
         f'<li><a href="/aluno/{enderecos.de(ALUNO, a["id"])}">{e(a["nome"])}</a> · {e(_medalhas(a))}</li>'
         for a in d["top_alunos"][:MAX_ALUNOS_NO_RESUMO] if enderecos.de(ALUNO, a["id"]))
-    recentes = "".join(f"<li>{_linha_premiacao(r, com_aluno=True)}</li>" for r in d["recentes"])
+    recentes = "".join(f"<li>{_linha_premiacao(r, com_aluno=True)}</li>"
+                       for r in sessao.premiacoes_recentes_da_escola(d["id"], MAX_PREMIACOES_NO_RESUMO))
     resumo = (f"<h1>{e(nome_lugar)}</h1><p>{e(descricao)}</p>"
               + (f"<h2>Destaques</h2><ul>{alunos}</ul>" if alunos else "")
               + f"<h2>Premiações recentes</h2><ul>{recentes}</ul>"
               + _rodape(base, f"{base}/api/v1/escolas/{_quote(d['id'])}/medalhistas"))
     return _montar(titulo, descricao, url, _migalhas(base, nome, url), resumo,
-                   imagem=imagem_de(base, url), imagem_alt=f"{nome_lugar}: {medalhas}")
+                   indexar=d.get("indexar", True), imagem=imagem_de(base, url), imagem_alt=f"{nome_lugar}: {medalhas}")
 
 
 def _cidade(d: dict, sessao: SessaoDeLeitura, base: str, url: str) -> bytes:
@@ -354,7 +350,8 @@ def _cidade(d: dict, sessao: SessaoDeLeitura, base: str, url: str) -> bytes:
                  + (f" na {_lista(siglas[:4])}" if siglas else "") + "."
                  + (f" {d['rank']}ª cidade no ranking nacional." if d.get("rank") else ""))
     escolas = "".join(
-        f'<li><a href="/escola/{enderecos.de(ESCOLA, x["id"])}">{e(nome_de_exibicao(x["nome"]))}</a> · {e(_medalhas(x))}</li>'
+        f'<li><a href="/escola/{enderecos.de(ESCOLA, x["id"])}">{e(nome_de_exibicao(x["nome"]))}</a>'
+        f' · {e(_medalhas(x))}</li>'
         for x in d["top_escolas"] if enderecos.de(ESCOLA, x["id"]))
     alunos = "".join(
         f'<li><a href="/aluno/{enderecos.de(ALUNO, a["id"])}">{e(a["nome"])}</a> · {e(_medalhas(a))}</li>'
@@ -378,38 +375,31 @@ def _quote(ident: str) -> str:
 
 # ---------------------------------------------------------------- sitemap
 
-_sitemaps: dict[tuple, dict[str, bytes]] = {}
 
 
-def sitemap(sessao: SessaoDeLeitura, nome: str, base: str, versao: int) -> bytes | None:
-    """nome: 'sitemap.xml' (índice) ou um dos arquivos listados nele. None se não existe."""
-    chave = (versao, base)
-    if chave not in _sitemaps:
-        _sitemaps.clear()
-        _sitemaps[chave] = _gerar_sitemaps(sessao, base)
-    return _sitemaps[chave].get(nome)
+def sitemap(sessao: SessaoDeLeitura, nome: str, base: str) -> bytes | None:
+    """nome: 'sitemap.xml' (índice) ou um dos arquivos listados nele; None se não existe.
 
-
-def _gerar_sitemaps(sessao: SessaoDeLeitura, base: str) -> dict[str, bytes]:
-    """nome -> XML de todos os sitemaps: as telas, os perfis em arquivos de até URLS_POR_SITEMAP endereços e o
-    índice sitemap.xml. lastmod é a data da última atualização da base."""
+    Cada arquivo é montado quando pedido, só com os seus endereços (lidos da base em ordem alfabética, até
+    URLS_POR_SITEMAP): nada fica guardado no servidor. O CDN guarda a resposta, como faz com as páginas."""
     data = (sessao.resumo_base().get("atualizado_em") or "")[:10]
     lastmod = f"<lastmod>{data}</lastmod>" if re.fullmatch(r"\d{4}-\d{2}-\d{2}", data) else ""
     enderecos = sessao.enderecos()
-
-    def urlset(urls: list[str]) -> bytes:
-        corpo = "".join(f"<url><loc>{escape_xml(u)}</loc>{lastmod}</url>" for u in urls)
-        return ('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-                f"{corpo}</urlset>\n").encode("utf-8")
-
-    telas = [base + c for c, t in TELAS.items() if t.indexar]
-    arquivos = {"sitemaps/paginas.xml": urlset([base + "/", *telas])}
+    arquivos = {"sitemaps/paginas.xml": (None, 0)}
     for tipo, plural in ((ALUNO, "alunos"), (ESCOLA, "escolas"), (CIDADE, "cidades")):
-        urls = [f"{base}/{tipo}/{e}" for e in enderecos.todos(tipo)]
-        for i in range(0, len(urls), URLS_POR_SITEMAP):
-            arquivos[f"sitemaps/{plural}-{i // URLS_POR_SITEMAP + 1}.xml"] = urlset(urls[i:i + URLS_POR_SITEMAP])
-    indice = "".join(f"<sitemap><loc>{base}/{nome}</loc>{lastmod}</sitemap>" for nome in arquivos)
-    arquivos["sitemap.xml"] = ('<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex '
-                               f'xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{indice}</sitemapindex>\n'
-                               ).encode("utf-8")
-    return arquivos
+        for i in range(0, enderecos.contar(tipo), URLS_POR_SITEMAP):
+            arquivos[f"sitemaps/{plural}-{i // URLS_POR_SITEMAP + 1}.xml"] = (tipo, i)
+    if nome == "sitemap.xml":
+        indice = "".join(f"<sitemap><loc>{base}/{n}</loc>{lastmod}</sitemap>" for n in arquivos)
+        return ('<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex '
+                f'xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{indice}</sitemapindex>\n').encode("utf-8")
+    if nome not in arquivos:
+        return None
+    tipo, offset = arquivos[nome]
+    if tipo is None:
+        urls = [base + "/", *(base + c for c, t in TELAS.items() if t.indexar)]
+    else:
+        urls = [f"{base}/{tipo}/{e}" for e in enderecos.fatia(tipo, offset, URLS_POR_SITEMAP)]
+    corpo = "".join(f"<url><loc>{escape_xml(u)}</loc>{lastmod}</url>" for u in urls)
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            f"{corpo}</urlset>\n").encode("utf-8")

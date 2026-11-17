@@ -1,5 +1,5 @@
 """Critérios de ordenação e posição nos rankings (empates dividem a posição, como RANK() no SQL)."""
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 
 Chave = Callable[[dict], tuple]
@@ -21,7 +21,9 @@ def chave_de_ordenacao(ordem: str, coluna: str) -> Chave:
 
 
 def ordenar(itens: list[dict], ordem: str, coluna: str) -> list[dict]:
-    """Ordena pelo critério; o nome desempata para a ordem ser estável entre execuções.
+    """Ordena pelo critério; o nome desempata para a ordem ser estável entre execuções. É a definição de
+    referência: os rankings do site são feitos pelo banco (adaptadores/sqlite/consultas_ranking.py), e um
+    teste confere que dão o mesmo resultado.
 
     No ranking por pontos, quem não pontua no método fica de fora.
     """
@@ -45,19 +47,17 @@ def posicionar(ordenados: list[dict], chave: Chave, offset: int = 0,
 
 
 @dataclass(frozen=True)
-class RankingOrdenado:
-    """Ranking completo de um recorte, já ordenado. Os itens são agregados de aluno, escola, estado ou cidade."""
-    tipo: str               # alunos | escolas | estados | cidades
-    ordem: str              # chave de ORDENACOES
-    metodo: str             # método de pontuação
-    coluna: str             # coluna de pontos do método
-    niveis: str | None      # níveis considerados (o método IMPA edital restringe)
-    itens: list[dict]
-
-    @property
-    def chave(self) -> Chave:
-        """Chave de ordenação deste ranking (também decide os empates nas posições)."""
-        return chave_de_ordenacao(self.ordem, self.coluna)
+class PaginaDoRanking:
+    """Uma página de um ranking (ou o ranking inteiro, na exportação). Os itens são dicionários de aluno, escola,
+    estado ou cidade com id, pos (posição; empates dividem), xp (pontos no método), ouro, prata, bronze, mencao e
+    os campos que cada uso pediu."""
+    tipo: str                    # alunos | escolas | estados | cidades
+    ordem: str                   # chave de ORDENACOES
+    metodo: str                  # método de pontuação
+    coluna: str                  # coluna de pontos do método
+    niveis: str | None           # níveis considerados (o método IMPA edital restringe)
+    total: int | None            # quantos itens o ranking tem (None quando não foi contado)
+    itens: Iterable[dict]
 
 
 def com_pontos(item: dict, coluna: str) -> dict:
@@ -67,17 +67,22 @@ def com_pontos(item: dict, coluna: str) -> dict:
     return item
 
 
-def com_posicoes(ranking: RankingOrdenado, offset: int = 0, limite: int | None = None) -> Iterator[dict]:
-    """Cópias dos itens com posição e pontos, prontas para exibir ou exportar."""
-    for posicao, item in posicionar(ranking.itens, ranking.chave, offset, limite):
-        yield com_pontos(dict(item, pos=posicao), ranking.coluna)
+def preencher_posicoes(itens: list[dict], coluna: str, destino: str,
+                       medalhas: tuple[str, str, str] = ("ouro", "prata", "bronze")) -> None:
+    """Grava em item[destino] a posição no ranking por pontos da coluna. Usa o mesmo critério da lista do
+    ranking (ORDENACOES["xp"]: pontos, depois ouros, pratas e bronzes; empate em tudo divide a posição), para
+    a posição do perfil ser a mesma que a pessoa vê na lista.
 
+    medalhas: campos com as contagens que desempatam. No método IMPA edital a lista só conta as medalhas que
+    pontuam nele, então o desempate usa contagens próprias."""
+    ouro, prata, bronze = medalhas
 
-def preencher_posicoes(itens: list[dict], coluna: str, destino: str) -> None:
-    """Grava em item[destino] a posição pela coluna de pontos (maior primeiro; empates dividem)."""
-    itens.sort(key=lambda a: -a[coluna])
+    def chave(r: dict) -> tuple:
+        return -(r[coluna] or 0), -r[ouro], -r[prata], -r[bronze]
+    itens.sort(key=chave)
     posicao, anterior = 0, None
     for i, item in enumerate(itens, 1):
-        if item[coluna] != anterior:
-            posicao, anterior = i, item[coluna]
+        k = chave(item)
+        if k != anterior:
+            posicao, anterior = i, k
         item[destino] = posicao

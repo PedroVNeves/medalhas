@@ -18,4 +18,6 @@ RUN useradd --create-home app && chown -R app /app/data
 USER app
 
 # O Cloud Run informa a porta em $PORT. --trust-proxy: o IP real do visitante chega em X-Forwarded-For.
-CMD exec python server.py --host 0.0.0.0 --port ${PORT:-8080} --no-browser --trust-proxy
+# --proxy-hops 2: Firebase Hosting + Cloud Run acrescentam um IP cada; o do visitante é o penúltimo. Chamando
+# o Cloud Run direto (um salto só), vale o primeiro valor do cabeçalho, como antes.
+CMD exec python server.py --host 0.0.0.0 --port ${PORT:-8080} --no-browser --trust-proxy --proxy-hops 2

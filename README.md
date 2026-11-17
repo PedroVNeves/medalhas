@@ -63,8 +63,12 @@ python build_db.py   # baixa as listas oficiais e gera data/medalhas.db (alguns 
 python server.py     # abre o site em http://localhost:8000
 ```
 
+- `python build_db.py --mencoes-obmep` inclui as menções honrosas da OBMEP (cerca de 720 mil; em avaliação,
+  ver `docs/mencoes-obmep.md`).
 - `python build_db.py --refresh` apaga o cache e baixa tudo de novo (use quando sair um ano novo). Sem
   `--refresh`, as páginas já baixadas ficam em `cache/` e a base é regerada em segundos.
+- Se alguma fonte falhar (ou vier vazia), a base **não** é gravada e a anterior continua valendo: uma base
+  sem a OBMEP não substitui a completa por descuido. `python build_db.py --permitir-parcial` grava assim mesmo.
 - `python server.py --port 9000 --no-browser` muda a porta e não abre o navegador.
 - `python server.py --host 0.0.0.0` aceita conexões de outras máquinas; veja a
   [proteção contra excesso de requisições](#proteção-contra-excesso-de-requisições).
@@ -114,7 +118,10 @@ Se você organiza uma olimpíada ou tem a lista de premiados de uma delas, [entr
 As listas oficiais não têm CPF, data de nascimento nem código de escola: só nomes escritos de jeitos
 diferentes. Esta seção explica como o Medalhas decide o que é a mesma pessoa, a mesma escola e a mesma cidade.
 As regras ficam em `medalhas/dominio/` e são aplicadas ao gerar a base (`aplicacao/gerar_base.py`), nesta
-ordem: correções à mão → identidade dos alunos → cidade das escolas → filtro de meninas → indexação.
+ordem: limpeza dos nomes → correções à mão → identidade dos alunos → cidade das escolas → filtro de meninas →
+indexação. A limpeza tira o que as listas deixam grudado no nome e que separaria a mesma pessoa em dois perfis:
+restos de HTML ("Júnior/td>"), e-mail, turma ("7ºB") e número de nota de rodapé; premiação sem nome ou sem
+ano é descartada.
 
 ### Alunos: quem é a mesma pessoa
 
@@ -125,7 +132,13 @@ O aluno é identificado por **nome (sem acento) + estado**: o id `MARIA SOUZA LI
   homônimos, estimado pela frequência de cada palavra entre todos os nomes, é baixo); as premiações cabem
   numa carreira escolar (até 12 anos); e não há a mesma olimpíada no mesmo ano nos dois estados (aí são
   homônimos). Alunos de ponta mudam de estado (vão estudar em Fortaleza, por exemplo), e essa regra os junta.
-- **Premiações sem estado** (IMO, EGOI, IOAI, Itabirana de 2020 em diante) vão para a pessoa de mesmo nome:
+- **Mesmo nome no mesmo estado** é uma pessoa só, a menos que as premiações não caibam numa pessoa: a mesma
+  olimpíada no mesmo ano em duas cidades (ou em duas escolas da mesma cidade), o nível da OBMEP regredindo
+  com os anos, ou uma carreira de mais de 12 anos. Aí o nome é dividido por cidade (e por escola, ou pelos
+  intervalos de 8 anos ou mais sem premiação): a maior parte fica com `NOME|UF` e as outras ganham a cidade
+  no id (`LUCAS ANTONIO SILVA|MG|DIVINOPOLIS`, endereço `/aluno/lucas-antonio-silva-mg-divinopolis`).
+- **Premiações sem estado** (IMO, EGOI, IOAI, Itabirana de 2020 em diante) vão para a pessoa de mesmo nome,
+  desde que caibam na carreira dela (até 12 anos):
   - em olimpíada de alto nível (OBM e internacionais), quando só existe uma pessoa com aquele nome;
   - nas demais, só quando o nome é raro **ou** quando a pessoa de mesmo nome foi premiada **na mesma
     escola** (a comparação aceita abreviações como "EE MAJ LAGE" = "Escola Estadual Major Lage" e ignora
@@ -164,7 +177,9 @@ Para achar a cidade de uma escola que veio sem ela:
 1. se o mesmo nome de escola aparece numa **única cidade daquele estado** nas outras listas, usa essa cidade
    ("Liceu Jardim", SP → Santo André); com duas ou mais cidades possíveis ("Colégio Etapa"), não chuta;
 2. senão, se o nome traz o campus e ele é uma cidade conhecida do estado, usa essa cidade
-   ("IFES – CAMPUS VITORIA" → Vitória).
+   ("IFES – CAMPUS VITORIA" → Vitória);
+3. senão, se o nome termina com uma cidade conhecida do estado depois de um hífen, usa essa cidade
+   ("IFBA - SALVADOR" → Salvador).
 
 ### Cidades
 
@@ -178,7 +193,7 @@ As listas oficiais não informam o sexo, e adivinhar pelo nome erra. Por isso o 
 (`sexo=F` na API) inclui só quem **certamente** é menina (`dominio/sexo.py`):
 
 - premiadas em olimpíada exclusiva para meninas: **EGMO**, **PAGMO** e **EGOI**;
-- premiadas na etapa **"Elas em Destaque"** da Olimpíada Itabirana;
+- premiadas na etapa **"Elas em Destaque"** da Olimpíada Itabirana (medalha ou menção honrosa da etapa);
 - alunas que pediram para entrar (lista `MENINAS_CONFIRMADAS`).
 
 Para essas alunas, **todas** as premiações contam (OBMEP, OBM, OBI…). Outras meninas medalhistas ficam fora
@@ -231,19 +246,21 @@ conferidas ao importar o módulo):
 
 | Degrau | Olimpíadas | Ouro | Prata | Bronze | Menção |
 |---|---|---|---|---|---|
-| Entrada | Galois-Noether | 20 | 12 | 6 | – |
-| Regional | Itabirana ("Elas em Destaque" vale bronze) | 80 | 48 | 24 | – |
-| OBMEP | OBMEP, OBI, OBQ, OMIF, Maio, OMOP | 100 | 60 | 30 | – |
+| Entrada | Galois-Noether | 20 | 12 | 6 | 2 |
+| Regional | Itabirana ("Elas em Destaque" vale bronze) | 80 | 48 | 24 | 8 |
+| OBMEP | OBMEP, OBI, OBQ, OMIF, Maio, OMOP | 100 | 60 | 30 | 10 |
 | OBM | OBM, OMCPLP, IGO, IMSC, OIMU, CIIM | 200 | 150 | 110 | 40 |
 | Cone Sul | Cone Sul, PAGMO | 260 | 190 | 140 | 50 |
 | Ibero | Ibero, EGMO, APMO, IMC, EGOI, IOAI | 320 | 240 | 170 | 60 |
 | IMO | IMO | 600 | 400 | 280 | 100 |
 
 Regras da escala: ouro OBM = 2× ouro OBMEP; bronze OBM > ouro OBMEP; bronze Ibero > prata OBM; bronze IMO >
-prata Ibero; Cone Sul entre OBM e Ibero; regionais entre a entrada e a OBMEP. Os prêmios antigos da OBM
-("1º Prêmio"…) valem como bronze.
+prata Ibero; Cone Sul entre OBM e Ibero; regionais entre a entrada e a OBMEP; em todo degrau a menção honrosa
+pontua, sempre menos que o bronze. Os prêmios antigos da OBM ("1º Prêmio"…) valem como bronze. Nos dois
+métodos do IMPA a menção não pontua: a tabela é a do edital.
 
-Os totais e as posições nacional e estadual em cada método são pré-calculados ao gerar a base. Os níveis
+Os totais e as posições nacional e estadual em cada método são pré-calculados ao gerar a base, com o mesmo
+critério da lista do ranking (pontos, depois ouros, pratas e bronzes; empate em tudo divide a posição). Os níveis
 (Estreante → Promessa → Talento → Destaque → Elite → Mestre → Lenda) têm limites próprios por método
 (`dominio/gamificacao.py`), e há conquistas como *Hat-trick Dourado*, *Dupla Coroa* e *Grand Slam*.
 
@@ -406,7 +423,10 @@ funciona por IP:
   `{"erro": "...", "tente_em_segundos": N}`.
 - Textos de busca têm no máximo 100 caracteres e 8 palavras, e as páginas têm tamanho máximo.
 - Atrás de um proxy reverso, rode com `--trust-proxy` para usar o IP real de `X-Forwarded-For`. Sem proxy, não
-  use: qualquer um poderia forjar o cabeçalho e fugir do limite.
+  use: qualquer um poderia forjar o cabeçalho e fugir do limite. Cada proxy acrescenta um IP à direita do
+  cabeçalho e o que vem à esquerda é o que o cliente mandou, então o IP é contado da direita:
+  `--proxy-hops N` diz quantos proxies seus há na frente (padrão 1).
+- Parâmetro inválido (400) e id que não existe (404) não gastam a cota.
 
 ## Publicar na internet (Firebase Hosting + Cloud Run)
 
@@ -422,11 +442,21 @@ visitante -> medalhas.online (Firebase Hosting: HTTPS, CDN, arquivos de web/)
 
 - `Dockerfile`: imagem do servidor, com a base dentro (só leitura).
 - `firebase.json`: publica `web/` e repassa a API, as páginas e o sitemap ao Cloud Run em `southamerica-east1`.
-- O servidor roda com `--trust-proxy`: lê o IP do visitante em `X-Forwarded-For` e o domínio em
-  `X-Forwarded-Host`.
+- O servidor roda com `--trust-proxy --proxy-hops 2`: lê o IP do visitante em `X-Forwarded-For` (o
+  penúltimo valor: o Firebase Hosting acrescenta o IP do visitante e o Cloud Run, o do Hosting) e o domínio em
+  `X-Forwarded-Host`, que só vale se for um dos domínios do site (`MEDALHAS_URL` e `MEDALHAS_HOSTS`).
+  **Confira o número de saltos depois de publicar**: `curl -s https://medalhas.online/api/v1 -D - -o /dev/null`
+  várias vezes deve fazer `X-RateLimit-Remaining` cair de um em um; se a cota parecer compartilhada com outros
+  visitantes, ou não cair, o número de saltos está errado.
+- `--concurrency 60`: o servidor aceita 64 conexões ao mesmo tempo; acima disso o Cloud Run sobe outra
+  instância em vez de mandar requisições que seriam recusadas. `--memory 1Gi`: no Cloud Run o arquivo da base,
+  que vai dentro da imagem, conta como memória à medida que é lido (o servidor em si usa poucas dezenas de MB).
+  `--execution-environment gen2`: lê o arquivo bem mais rápido que a 1ª geração (num teste, a busca caiu de 17 s
+  para 4 s com uma base grande).
 
 ```bash
-gcloud run deploy medalhas --source . --region southamerica-east1 --allow-unauthenticated
+gcloud run deploy medalhas --source . --region southamerica-east1 --allow-unauthenticated \
+    --concurrency 60 --memory 1Gi --execution-environment gen2
 firebase deploy --only hosting
 ```
 
@@ -456,7 +486,7 @@ medalhas/
     escolas.py                 siglas, chave da escola, escolas renomeadas, cidade das escolas sem ela
     identidade.py              quem é a mesma pessoa, grafias corrigidas à mão
     sexo.py                    filtro de meninas
-    ranking.py                 ordenação e posição (empates dividem a posição)
+    ranking.py                 critérios de ordem e posição (empates dividem); referência dos rankings do banco
     gamificacao.py             níveis e conquistas
     enderecos.py               endereços legíveis (/aluno/…, /escola/…, /cidade/…)
     texto.py                   normalização de nomes
@@ -466,6 +496,7 @@ medalhas/
   adaptadores/
     coletores/                 um módulo por fonte; http.py baixa com cache em cache/, pdf.py lê PDFs
     sqlite/                    esquema, gravação, tabelas-resumo e consultas (site e API)
+      consultas_ranking.py     rankings feitos pelo banco: só a página pedida, só os campos pedidos
     http/                      servidor, site estático, API do site, limites por IP
       paginas.py               páginas com título e resumo para buscadores, e o sitemap
       imagens.py, fontes/      imagens de compartilhamento e de story

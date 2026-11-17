@@ -13,6 +13,7 @@ import time
 
 from ...dominio.premiacao import BRONZE, MENCAO, OURO, PRATA, Premiacao
 from ...dominio.texto import normalizar
+from .html import registrar_periodo
 from .http import baixar, baixar_bytes
 from .pdf import linhas, paginas
 
@@ -122,6 +123,5 @@ def coletar(log=print) -> list[Premiacao]:
                     "uf": uf_da_instituicao(r["instituicao"]),
                     "premio": r["premio"], "medalha": r["premio"], "pontos": None, "fonte": url,
                 })
-    anos = sorted({p["ano"] for p in premiacoes})
-    log(f"OMIF: {len(premiacoes)} premiações, {anos[0] if anos else '-'}–{anos[-1] if anos else '-'}")
+    registrar_periodo(log, "OMIF", premiacoes)
     return premiacoes

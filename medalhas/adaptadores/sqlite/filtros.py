@@ -13,14 +13,23 @@ AGREGADOS = """SUM(medalha='Ouro') AS ouro, SUM(medalha='Prata') AS prata, SUM(m
          MIN(ano) AS de, MAX(ano) AS ate"""
 
 # Chaves de filtro reconhecidas (as demais chaves da URL são ignoradas)
-CHAVES_FILTRO = ("competicao", "area", "medalha", "uf", "rede", "nivel", "escola_chave", "esfera", "sexo", "ano", "ano_de",
-                 "ano_ate", "municipio", "sem_mencao")
+CHAVES_FILTRO = ("competicao", "area", "medalha", "uf", "rede", "nivel", "escola_chave", "esfera", "sexo", "ano",
+                 "ano_de", "ano_ate", "municipio", "sem_mencao", "so_edital")
+_ANO_MAXIMO = 9999   # acima disso o SQLite nem aceita o número; nenhum ano de verdade chega perto
 
 # Campos pesquisáveis por texto. Os espaços à esquerda fazem "% PALAVRA%" casar no início de palavra.
 _NOME = "(' ' || nome_busca)"
 _MUNICIPIO = "(' ' || municipio_busca)"
 _ESCOLA = "escola_termos"   # já gravado entre espaços
 _CAMPOS_TEXTO = {"nome": [_NOME], "escola": [_ESCOLA], "tudo": [_NOME, _ESCOLA, _MUNICIPIO]}
+
+
+def inteiro(valor, nome: str, minimo: int = 0, maximo: int = _ANO_MAXIMO) -> int:
+    """Número inteiro vindo da URL, ajustado ao intervalo. ValueError (com o nome do parâmetro) se não é número."""
+    try:
+        return max(minimo, min(int(valor), maximo))
+    except (TypeError, ValueError):
+        raise ValueError(f"'{nome}' deve ser um número inteiro") from None
 
 
 def condicoes(filtros: dict) -> tuple[list[str], list]:
@@ -40,12 +49,14 @@ def condicoes(filtros: dict) -> tuple[list[str], list]:
     for chave, operador in (("ano", "="), ("ano_de", ">="), ("ano_ate", "<=")):
         if filtros.get(chave):
             where.append(f"ano {operador} ?")
-            args.append(int(filtros[chave]))
+            args.append(inteiro(filtros[chave], chave))
     if filtros.get("municipio"):
         where.append("municipio_busca = ?")
         args.append(normalizar(filtros["municipio"]))
     if filtros.get("sem_mencao") == "1":
         where.append("medalha != 'Menção Honrosa'")
+    if filtros.get("so_edital") == "1":   # método IMPA edital: só o que pontua nele (olimpíada e nível aceitos)
+        where.append("p_impa3 > 0")
     return where, args
 
 

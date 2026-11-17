@@ -4,9 +4,8 @@ from collections.abc import Iterable
 from urllib.parse import quote
 
 from ....aplicacao.portas import Linha
-from ....dominio import pontuacao
+from ....dominio import gamificacao, pontuacao
 from ....dominio.enderecos import slug
-from ....dominio.premiacao import BRONZE, MENCAO, OURO, PRATA
 from ....dominio.texto import normalizar
 
 
@@ -48,10 +47,9 @@ def medalhas(linha: Linha) -> dict:
 
 def contar_medalhas(premiacoes: list[Linha]) -> dict:
     """Contagem de medalhas de uma lista de premiações, no mesmo formato de medalhas()."""
-    def quantas(medalha: str) -> int:
-        return sum(r["medalha"] == medalha for r in premiacoes)
-    return {"ouro": quantas(OURO), "prata": quantas(PRATA), "bronze": quantas(BRONZE),
-            "mencao_honrosa": quantas(MENCAO), "total": len(premiacoes)}
+    c = gamificacao.contar_medalhas(premiacoes)
+    return {"ouro": c["ouro"], "prata": c["prata"], "bronze": c["bronze"], "mencao_honrosa": c["mencao"],
+            "total": len(premiacoes)}
 
 
 def posicoes(resumo: Linha) -> dict:

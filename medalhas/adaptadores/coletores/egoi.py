@@ -6,7 +6,7 @@ A página do país lista, por ano, cada participante com as notas das tarefas. A
 import re
 
 from ...dominio.premiacao import BRONZE, OURO, PRATA, Premiacao
-from .html import texto
+from .html import registrar_periodo, texto
 from .http import baixar
 
 URL = "https://stats.egoi.org/countries/BRA/results/"
@@ -38,7 +38,7 @@ def ler_resultados(pagina: str) -> list[dict]:
 
 def coletar(log=print) -> list[Premiacao]:
     """Medalhas do Brasil em todas as edições da EGOI. Sem a página, devolve lista vazia."""
-    pagina = baixar(URL) or ""
+    pagina = baixar(URL, esperado="<td") or ""
     premiacoes: list[Premiacao] = [{
         "competicao": "EGOI", "ano": r["ano"], "nivel": None, "nome": r["nome"], "escola": None, "rede": None,
         "esfera": None, "municipio": None,
@@ -46,6 +46,5 @@ def coletar(log=print) -> list[Premiacao]:
         "premio": r["medalha"], "medalha": r["medalha"],
         "pontos": r["pontos"] if re.fullmatch(r"\d+", r["pontos"] or "") else None, "fonte": URL,
     } for r in ler_resultados(pagina)]
-    anos = sorted({p["ano"] for p in premiacoes})
-    log(f"EGOI: {len(premiacoes)} premiações, {anos[0] if anos else '-'}–{anos[-1] if anos else '-'}")
+    registrar_periodo(log, "EGOI", premiacoes)
     return premiacoes

@@ -12,6 +12,8 @@ from .erros import NaoEncontrado, ParametroInvalido
 
 LIMITE_PADRAO = 20
 LIMITE_MAXIMO = {"alunos": 100, "escolas": 100, "medalhistas": 500, "premiacoes": 1000, "ranking": 500}
+OFFSET_MAXIMO = 10**9      # bem além de qualquer lista; evita número que o SQLite não aceita
+ANOS = (1900, 2200)        # faixa aceita em ano, ano_de e ano_ate (fora dela o valor é ajustado)
 MAX_CARACTERES = 100   # buscas por texto: protege a base de consultas caras
 MAX_PALAVRAS = 8
 _VERDADEIRO = ("1", "true", "sim", "s", "yes")
@@ -33,7 +35,7 @@ def inteiro(params: dict, chave: str, padrao: int | None = None, minimo: int | N
     v = (params.get(chave) or "").strip()
     if not v:
         return padrao
-    if not re.fullmatch(r"-?\d+", v):
+    if not re.fullmatch(r"-?\d{1,18}", v):   # até 18 dígitos: cabe no inteiro do SQLite
         raise ParametroInvalido(f"'{chave}' deve ser um número inteiro (recebido: {v[:20]!r})")
     n = int(v)
     if minimo is not None:
@@ -45,7 +47,8 @@ def inteiro(params: dict, chave: str, padrao: int | None = None, minimo: int | N
 
 def paginacao(params: dict, rota: str) -> tuple[int, int]:
     """(limite, offset) da página, com o tamanho máximo da rota."""
-    return inteiro(params, "limite", LIMITE_PADRAO, 1, LIMITE_MAXIMO[rota]), inteiro(params, "offset", 0, 0)
+    return (inteiro(params, "limite", LIMITE_PADRAO, 1, LIMITE_MAXIMO[rota]),
+            inteiro(params, "offset", 0, 0, OFFSET_MAXIMO))
 
 
 def texto(params: dict, chave: str, obrigatorio: bool = False) -> Expansao:
@@ -100,7 +103,7 @@ def filtros(params: dict, sessao: SessaoDeLeitura) -> dict:
         if valor:
             f[chave] = valor
     for chave in ("ano", "ano_de", "ano_ate"):
-        n = inteiro(params, chave)
+        n = inteiro(params, chave, None, *ANOS)
         if n is not None:
             f[chave] = n
     if params.get("rede"):
@@ -111,8 +114,9 @@ def filtros(params: dict, sessao: SessaoDeLeitura) -> dict:
     if params.get("sexo"):
         sexo = _SEXOS.get(normalizar(params["sexo"]))
         if not sexo:
-            raise ParametroInvalido("sexo aceita só 'F': alunas premiadas em olimpíadas só para meninas "
-                                    "(EGMO, PAGMO, EGOI); as listas oficiais não informam o sexo dos demais")
+            raise ParametroInvalido("sexo aceita só 'F': alunas premiadas em olimpíadas ou etapas só para meninas "
+                                    "(EGMO, PAGMO, EGOI, Elas em Destaque da Itabirana); as listas oficiais não "
+                                    "informam o sexo dos demais")
         f["sexo"] = sexo
     if params.get("municipio"):
         f["municipio"] = params["municipio"][:MAX_CARACTERES]

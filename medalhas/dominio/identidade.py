@@ -9,10 +9,11 @@ from functools import lru_cache
 
 from .escolas import PARTICULAS, palavras_da_chave
 from .olimpiadas import area, e_alto_nivel
-from .premiacao import Premiacao
+from .premiacao import MENCAO, Premiacao
 from .texto import normalizar
 
 MAX_ANOS_CARREIRA = 12              # do 6º ano do fundamental ao fim da faculdade
+MAX_ANOS_SEM_PREMIO = 8             # intervalo sem premiação que, numa carreira longa demais, separa duas pessoas
 LIMITE_HOMONIMOS = 0.3              # nº esperado de pessoas com o nome, abaixo do qual o nome é "raro"
 LIMITE_HOMONIMOS_ALTO_NIVEL = 3.0   # mais tolerante quando há OBM/internacional em 2+ UFs
 
@@ -117,10 +118,11 @@ def completar_identidades(premiacoes: list[Premiacao]) -> tuple[int, int]:
 
     Devolve (UFs inferidas pelo nome exato, nomes abreviados completados).
     """
-    homonimos_esperados = _estimador_de_homonimos(normalizar(p["nome"]) for p in premiacoes)
+    provas = [p for p in premiacoes if not de_massa(p)]   # menções da OBMEP não decidem a UF de ninguém
+    homonimos_esperados = _estimador_de_homonimos(normalizar(p["nome"]) for p in provas)
     ufs_do_nome: dict[str, set[str]] = {}
     escolas_do_nome: dict[str, set[tuple[str, str]]] = {}   # nome -> {(UF, escola)}
-    for p in premiacoes:
+    for p in provas:
         if p.get("uf"):
             ufs_do_nome.setdefault(normalizar(p["nome"]), set()).add(p["uf"])
             if p.get("escola"):
@@ -161,9 +163,170 @@ def completar_identidades(premiacoes: list[Premiacao]) -> tuple[int, int]:
     return exatos, abreviados
 
 
+def de_massa(p: Premiacao) -> bool:
+    """Menção honrosa da OBMEP: cerca de 50 mil por edição, quase sempre a única premiação da pessoa.
+
+    Essas premiações entram nos perfis sem mudar quem é quem: não unem estados, não contam para saber se um
+    nome é raro, não servem de prova do estado de quem veio sem UF e não decidem qual homônimo fica com o
+    endereço "NOME|UF" (ver anexar_de_massa)."""
+    return p["competicao"] == "OBMEP" and p["medalha"] == MENCAO
+
+
+def _chave_da_escola(p: Premiacao) -> str:
+    """Palavras que identificam a escola da premiação, em ordem ("" sem escola)."""
+    return " ".join(sorted(palavras_da_chave(p.get("escola")))) if p.get("escola") else ""
+
+
+def _mesma_edicao_em_lugares_diferentes(a: Premiacao, b: Premiacao) -> bool:
+    """As duas premiações são da mesma olimpíada no mesmo ano, mas em cidades (ou, na mesma cidade, em escolas)
+    diferentes: ninguém estuda em dois lugares ao mesmo tempo, então são homônimos. Na mesma escola pode ser a
+    mesma pessoa (a OBI premia iniciação e programação no mesmo ano)."""
+    if (a["competicao"], a["ano"]) != (b["competicao"], b["ano"]):
+        return False
+    cidade_a, cidade_b = normalizar(a.get("municipio")), normalizar(b.get("municipio"))
+    if cidade_a and cidade_b and cidade_a != cidade_b:
+        return True
+    return bool(a.get("escola") and b.get("escola") and _chave_da_escola(a) != _chave_da_escola(b)
+                and not mesma_escola(a["escola"], b["escola"]))
+
+
+def _nivel_regride(registros: list[Premiacao]) -> bool:
+    """Na OBMEP o nível só sobe com os anos (1 -> 2 -> 3): um nível menor num ano posterior é de outra pessoa."""
+    niveis = sorted((p["ano"], int(p["nivel"])) for p in registros
+                    if p["competicao"] == "OBMEP" and p.get("nivel") in ("1", "2", "3"))
+    return any(depois[0] > antes[0] and depois[1] < antes[1] for antes, depois in zip(niveis, niveis[1:]))
+
+
+def _cabe_numa_pessoa(registros: list[Premiacao]) -> bool:
+    """As premiações podem ser de uma pessoa só: cabem numa carreira escolar, sem a mesma edição em dois lugares
+    e sem o nível da OBMEP regredir."""
+    anos = [p["ano"] for p in registros]
+    if max(anos) - min(anos) > MAX_ANOS_CARREIRA or _nivel_regride(registros):
+        return False
+    return not any(_mesma_edicao_em_lugares_diferentes(a, b) for i, a in enumerate(registros) for b in registros[:i])
+
+
+def _separar_por(registros: list[Premiacao], chave) -> list[list[Premiacao]]:
+    """Grupos pelo valor de chave(p); quem não tem valor vai para o grupo com o ano mais próximo."""
+    grupos: dict[str, list[Premiacao]] = {}
+    sem_valor = []
+    for p in registros:
+        valor = chave(p)
+        (grupos.setdefault(valor, []) if valor else sem_valor).append(p)
+    if not grupos:
+        return [registros]
+    for p in sem_valor:
+        min(grupos.values(), key=lambda g: (min(abs(p["ano"] - q["ano"]) for q in g), -len(g))).append(p)
+    return list(grupos.values())
+
+
+def _separar_no_tempo(registros: list[Premiacao]) -> list[list[Premiacao]]:
+    """Uma carreira longa demais é cortada nos intervalos de MAX_ANOS_SEM_PREMIO anos ou mais sem premiação."""
+    ordenados = sorted(registros, key=lambda p: p["ano"])
+    if ordenados[-1]["ano"] - ordenados[0]["ano"] <= MAX_ANOS_CARREIRA:
+        return [registros]
+    partes = [[ordenados[0]]]
+    for p in ordenados[1:]:
+        if p["ano"] - partes[-1][-1]["ano"] >= MAX_ANOS_SEM_PREMIO:
+            partes.append([])
+        partes[-1].append(p)
+    return partes
+
+
+def separar_homonimos(registros: list[Premiacao]) -> list[list[Premiacao]]:
+    """Divide as premiações de um mesmo nome numa mesma UF quando elas não cabem numa pessoa só
+    (ver _cabe_numa_pessoa). A maior parte dos nomes volta inteira, num grupo só.
+
+    A divisão é por cidade; dentro de uma cidade, por escola quando a mesma edição aparece em duas; e, numa
+    carreira longa demais, pelos intervalos sem premiação. Pedaços que cabem juntos numa pessoa (quem mudou de
+    cidade) são reunidos, desde que só haja um pedaço com que possam se juntar. O primeiro grupo devolvido é o
+    maior: ele fica com o id "NOME|UF" e os outros ganham a cidade no id.
+    """
+    if _cabe_numa_pessoa(registros):
+        return [registros]
+    pedacos: list[list[Premiacao]] = []
+    for da_cidade in _separar_por(registros, lambda p: normalizar(p.get("municipio"))):
+        por_escola = [da_cidade] if _cabe_numa_pessoa(da_cidade) else _separar_por(da_cidade, _chave_da_escola)
+        for da_escola in por_escola:
+            pedacos += _separar_no_tempo(da_escola)
+    pedacos.sort(key=lambda g: (-len(g), -max(p["ano"] for p in g)))
+    pessoas: list[list[Premiacao]] = []
+    for pedaco in pedacos:
+        compativeis = [pessoa for pessoa in pessoas if _cabe_numa_pessoa(pessoa + pedaco)]
+        if len(compativeis) == 1:
+            compativeis[0].extend(pedaco)
+        else:
+            pessoas.append(list(pedaco))
+    return pessoas
+
+
 def atribuir_alunos(premiacoes: list[Premiacao]) -> int:
     """Preenche `aluno_id` ("NOME NORMALIZADO|UF") em cada premiação. Devolve quantas pessoas foram
     reunidas entre UFs diferentes.
+
+    As premiações de massa (de_massa) ficam de fora dessas regras: depois que as demais definem quem é quem,
+    elas só se juntam aos perfis que já existem ou formam pessoas novas (anexar_de_massa).
+    """
+    principais = [p for p in premiacoes if not de_massa(p)]
+    unidos = _atribuir(principais)
+    anexar_de_massa([p for p in premiacoes if de_massa(p)], principais)
+    return unidos
+
+
+def _novo_id(nome: str, uf: str, grupo: list[Premiacao], usados: set[str]) -> str:
+    """ "NOME|UF"; se já é de outra pessoa (homônimo da mesma UF), a cidade (e um número, se preciso) distingue."""
+    ident = f"{nome}|{uf}"
+    if ident in usados:
+        cidade = normalizar(max(grupo, key=lambda p: (bool(p.get("municipio")), p["ano"])).get("municipio"))
+        base, n = f"{ident}|{cidade}", 1
+        ident = base
+        while ident in usados:
+            n += 1
+            ident = f"{base} {n}"
+    usados.add(ident)
+    return ident
+
+
+def anexar_de_massa(massa: list[Premiacao], principais: list[Premiacao]) -> None:
+    """Dá aluno_id às premiações de massa sem mexer nos perfis que as demais premiações definiram.
+
+    Cada uma entra no perfil de mesmo nome e mesma UF em que cabe (_cabe_numa_pessoa: mesma carreira, sem
+    repetir edição, sem o nível regredir); se dois homônimos cabem, só a mesma escola decide, e na dúvida ela não
+    entra em nenhum. As que sobram formam pessoas novas, divididas como os homônimos (separar_homonimos); se o
+    "NOME|UF" já é de um medalhista, elas levam a cidade no id."""
+    pessoas: dict[str, list[Premiacao]] = {}
+    for p in principais:
+        pessoas.setdefault(p["aluno_id"], []).append(p)
+    por_nome_uf: dict[tuple[str, str], list[str]] = {}
+    usados: dict[str, set[str]] = {}
+    for ident, registros in pessoas.items():
+        nome = ident.split("|")[0]
+        usados.setdefault(nome, set()).add(ident)
+        for uf in {p["uf"] for p in registros if p.get("uf")}:
+            por_nome_uf.setdefault((nome, uf), []).append(ident)
+
+    grupos: dict[tuple[str, str], list[Premiacao]] = {}
+    for p in massa:
+        grupos.setdefault((normalizar(p["nome"]), p.get("uf") or ""), []).append(p)
+    for (nome, uf), registros in grupos.items():
+        sobra = []
+        for p in sorted(registros, key=lambda p: p["ano"]):
+            cabem = [i for i in por_nome_uf.get((nome, uf), ()) if _cabe_numa_pessoa(pessoas[i] + [p])]
+            if len(cabem) > 1:
+                cabem = [i for i in cabem if any(mesma_escola(p.get("escola"), q.get("escola")) for q in pessoas[i])]
+            if len(cabem) == 1:
+                p["aluno_id"] = cabem[0]
+                pessoas[cabem[0]].append(p)
+            else:
+                sobra.append(p)
+        for grupo in separar_homonimos(sobra) if sobra else []:
+            ident = _novo_id(nome, uf, grupo, usados.setdefault(nome, set()))
+            for p in grupo:
+                p["aluno_id"] = ident
+
+
+def _atribuir(premiacoes: list[Premiacao]) -> int:
+    """As regras de atribuir_alunos, para as premiações que não são de massa.
 
     Por padrão, mesma pessoa = mesmo nome (sem acento) + mesma UF. Como alunos de ponta mudam de estado
     (vão estudar em Fortaleza, por exemplo), o mesmo nome em UFs diferentes é unido quando:
@@ -172,6 +335,9 @@ def atribuir_alunos(premiacoes: list[Premiacao]) -> int:
       - o nome é raro: o número esperado de pessoas com esse nome, estimado pela frequência de cada
         palavra entre todos os nomes, fica abaixo de LIMITE_HOMONIMOS.
     Premiações sem UF entram na pessoa quando ela é única (e, fora do alto nível, o nome é raro).
+
+    Dentro de uma UF, o mesmo nome é dividido quando as premiações não cabem numa pessoa só (separar_homonimos):
+    a maior parte fica com "NOME|UF" e as outras ganham a cidade no id ("NOME|UF|CIDADE").
     """
     por_nome: dict[str, list[Premiacao]] = {}
     for p in premiacoes:
@@ -185,6 +351,7 @@ def atribuir_alunos(premiacoes: list[Premiacao]) -> int:
         for p in registros:
             (por_uf.setdefault(p["uf"], []) if p.get("uf") else sem_uf).append(p)
         grupos = list(por_uf.values())
+        reunido = False
 
         if len(grupos) > 1:
             dono: dict[tuple, str] = {}
@@ -192,22 +359,29 @@ def atribuir_alunos(premiacoes: list[Premiacao]) -> int:
             for uf, ps in por_uf.items():
                 for edicao in {(p["competicao"], p["ano"]) for p in ps}:
                     conflito |= dono.setdefault(edicao, uf) != uf
-            anos = [p["ano"] for p in registros if p["ano"]]
+            anos = [p["ano"] for p in registros]
             cabe_na_carreira = max(anos) - min(anos) <= MAX_ANOS_CARREIRA
             limite = LIMITE_HOMONIMOS_ALTO_NIVEL if sum(_alto_nivel(g) for g in grupos) >= 2 else LIMITE_HOMONIMOS
             if not conflito and cabe_na_carreira and homonimos_esperados(nome) < limite:
                 grupos = [[p for g in grupos for p in g]]
                 unidos += 1
+                reunido = True
+        if not reunido:   # quem foi reunido entre estados já passou pelas mesmas checagens
+            grupos = [pessoa for g in grupos for pessoa in separar_homonimos(g)]
 
-        ids = []
+        ids: list[str] = []
+        usados: set[str] = set()
         for grupo in grupos:
             # UF principal = a do registro mais recente (aparece no perfil e no ranking por estado)
-            principal = max(grupo, key=lambda p: (p["ano"] or 0, p["competicao"] != "OBMEP"))["uf"]
-            ident = f"{nome}|{principal}"
+            principal = max(grupo, key=lambda p: (p["ano"], p["competicao"] != "OBMEP"))["uf"]
+            ident = _novo_id(nome, principal, grupo, usados)
             ids.append(ident)
             for p in grupo:
                 p["aluno_id"] = ident
         for p in sem_uf:
             unico = len(ids) == 1 and _pode_usar_o_nome(p, homonimos_esperados)
-            p["aluno_id"] = ids[0] if unico else f"{nome}|"
+            # o medalhista da IMO de 1985 não é o aluno de mesmo nome premiado em 2015
+            anos = [q["ano"] for q in grupos[0]] + [p["ano"]] if unico else []
+            cabe_na_carreira = unico and max(anos) - min(anos) <= MAX_ANOS_CARREIRA
+            p["aluno_id"] = ids[0] if cabe_na_carreira else f"{nome}|"
     return unidos

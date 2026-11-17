@@ -29,11 +29,14 @@ class ColetorDeFuncao:
         return self.funcao(log)
 
 
-def todos() -> list[ColetorDeFuncao]:
-    """Um coletor por olimpíada, na ordem do catálogo."""
+def todos(mencoes_obmep: bool = False) -> list[ColetorDeFuncao]:
+    """Um coletor por olimpíada, na ordem do catálogo. mencoes_obmep: inclui as menções honrosas da OBMEP
+    (cerca de 50 mil por edição; ver docs/mencoes-obmep.md)."""
     coletores = []
     for sigla in CATALOGO:
-        if sigla in _ESPECIFICOS:
+        if sigla == "OBMEP" and mencoes_obmep:
+            funcao = partial(obmep.coletar, mencoes=True)
+        elif sigla in _ESPECIFICOS:
             funcao = _ESPECIFICOS[sigla]
         elif sigla in obm_internacional.SIGLAS:
             funcao = partial(obm_internacional.coletar, sigla)

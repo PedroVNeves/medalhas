@@ -5,6 +5,7 @@ Uso:
     python server.py --port 9000 --no-browser
     python server.py --host 0.0.0.0  # aceita conexões de outras máquinas (API pública)
     python server.py --rate-limit 30 --daily-limit 500 --export-limit 3    # limites por IP
+    python server.py --trust-proxy --proxy-hops 2   # atrás de dois proxies (CDN + balanceador)
 
 Ponto de montagem: liga a leitura SQLite ao servidor HTTP e aplica os limites da linha de comando.
 """
@@ -27,6 +28,9 @@ def argumentos(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--no-browser", action="store_true", help="não abre o navegador")
     p.add_argument("--trust-proxy", action="store_true",
                    help="usa o IP de X-Forwarded-For (só atrás de um proxy reverso seu, como nginx)")
+    p.add_argument("--proxy-hops", type=int, default=1,
+                   help="quantos proxies seus há na frente (padrão 1): o IP do visitante é o N-ésimo de "
+                        "X-Forwarded-For contado da direita; o resto do cabeçalho é forjável")
     limite = p.add_argument_group("limites por IP (0 remove o limite)")
     limite.add_argument("--rate-limit", type=int, help="consultas por minuto à API pública (padrão 60)")
     limite.add_argument("--daily-limit", type=int, help="consultas por dia à API pública (padrão 2000)")
@@ -48,7 +52,8 @@ def main(argv: list[str] | None = None) -> None:
                        consultas_simultaneas=args.max_concurrent, conexoes_por_ip=args.max_connections_per_ip)
 
     leitura = LeituraSqlite(config.CAMINHO_BASE)
-    servidor = Servidor((args.host, args.port), leitura, confiar_proxy=args.trust_proxy)
+    servidor = Servidor((args.host, args.port), leitura, confiar_proxy=args.trust_proxy,
+                        saltos_proxy=args.proxy_hops)
     threading.Thread(target=aquecer, args=(leitura,), daemon=True).start()
 
     url = f"http://localhost:{args.port}"
