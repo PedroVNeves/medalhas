@@ -19,6 +19,8 @@ const observador = new ResizeObserver(entradas => {
   }
 });
 
+// Instância do ECharts guardada por chave. Se o elemento mudou (o Alpine recriou a seção), descarta a antiga
+// e cria outra; null se o elemento ainda não existe.
 function chart(el, key) {
   if (!el) return null;
   if (charts[key] && charts[key].getDom() !== el) { observador.unobserve(charts[key].getDom()); charts[key].dispose(); delete charts[key]; }
@@ -57,6 +59,8 @@ function stackedYears(el, key, rows, log = false) {
   }, true);
 }
 
+// Mapa do Brasil com cada estado pintado pela métrica (xp, ouro, total ou alunos). O contorno dos estados é
+// baixado na primeira vez. comTooltip=false (telas de toque): o toque chama onClick e acende o estado.
 async function brazilMap(el, key, estados, metric, onClick, comTooltip = true) {
   const c = chart(el, key); if (!c) return;
   c.showLoading({ text: "", color: "#f5c542", maskColor: "transparent" });
@@ -107,6 +111,7 @@ function destacarEstado(key, nome) {
 }
 
 // ---------------------------------------------------------------- confete
+// três rajadas de confete; nada acontece se o sistema pede menos movimento
 function celebrate() {
   if (!window.confetti || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const colors = ["#f5c542", "#ffe08a", "#ffffff", "#7c8cff"];
@@ -116,6 +121,7 @@ function celebrate() {
 }
 
 // ---------------------------------------------------------------- contador animado
+// conta de 0 até `to` em 1,4 s, desacelerando no fim; direto no valor se o sistema pede menos movimento
 function countUp(el, to) {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) { el.textContent = fmt(to); return; }
   const from = 0, dur = 1400, t0 = performance.now();

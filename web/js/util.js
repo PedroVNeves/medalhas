@@ -18,6 +18,7 @@ const API = async (path, params = {}) => {
 };
 
 // ---------------------------------------------------------------- formatação
+// número no formato brasileiro (12.167); vazio vira 0
 const fmt = n => (n ?? 0).toLocaleString("pt-BR");
 const UF_NOMES = {
   AC: "Acre", AL: "Alagoas", AM: "Amazonas", AP: "Amapá", BA: "Bahia", CE: "Ceará", DF: "Distrito Federal",
@@ -33,6 +34,9 @@ const KEEP_UPPER = /^(I{1,3}|IV|V|VI{0,3}|IX|X|[A-Z]{1,2}|EE|EM|EMEF|EMEB|EMEIEF
 // Cópia de slug() em medalhas/dominio/enderecos.py: as duas precisam dar o mesmo resultado.
 const slug = t => (t || "").normalize("NFKD").replace(/\p{Mn}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
+// Nome de escola para exibição. "MILITAR DE FORTALEZA, COLEGIO" vira "Colegio Militar de Fortaleza": em nomes
+// todos em maiúsculas, só a inicial fica maiúscula, preposições ficam minúsculas e siglas (EEEFM, IFAL, números
+// romanos) continuam em maiúsculas. Nome que já vem em caixa mista é mantido.
 function prettySchool(name) {
   if (!name) return "";
   let s = name.trim();
@@ -47,6 +51,7 @@ function prettySchool(name) {
     return w.charAt(0) + w.slice(1).toLowerCase();
   }).join("");
 }
+// até duas iniciais para o avatar: "Maria de Souza" -> "MS" (pula palavras curtas como "de")
 const initials = n => (n || "?").split(/\s+/).filter(w => w.length > 2 || w === w.toUpperCase()).slice(0, 2).map(w => w[0]).join("").toUpperCase();
 // rótulo curto do nível para os chips: "3" -> "N3", "Programação Nível 2" -> "Prog. 2", "Iniciação Nível Júnior" -> "Inic. Jr"
 const nivelCurto = n => {
@@ -62,11 +67,14 @@ const descreveImpa = v => {
   const ls = (v || "3").split(",").map(n => /^\d$/.test(n) ? `Nível ${n}` : n);
   return ls.length > 1 ? ls.slice(0, -1).join(", ") + " e " + ls.at(-1) : ls[0];
 };
+// "3" -> "Nível 3"; outros níveis ("Universitário", "Programação Nível 1") ficam como estão
 const nivelLabel = n => !n ? "" : /^\d$/.test(n) ? `Nível ${n}` : n;
+// classe CSS da cor da medalha (ouro é o estilo padrão, sem classe)
 const medalClass = m => ({ Ouro: "", Prata: "prata", Bronze: "bronze", "Menção Honrosa": "mencao" }[m] ?? "bronze");
 
 // ---------------------------------------------------------------- ícones lucide como diretiva Alpine
 // x-icon="'crown'" desenha o SVG dentro do elemento (sem substituir o nó, que o Alpine controla).
+// nome do ícone no lucide: "map-pin" -> "MapPin"
 const pascal = s => String(s).replace(/(^|-)(\w)/g, (_, __, c) => c.toUpperCase());
 document.addEventListener("alpine:init", () => {
   Alpine.directive("icon", (el, { expression }, { effect, evaluateLater }) => {

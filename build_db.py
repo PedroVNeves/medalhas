@@ -17,6 +17,7 @@ from medalhas.aplicacao.gerar_base import gerar_base
 
 
 def main(argv: list[str] | None = None, caminho: Path = config.CAMINHO_BASE) -> None:
+    """Gera a base em `caminho` e mostra quantas premiações foram gravadas e quais fontes falharam."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--refresh", action="store_true", help="apaga o cache e baixa tudo de novo")
     args = parser.parse_args(argv)

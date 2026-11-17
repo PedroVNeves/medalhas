@@ -142,6 +142,7 @@ console.table(ouros);`,
   },
 };
 
+// um parâmetro na referência: nome, tipo, descrição e se é obrigatório
 const P = (nome, tipo, desc, obrig = false) => ({ nome, tipo, desc, obrig });
 const FILTROS = [
   P("uf", "texto", "Sigla do estado. Ex.: SP"),
@@ -220,5 +221,6 @@ function resumirJSON(v) {
   return v;
 }
 const escapar = t => t.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+// código com cores do highlight.js (ou só escapado, se a biblioteca ainda não carregou)
 const realcar = (codigo, lang) => window.hljs?.getLanguage(lang) ? hljs.highlight(codigo, { language: lang }).value : escapar(codigo);
 

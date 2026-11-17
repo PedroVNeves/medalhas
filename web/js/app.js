@@ -17,6 +17,7 @@ const TELAS = ["home", "busca", "ranking", "estados", "sobre", "dados", "aluno",
 // endereços que o site abre sem recarregar a página
 const ROTA_INTERNA = /^\/(busca|ranking(\/(alunos|escolas|estados|cidades))?|estados|sobre|dados|(aluno|escola|cidade)\/[^/]+)?$/;
 
+// Estado e métodos que o index.html usa (x-data="app()"). Cada tela tem a sua seção abaixo.
 function app() {
   return {
     UF_NOMES, fmt, prettySchool, destacarEstado, initials, nivelLabel, medalClass, nivelCurto, descreveImpa,
@@ -47,6 +48,7 @@ function app() {
     story: { aberto: false, src: "", link: "", nomeArquivo: "", arquivo: null, carregando: false, erro: false,
              copiado: false, podeCompartilhar: false },
 
+    // liga a navegação sem recarregar (links, voltar/avançar, tecla /), abre a rota atual e carrega a visão geral
     async init() {
       // voltar/avançar do navegador (popstate) e endereço com # editado à mão (hashchange)
       window.addEventListener("popstate", () => this.onRoute());
@@ -67,6 +69,8 @@ function app() {
       this.onRoute(true);  // a rota não espera a visão geral: perfis e rankings carregam sozinhos
       await this.loadOverview();
     },
+    // visão geral (/api/overview): totais, catálogo, filtros e destaques; define o método padrão se o usuário
+    // ainda não escolheu e redesenha a tela inicial ou o mapa
     async loadOverview() {
       const d = await API("overview");
       if (d.erro) { this.avisar(d.erro, { label: "Tentar de novo", fn: () => this.loadOverview() }); return; }
@@ -84,6 +88,7 @@ function app() {
       const sel = (v || "").split(",").filter(n => this.niveisAceitos.includes(n));
       return (sel.length ? sel : this.niveisAceitos).join(",");
     },
+    // aviso no rodapé por 7 s, com um botão opcional ({ label, fn })
     avisar(texto, acao = null) {
       this.aviso = { texto, acao };
       clearTimeout(this._avisoT);
@@ -111,6 +116,8 @@ function app() {
       if (url !== location.pathname + location.search + location.hash) history.pushState(null, "", url);
       this.onRoute();
     },
+    // lê o endereço atual e prepara a tela: título, método vindo do link, filtros da URL e os dados da tela.
+    // forcar=true recarrega mesmo sem o endereço ter mudado (troca de método)
     onRoute(forcar = false) {
       const atual = location.pathname + location.search + location.hash;
       if (atual === this._rotaAtual && !forcar) return;   // popstate e hashchange chegam juntos
@@ -166,6 +173,7 @@ function app() {
       document.querySelectorAll("[data-count]").forEach(el => countUp(el, +el.dataset.count));
       this.drawYears();
     },
+    // gráfico de medalhas por ano, de todas as olimpíadas ou só da escolhida (yearComp)
     drawYears() {
       const by = {};
       for (const r of this.ov.serie) {
@@ -276,6 +284,8 @@ function app() {
       this.runSearch();
     },
     limparBuscaFiltros() { for (const k of Object.keys(this.bf)) this.bf[k] = ""; this.setBuscaFilter("uf", ""); },
+    // busca completa: agrupa as premiações por aluno (ou por escola, no campo escola) e ordena os grupos por pontos.
+    // Resposta de uma busca já substituída por outra é descartada
     async runSearch() {
       const q = this.q.trim();
       // sem texto, a busca só roda com um filtro que restrinja bem (estado, ano ou escola)
@@ -388,6 +398,7 @@ function app() {
     },
     // perfis também descartam respostas de um perfil anterior (trocar rápido de página)
     _novoPedidoPerfil() { return (this._pedidoPerfil = (this._pedidoPerfil || 0) + 1); },
+    // perfil do aluno; com algum ouro, confete na primeira visita da sessão
     async loadAluno(endereco) {
       const pedido = this._novoPedidoPerfil();
       this.loadingPerfil = true; this.aluno = null;
@@ -398,6 +409,7 @@ function app() {
       const id = d.id;
       if (d.medalhas?.ouro && !sessionStorage.getItem("cf:" + id)) { sessionStorage.setItem("cf:" + id, 1); setTimeout(celebrate, 350); }
     },
+    // perfil da escola e o gráfico por ano; com 10 ouros ou mais, confete na primeira visita da sessão
     async loadEscola(endereco) {
       const pedido = this._novoPedidoPerfil();
       this.loadingPerfil = true; this.escola = null;
@@ -411,6 +423,7 @@ function app() {
         if (d.medalhas?.ouro >= 10 && !sessionStorage.getItem("cf:" + id)) { sessionStorage.setItem("cf:" + id, 1); setTimeout(celebrate, 350); }
       });
     },
+    // perfil da cidade e o gráfico por ano
     async loadCidade(endereco) {
       const pedido = this._novoPedidoPerfil();
       this.loadingPerfil = true; this.cidade = null;
@@ -422,6 +435,7 @@ function app() {
         if (d.serie) stackedYears(this.$refs.cityChart, "city", d.serie.map(s => ({ ano: s.ano, ouro: s.Ouro, prata: s.Prata, bronze: s.Bronze })));
       });
     },
+    // premiações do aluno agrupadas por ano, na ordem em que vieram (mais recente primeiro)
     get alunoPorAno() {
       if (!this.aluno?.premiacoes) return [];
       const m = new Map();
@@ -502,6 +516,8 @@ function app() {
       if (this.route.query.escola_chave) p.escola_id = this.route.query.escola_chave;
       return p;
     },
+    // filtros do ranking no formato da exportação: premiacoes baixa as premiações do recorte, os outros conjuntos
+    // o ranking completo (no de estados, o filtro de estado não se aplica)
     exportRanking(conjunto) {
       const { ordem, ...f } = this.rk.f;
       const p = { metodo: this.metodo, ...Object.fromEntries(Object.entries(f).filter(([, v]) => v)) };
@@ -512,10 +528,12 @@ function app() {
     },
 
     // ------------------------------------------------ documentação da API
+    // limites atuais da API, mostrados na página API & Dados (uma vez)
     async loadDoc() {
       if (this.doc.limites) return;
       try { this.doc.limites = (await (await fetch("/api/v1")).json()).limites; } catch { /* a página funciona sem */ }
     },
+    // código da receita na linguagem escolhida, com o endereço deste servidor e realce de sintaxe
     codigo(receita) { const l = this.doc.lang; return realcar(RECEITAS[receita][l].replaceAll("{B}", BASE), l === "curl" ? "bash" : l); },
     async copiar(texto, chave) {
       try {
@@ -525,6 +543,7 @@ function app() {
       } catch { this.avisar("Não foi possível copiar."); }
     },
     receitaTexto(receita) { return RECEITAS[receita][this.doc.lang]; },
+    // chama a rota de exemplo e mostra a resposta resumida (2 itens por lista) e quantas consultas restam
     async testar(rota) {
       this.doc.carregando[rota.id] = true;
       try {
@@ -539,8 +558,11 @@ function app() {
       }
     },
 
+    // "Top 0,1%", "Top 0,5%", "Top 3%": a posição como fatia do total
     percentil(rank, total) { const p = rank / total * 100; return p < 0.1 ? "Top 0,1%" : p < 1 ? `Top ${p.toFixed(1).replace(".", ",")}%` : `Top ${Math.ceil(p)}%`; },
+    // quantas conquistas da lista já foram desbloqueadas
     desbloqueadas(list) { return (list || []).filter(c => c.desbloqueada).length; },
+    // cor do tier como variável CSS (--tc) para o selo
     tierStyle(t) { return t ? `--tc:${t.cor}` : ""; },
   };
 }

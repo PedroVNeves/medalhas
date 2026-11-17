@@ -20,6 +20,7 @@ from medalhas.adaptadores.sqlite import LeituraSqlite
 
 
 def argumentos(argv: list[str] | None = None) -> argparse.Namespace:
+    """Opções da linha de comando; os limites ausentes mantêm o padrão de limites.GRUPOS."""
     p = argparse.ArgumentParser(description="Site e API dos medalhistas brasileiros.")
     p.add_argument("--port", type=int, default=8000)
     p.add_argument("--host", default="127.0.0.1", help="0.0.0.0 aceita conexões de outras máquinas")
@@ -37,6 +38,8 @@ def argumentos(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> None:
+    """Aplica os limites, sobe o servidor, aquece o cache em segundo plano e abre o navegador (salvo
+    --no-browser). Sai com mensagem se a base ainda não foi gerada."""
     args = argumentos(argv)
     if not config.CAMINHO_BASE.exists():
         sys.exit("Base não encontrada. Rode primeiro: python build_db.py")
