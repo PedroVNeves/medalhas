@@ -123,7 +123,7 @@ def filtros(params: dict, sessao: SessaoDeLeitura) -> dict:
 def ranking(params: dict, tipo: str, sessao: SessaoDeLeitura) -> dict:
     """Parâmetros do ranking no formato das consultas do site (todos os valores como texto)."""
     if tipo not in TIPOS:
-        raise NaoEncontrado("ranking inexistente: use /api/v1/ranking/alunos, /escolas ou /estados")
+        raise NaoEncontrado("ranking inexistente: use /api/v1/ranking/alunos, /escolas, /estados ou /cidades")
     p = {**filtros(params, sessao), "tipo": tipo, "metodo": params.get("metodo", ""),
          "ordem": params.get("ordem", ORDEM_PADRAO)}
     if p["ordem"] not in ORDENACOES:

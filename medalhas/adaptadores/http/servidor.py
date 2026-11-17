@@ -69,7 +69,7 @@ class Handler(BaseHTTPRequestHandler):
         espera = int(cabecalhos["Retry-After"])
         escopo = cabecalhos.get("X-RateLimit-Scope")
         if escopo == "dia":
-            mensagem = "limite diário de consultas atingido; volta a liberar à meia-noite"
+            mensagem = "limite diário de consultas atingido; volta a liberar à meia-noite (horário de Brasília)"
         elif escopo == "bloqueio":
             mensagem = f"muitas requisições depois do limite: IP bloqueado por {espera} segundo(s)"
         else:

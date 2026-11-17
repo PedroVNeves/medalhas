@@ -109,6 +109,13 @@ class TestLimites(unittest.TestCase):
         self.assertEqual((ok, cab["X-RateLimit-Scope"]), (False, "min"))
         self.assertTrue(self.limitador.consumir("teste", "2.2.2.2")[0])   # outro IP tem a própria cota
 
+    def test_teto_diario_vira_a_meia_noite_de_brasilia(self):
+        import time
+        from datetime import datetime
+        falta = limites._meia_noite() - time.time()
+        self.assertTrue(0 < falta <= 24 * 3600)
+        self.assertEqual(datetime.fromtimestamp(limites._meia_noite(), limites.BRASILIA).strftime("%H:%M"), "00:00")
+
     def test_insistir_bloqueia_o_ip(self):
         with mock.patch.object(limites, "ABUSO_REJEICOES", 3):
             for _ in range(6):

@@ -13,6 +13,7 @@ Os contadores ficam na memória: zeram quando o servidor reinicia.
 import threading
 import time
 from collections import Counter
+from datetime import datetime, timedelta, timezone
 
 # grupo -> {"quantidade": fichas por janela, "janela": segundos, "por_dia": teto diário ou None}
 GRUPOS = {
@@ -31,12 +32,20 @@ MAX_CONEXOES_IP = 12      # conexões abertas ao mesmo tempo por IP
 MAX_CONSULTAS = 8         # consultas à base rodando ao mesmo tempo
 ESPERA_CONSULTA = 10      # segundos esperando vaga antes de responder 503
 SEM_LIMITE = 10**9        # cota "infinita" (limite desligado com 0 na linha de comando)
+# O teto diário vira à meia-noite de Brasília, não à do servidor (o Cloud Run roda em UTC, que daria 21h).
+# Horário fixo: o Brasil não tem horário de verão desde 2019.
+BRASILIA = timezone(timedelta(hours=-3))
+
+
+def _hoje() -> str:
+    """Data de hoje em Brasília: muda quando o teto diário volta a zero."""
+    return datetime.now(BRASILIA).strftime("%Y-%m-%d")
 
 
 def _meia_noite() -> float:
-    """Instante (time.time) da próxima meia-noite local, quando o teto diário volta a zero."""
-    t = time.localtime()
-    return time.mktime((t.tm_year, t.tm_mon, t.tm_mday + 1, 0, 0, 0, 0, 0, -1))
+    """Instante (time.time) da próxima meia-noite de Brasília, quando o teto diário volta a zero."""
+    agora = datetime.now(BRASILIA)
+    return (agora + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
 
 
 class Limitador:
@@ -75,7 +84,7 @@ class Limitador:
         """Gasta uma ficha. Devolve (permitido, cabeçalhos X-RateLimit-* / Retry-After)."""
         g = GRUPOS[grupo]
         qtd, janela, por_dia = g["quantidade"], g["janela"], g["por_dia"]
-        agora, hoje, chave = time.monotonic(), time.strftime("%Y-%m-%d"), (grupo, ip)
+        agora, hoje, chave = time.monotonic(), _hoje(), (grupo, ip)
         por = "min" if janela == 60 else "h" if janela == 3600 else f"{janela}s"
         cab = {"X-RateLimit-Limit": f"{qtd}/{por}" + (f", {por_dia}/dia" if por_dia else "")}
         with self._lock:

@@ -169,6 +169,8 @@ def _nome_do_arquivo(params: dict, conjunto: str, formato: str) -> str:
     for chave in _PARTES_DO_NOME:
         if params.get(chave):
             partes.append(re.sub(r"[^a-z0-9]+", "-", normalizar(params[chave]).lower())[:40].strip("-"))
+    if params.get("sexo"):   # só existe sexo=F (validado antes)
+        partes.append("meninas")
     if conjunto != "premiacoes":
         partes.append(parametros.metodo(params)[0])
     return "medalhas-" + "-".join(p for p in partes if p) + f".{formato}"
