@@ -276,6 +276,19 @@ class TestPontaAPonta(unittest.TestCase):
         csv = self.get("/api/v1/exportar?conjunto=cidades")
         self.assertEqual(csv[0], 200)
 
+    def test_pagina_de_erro_em_enderecos_de_pagina(self):
+        from unittest import mock
+        from medalhas.adaptadores.http import paginas
+        with mock.patch.object(paginas, "tela", side_effect=RuntimeError("bug")):
+            status, cab, corpo = self.get("/sobre")
+        self.assertEqual(status, 500)
+        self.assertIn("text/html", cab["Content-Type"])
+        pagina = corpo.decode()
+        self.assertIn("Algo deu errado", pagina)
+        self.assertNotIn("{{", pagina)   # todos os marcadores preenchidos
+        with mock.patch.object(paginas, "tela", side_effect=RuntimeError("bug")):
+            self.assertEqual(self.get("/api/v1/olimpiadas")[0], 200)   # a API segue com JSON, sem a página
+
     def test_pagina_sobre(self):
         status, cab, corpo = self.get("/sobre")
         self.assertEqual(status, 200)

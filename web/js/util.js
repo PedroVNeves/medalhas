@@ -2,10 +2,19 @@
 
 // método de pontuação escolhido no topo (impa | impa3 | site); vai em toda chamada à API
 let METODO = localStorage.getItem("metodo") || "";
-const API = (path, params = {}) => {
+// Nunca lança erro: falha do servidor (429, 503, 500…) ou de rede vira { erro: "mensagem" }, que a tela mostra.
+const API = async (path, params = {}) => {
   const all = { ...params, metodo: METODO };
   const qs = new URLSearchParams(Object.entries(all).filter(([, v]) => v !== "" && v != null));
-  return fetch(`/api/${path}?${qs}`).then(r => r.json());
+  try {
+    const r = await fetch(`/api/${path}?${qs}`);
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok && !d.erro) d.erro = r.status === 503 ? "Servidor ocupado. Tente de novo em alguns segundos."
+      : `O servidor respondeu com erro ${r.status}. Tente de novo.`;
+    return d;
+  } catch {
+    return { erro: "Falha de conexão. Confira a internet e tente de novo." };
+  }
 };
 
 // ---------------------------------------------------------------- formatação

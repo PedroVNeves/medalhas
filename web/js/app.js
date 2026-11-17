@@ -68,7 +68,9 @@ function app() {
       await this.loadOverview();
     },
     async loadOverview() {
-      this.ov = await API("overview");
+      const d = await API("overview");
+      if (d.erro) { this.avisar(d.erro, { label: "Tentar de novo", fn: () => this.loadOverview() }); return; }
+      this.ov = d;
       if (!this.metodo) { this.metodo = METODO = this.ov.metodo; }
       if (this.is("home")) this.$nextTick(() => this.drawHome());
       if (this.is("estados")) this.$nextTick(() => this.drawMap());
@@ -219,8 +221,8 @@ function app() {
     get campoSugestoes() { return this.sug.onde === "nav" ? "tudo" : this.campo; },
     async carregarSugestoes(q) {
       const campo = this.campoSugestoes;
-      let d;
-      try { d = await API("sugestoes", { q, campo }); } catch { return; }
+      const d = await API("sugestoes", { q, campo });
+      if (d.erro) return;   // é só uma ajuda: sem sugestões, Enter continua abrindo a busca
       if (q !== this.q.trim() || campo !== this.campoSugestoes || !this.sug.onde) return;   // já digitou outra coisa
       const local = (municipio, uf) => [prettySchool(municipio), uf].filter(Boolean).join(" · ");
       this.sug.lista = [
@@ -286,6 +288,7 @@ function app() {
       this._lastSearch = key;
       const d = await API("busca", params);
       if (this._lastSearch !== key) return;
+      if (d.erro) { this.busca = { loading: false, total: 0, grupos: [], erro: d.erro }; this.avisar(d.erro); return; }
       const byEscola = this.campo === "escola";
       const map = new Map();
       for (const r of d.resultados) {
@@ -311,13 +314,20 @@ function app() {
       history.replaceState(null, "", this.rankLink(this.rk.tipo, p));
       this.loadRanking();
     },
+    // cada pedido ganha um número: resposta de um pedido antigo (filtro trocado no meio) é descartada
     async loadRanking(more = false) {
+      const pedido = this._pedidoRanking = (this._pedidoRanking || 0) + 1;
       this.rk.loading = true;
       const offset = more ? this.rk.itens.length : 0;
       const d = await API("ranking", { tipo: this.rk.tipo, ...this.rk.f, limite: 50, offset });
+      if (pedido !== this._pedidoRanking) return;
+      this.rk.loading = false;
+      if (d.erro) {   // mantém o que já estava na tela e explica
+        this.avisar(d.erro, { label: "Tentar de novo", fn: () => this.loadRanking(more) });
+        return;
+      }
       this.rk.itens = more ? this.rk.itens.concat(d.itens) : d.itens;
       this.rk.total = d.total;
-      this.rk.loading = false;
     },
     // ------------------------------------------------ filtros de múltipla escolha ("OBMEP,OBM", "1,3")
     temValor(valor, v) { return (valor || "").split(",").includes(v); },
@@ -376,17 +386,23 @@ function app() {
       const nome = this.is("escola") ? prettySchool(d.nome) : d.nome;
       document.title = `${d.uf ? `${nome} (${d.uf})` : nome} · Medalhas`;
     },
+    // perfis também descartam respostas de um perfil anterior (trocar rápido de página)
+    _novoPedidoPerfil() { return (this._pedidoPerfil = (this._pedidoPerfil || 0) + 1); },
     async loadAluno(endereco) {
+      const pedido = this._novoPedidoPerfil();
       this.loadingPerfil = true; this.aluno = null;
       const d = await API("aluno", { endereco });
+      if (pedido !== this._pedidoPerfil) return;
       this.aluno = d; this.loadingPerfil = false;
       this.perfilCarregado(d);
       const id = d.id;
       if (d.medalhas?.ouro && !sessionStorage.getItem("cf:" + id)) { sessionStorage.setItem("cf:" + id, 1); setTimeout(celebrate, 350); }
     },
     async loadEscola(endereco) {
+      const pedido = this._novoPedidoPerfil();
       this.loadingPerfil = true; this.escola = null;
       const d = await API("escola", { endereco });
+      if (pedido !== this._pedidoPerfil) return;
       this.escola = d; this.loadingPerfil = false;
       this.perfilCarregado(d);
       const id = d.id;
@@ -396,8 +412,10 @@ function app() {
       });
     },
     async loadCidade(endereco) {
+      const pedido = this._novoPedidoPerfil();
       this.loadingPerfil = true; this.cidade = null;
       const d = await API("cidade", { endereco });
+      if (pedido !== this._pedidoPerfil) return;
       this.cidade = d; this.loadingPerfil = false;
       this.perfilCarregado(d);
       this.$nextTick(() => {

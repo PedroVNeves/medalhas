@@ -4,6 +4,7 @@ Cada requisição da API segue o mesmo caminho:
     bloqueio por abuso? -> rota -> cota do IP -> vaga de consulta -> sessão de leitura -> resposta
 """
 import gzip
+import html
 import json
 import mimetypes
 import traceback
@@ -25,6 +26,14 @@ TEMPO_OCIOSO = 20   # segundos sem enviar/receber dados: derruba conexões lenta
 COMPACTAR_A_PARTIR = 1024   # bytes; abaixo disso o gzip quase não ganha nada
 TIPOS_COMPACTAVEIS = ("application/json", "text/", "application/javascript", "application/xml")
 CACHE_NAVEGADOR = 300   # segundos que o navegador reaproveita respostas marcadas com cache_cdn
+
+# Páginas de erro (web/erro.html) para quem abre um endereço do site; a API responde com JSON
+ERROS_DE_PAGINA = {
+    429: ("Muitas visitas seguidas", "Recebemos muitas visitas seguidas do seu endereço. Espere alguns segundos e "
+                                     "tente de novo."),
+    503: ("Servidor ocupado", "O Medalhas está atendendo muita gente agora. Tente de novo em alguns segundos."),
+    500: ("Algo deu errado", "Tivemos um problema ao montar esta página. Tente de novo; se continuar, avise."),
+}
 
 mimetypes.add_type("text/javascript", ".js")
 mimetypes.add_type("text/css", ".css")
@@ -146,15 +155,20 @@ class Handler(BaseHTTPRequestHandler):
             self._json(dados, cabecalhos=cabecalhos)
 
     # ------------------------------------------------ páginas de aluno/escola, telas do site e sitemap
-    def _com_sessao(self, funcao):
-        """Roda funcao(sessao) com as mesmas proteções da API do site. None se a consulta foi recusada."""
+    def _com_sessao(self, funcao, pagina: bool = False):
+        """Roda funcao(sessao) com as mesmas proteções da API do site. None se a consulta foi recusada.
+
+        pagina=True: a recusa vai como página de erro (quem pediu foi uma pessoa abrindo o endereço)."""
         permitido, cabecalhos = limites.limitador.consumir("site", self._ip())
         if not permitido:
-            self._recusar(cabecalhos)
+            self._pagina_de_erro(429, cabecalhos) if pagina else self._recusar(cabecalhos)
             return None
         if not limites.consultas.acquire(timeout=limites.ESPERA_CONSULTA):
-            self._enviar(b"Servidor ocupado; tente de novo em instantes", "text/plain; charset=utf-8", 503,
-                         {"Retry-After": "5"})
+            if pagina:
+                self._pagina_de_erro(503, {"Retry-After": "5"})
+            else:
+                self._enviar(b"Servidor ocupado; tente de novo em instantes", "text/plain; charset=utf-8", 503,
+                             {"Retry-After": "5"})
             return None
         try:
             with self.server.leitura.sessao() as sessao:
@@ -166,7 +180,7 @@ class Handler(BaseHTTPRequestHandler):
     _CACHE_PAGINA = {"Cache-Control": f"public, max-age={CACHE_NAVEGADOR}, s-maxage=86400"}
 
     def _pagina(self, tipo: str, endereco: str) -> None:
-        pagina = self._com_sessao(lambda s: paginas.perfil(s, tipo, endereco, URL_SITE))
+        pagina = self._com_sessao(lambda s: paginas.perfil(s, tipo, endereco, URL_SITE), pagina=True)
         if pagina is None:
             return
         if pagina.destino:
@@ -176,7 +190,7 @@ class Handler(BaseHTTPRequestHandler):
                          self._CACHE_PAGINA if pagina.status == 200 else None)
 
     def _tela(self, caminho: str) -> None:
-        pagina = self._com_sessao(lambda s: paginas.tela(s, caminho, URL_SITE))
+        pagina = self._com_sessao(lambda s: paginas.tela(s, caminho, URL_SITE), pagina=True)
         if pagina is None:
             return
         if pagina.destino:
@@ -219,6 +233,14 @@ class Handler(BaseHTTPRequestHandler):
         """A mesma página 404 que o Firebase Hosting mostra para endereços que não existem."""
         self._enviar((PASTA_WEB / "404.html").read_bytes(), "text/html; charset=utf-8", 404)
 
+    def _pagina_de_erro(self, status: int, cabecalhos: dict | None = None) -> None:
+        """web/erro.html preenchida com o código, o título e a mensagem do erro (ERROS_DE_PAGINA)."""
+        titulo, mensagem = ERROS_DE_PAGINA[status]
+        corpo = ((PASTA_WEB / "erro.html").read_text(encoding="utf-8")
+                 .replace("{{codigo}}", str(status)).replace("{{titulo}}", html.escape(titulo))
+                 .replace("{{mensagem}}", html.escape(mensagem)))
+        self._enviar(corpo.encode("utf-8"), "text/html; charset=utf-8", status, cabecalhos)
+
     def _sitemap(self, nome: str) -> None:
         versao = self.server.leitura.versao()
         resultado = self._com_sessao(lambda s: [paginas.sitemap(s, nome, URL_SITE, versao)])
@@ -233,7 +255,8 @@ class Handler(BaseHTTPRequestHandler):
     def _arquivo(self, caminho_url: str) -> None:
         relativo = "index.html" if caminho_url in ("/", "") else unquote(caminho_url.lstrip("/"))
         alvo = (PASTA_WEB / relativo).resolve()
-        if PASTA_WEB.resolve() not in alvo.parents or not alvo.is_file():   # bloqueia ../ e pastas
+        # bloqueia ../, pastas e o modelo das páginas de erro (sem os marcadores preenchidos)
+        if PASTA_WEB.resolve() not in alvo.parents or not alvo.is_file() or alvo.name == "erro.html":
             self._nao_encontrado()
             return
         tipo = mimetypes.guess_type(alvo.name)[0] or "application/octet-stream"
@@ -251,13 +274,15 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self) -> None:
-        espera = limites.limitador.bloqueio_restante(self._ip())
-        if espera:
-            self._recusar({"Retry-After": str(espera), "X-RateLimit-Scope": "bloqueio"})
-            return
         url = urlparse(self.path)
         params = {k: v[0] for k, v in parse_qs(url.query).items()}
         caminho = url.path.rstrip("/") or "/"
+        eh_api = caminho.startswith("/api/")
+        espera = limites.limitador.bloqueio_restante(self._ip())
+        if espera:
+            cabecalhos = {"Retry-After": str(espera), "X-RateLimit-Scope": "bloqueio"}
+            self._recusar(cabecalhos) if eh_api else self._pagina_de_erro(429, cabecalhos)
+            return
         try:
             partes = caminho.strip("/").split("/")
             if caminho.startswith("/api/"):
@@ -280,7 +305,10 @@ class Handler(BaseHTTPRequestHandler):
             pass   # o cliente desistiu no meio do envio
         except Exception as e:  # noqa: BLE001 — bug do servidor: registra o traceback e responde 500
             traceback.print_exc()
-            self._json({"erro": f"erro interno do servidor ({type(e).__name__})"}, 500)
+            if eh_api:
+                self._json({"erro": f"erro interno do servidor ({type(e).__name__})"}, 500)
+            else:
+                self._pagina_de_erro(500)
 
     do_HEAD = do_GET
 

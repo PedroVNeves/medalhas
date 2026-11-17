@@ -2,7 +2,7 @@
   "hosting": {
     "public": "web",
     "predeploy": ["npm run css"],
-    "ignore": ["**/.*", "css/entrada.css"],
+    "ignore": ["**/.*", "css/entrada.css", "erro.html"],
     "rewrites": [
       { "source": "/api/**", "run": { "serviceId": "medalhas", "region": "southamerica-east1" } },
       { "source": "/aluno/**", "run": { "serviceId": "medalhas", "region": "southamerica-east1" } },

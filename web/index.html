@@ -473,7 +473,7 @@
   </div>
 
   <div x-show="!busca.loading && !busca.grupos.length" class="glass card mt-6 p-12 text-center text-slate-400">
-    <i x-icon="'search-x'" class="mx-auto mb-3 h-10 w-10 text-slate-600"></i><span x-text="q.trim().length < 2 && !bf.uf && !bf.ano ? 'Digite um nome, ou escolha um estado ou ano nos filtros.' : 'Nenhum resultado. Tente outra grafia, só o sobrenome, a sigla da escola ou menos filtros.'"></span>
+    <i x-icon="'search-x'" class="mx-auto mb-3 h-10 w-10 text-slate-600"></i><span x-text="busca.erro ? busca.erro : q.trim().length < 2 && !bf.uf && !bf.ano ? 'Digite um nome, ou escolha um estado ou ano nos filtros.' : 'Nenhum resultado. Tente outra grafia, só o sobrenome, a sigla da escola ou menos filtros.'"></span>
   </div>
 
   <div class="stagger mt-6 grid gap-3" x-show="!busca.loading">
