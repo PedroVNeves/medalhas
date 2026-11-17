@@ -275,7 +275,9 @@ telas também: `/ranking/alunos`, `/ranking/escolas`, `/ranking/estados`, `/rank
   descrição, endereço canônico, dados estruturados (JSON-LD) e um resumo em texto dentro de `<noscript>`,
   para robôs de IA que não rodam JavaScript. No site, a troca de página acontece sem recarregar. Os títulos
   das telas estão em `paginas.py` (`TELAS`) e em `web/js/app.js` (`TITULOS`); um teste confere que batem.
-- Endereço inexistente mostra `web/404.html` com status 404.
+- Endereço inexistente mostra `web/404.html` com status 404. Se uma página não puder ser montada (limite de
+  acessos, servidor ocupado ou erro interno), o servidor responde com `web/erro.html` preenchida com o código e
+  a explicação; a API continua respondendo em JSON.
 - Imagens de compartilhamento (`og:image`, 1200×630) de cada aluno e escola são desenhadas na hora
   (`adaptadores/http/imagens.py`, com Pillow); as demais páginas usam `/og/site.png`. Fontes: Inter e
   Space Grotesk (licença OFL), em `adaptadores/http/fontes/`.
@@ -467,7 +469,7 @@ medalhas/
       api_v1/                  API pública: parâmetros, rotas, apresentação JSON, exportação, OpenAPI
 web/
   index.html, styles.css       página única e estilos próprios
-  404.html                     página de endereço inexistente
+  404.html, erro.html          endereço inexistente; modelo das páginas de erro do servidor (429, 503, 500)
   css/site.css                 classes do Tailwind, geradas por `npm run css`
   js/util.js, graficos.js      chamada à API, formatação, ícones; gráficos, mapa, confete
   js/documentacao-api.js       conteúdo da página API & Dados
