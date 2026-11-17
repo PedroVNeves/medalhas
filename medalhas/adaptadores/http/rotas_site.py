@@ -7,6 +7,7 @@ def _perfil(tipo: str):
     """Perfil pelo id (?id=) ou pelo endereço da página (?endereco=maria-souza-lima-al). A resposta traz o
     endereço oficial, que o site põe na barra de endereço."""
     def rota(sessao, pedido):
+        """Perfil com o endereço oficial, ou {"erro": …} se não existe."""
         params, enderecos = pedido.params, sessao.enderecos()
         achado = enderecos.resolver(tipo, params["endereco"]) if params.get("endereco") else None
         ident = achado[0] if achado else params.get("id", "")

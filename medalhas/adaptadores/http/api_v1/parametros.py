@@ -22,6 +22,7 @@ TEXTO_PREMIACOES = (("nome", "nome"), ("escola", "escola"), ("busca", "tudo"))
 
 
 def booleano(params: dict, chave: str, padrao: bool) -> bool:
+    """Sim/não da URL: 1, true, sim, s ou yes é verdadeiro; ausente ou vazio, o padrão; outro valor, falso."""
     v = (params.get(chave) or "").strip().lower()
     return padrao if not v else v in _VERDADEIRO
 

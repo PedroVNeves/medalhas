@@ -28,6 +28,7 @@ _ROTULO_MEDALHA = (("ouro", "ouro", "ouros"), ("prata", "prata", "pratas"), ("br
 
 @dataclass
 class Pagina:
+    """Resposta de uma página: o HTML pronto, ou um redirecionamento (destino) para o endereço oficial."""
     status: int
     corpo: bytes = b""
     destino: str | None = None   # redirecionamento permanente para o endereço oficial
@@ -39,6 +40,7 @@ _modelo: tuple[float, str] | None = None
 
 
 def _index() -> str:
+    """O index.html do site, relido só quando o arquivo muda."""
     global _modelo
     caminho = PASTA_WEB / "index.html"
     versao = caminho.stat().st_mtime
@@ -111,10 +113,12 @@ def _olimpiadas(premiacoes: list[dict]) -> list[str]:
 
 
 def _lista(itens: list[str]) -> str:
+    """['a', 'b', 'c'] -> 'a, b e c'"""
     return itens[0] if len(itens) == 1 else ", ".join(itens[:-1]) + " e " + itens[-1]
 
 
 def _linha_premiacao(r: dict, com_aluno: bool) -> str:
+    """'2024 · OBMEP · Ouro · nível 3 · Escola X' em HTML escapado; com_aluno troca a escola pelo nome do aluno."""
     partes = [str(r["ano"] or ""), r["competicao"], r["premio"] or r["medalha"] or ""]
     if r.get("nivel"):
         partes.append(f"nível {r['nivel']}")
@@ -126,12 +130,14 @@ def _linha_premiacao(r: dict, com_aluno: bool) -> str:
 
 
 def _rodape(base: str, api: str) -> str:
+    """Parágrafo final do resumo: fonte dos dados, o mesmo conteúdo na API e o llms.txt."""
     e = html.escape
     return (f'<p>Dados das listas oficiais de cada olimpíada. Os mesmos dados em JSON: <a href="{e(api)}">{e(api)}</a>. '
             f'Sobre o site e a API: <a href="{e(base)}/llms.txt">{e(base)}/llms.txt</a>.</p>')
 
 
 def _migalhas(base: str, nome: str, url: str) -> dict:
+    """Trilha de navegação (schema.org BreadcrumbList) Medalhas > página, para os buscadores."""
     return {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
         {"@type": "ListItem", "position": 1, "name": "Medalhas", "item": base + "/"},
         {"@type": "ListItem", "position": 2, "name": nome, "item": url}]}
@@ -155,6 +161,7 @@ UF_NOMES = {
 
 @dataclass(frozen=True)
 class Tela:
+    """Título e descrição de uma tela do site; indexar=False pede aos buscadores que não a listem."""
     titulo: str
     descricao: str
     indexar: bool = True
@@ -228,6 +235,8 @@ def _resumo_sobre() -> str:
 
 
 def _resumo_ranking(sessao: SessaoDeLeitura, tipo: str, t: Tela) -> str:
+    """Os MAX_RANKING_NO_RESUMO primeiros do ranking (alunos, escolas, cidades ou estados) em HTML, com links
+    para os perfis. Sempre pela tabela do IMPA, o método padrão do site."""
     e = html.escape
     r = sessao.ranking({"tipo": tipo, "limite": MAX_RANKING_NO_RESUMO, "metodo": "impa"})
     enderecos = sessao.enderecos()
@@ -270,6 +279,8 @@ def perfil(sessao: SessaoDeLeitura, tipo: str, endereco: str, base: str) -> Pagi
 
 
 def _aluno(d: dict, base: str, url: str) -> bytes:
+    """index.html da página do aluno: título curto (nome e olimpíadas), descrição com medalhas, escola e posição,
+    resumo com as premiações e o cartão de compartilhamento do aluno."""
     e = html.escape
     premiacoes = d["premiacoes"]
     siglas = _olimpiadas(premiacoes)
@@ -297,6 +308,8 @@ def _aluno(d: dict, base: str, url: str) -> bytes:
 
 
 def _escola(d: dict, sessao: SessaoDeLeitura, base: str, url: str) -> bytes:
+    """index.html da página da escola: alunos premiados, medalhas e posição; o resumo lista os destaques e as
+    premiações recentes."""
     e = html.escape
     enderecos = sessao.enderecos()
     nome = nome_de_exibicao(d["nome"])
@@ -324,6 +337,8 @@ def _escola(d: dict, sessao: SessaoDeLeitura, base: str, url: str) -> bytes:
 
 
 def _cidade(d: dict, sessao: SessaoDeLeitura, base: str, url: str) -> bytes:
+    """index.html da página da cidade: alunos, escolas e medalhas; o resumo lista as escolas e os alunos que
+    mais pontuam. Usa a imagem de compartilhamento do site."""
     e = html.escape
     enderecos = sessao.enderecos()
     nome_uf = f"{d['nome']} ({d['uf']})"
@@ -357,6 +372,7 @@ def imagem_de(base: str, url: str) -> str:
 
 
 def _quote(ident: str) -> str:
+    """Id codificado para caber num trecho de URL (| vira %7C, / vira %2F)."""
     return quote(ident, safe="")
 
 
@@ -375,6 +391,8 @@ def sitemap(sessao: SessaoDeLeitura, nome: str, base: str, versao: int) -> bytes
 
 
 def _gerar_sitemaps(sessao: SessaoDeLeitura, base: str) -> dict[str, bytes]:
+    """nome -> XML de todos os sitemaps: as telas, os perfis em arquivos de até URLS_POR_SITEMAP endereços e o
+    índice sitemap.xml. lastmod é a data da última atualização da base."""
     data = (sessao.resumo_base().get("atualizado_em") or "")[:10]
     lastmod = f"<lastmod>{data}</lastmod>" if re.fullmatch(r"\d{4}-\d{2}-\d{2}", data) else ""
     enderecos = sessao.enderecos()

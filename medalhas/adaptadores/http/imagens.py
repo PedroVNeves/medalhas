@@ -55,6 +55,7 @@ def _fonte(familia: str, peso: int, tamanho: int):
 
 
 def _largura(texto: str, fonte) -> float:
+    """Largura do texto em pixels nesta fonte."""
     return fonte.getlength(texto)
 
 
@@ -103,6 +104,7 @@ def numero(n: int) -> str:
 # ---------------------------------------------------------------- desenho
 
 def _fundo(largura: int = LARGURA, altura: int = ALTURA) -> "Image.Image":
+    """Fundo escuro do site com um brilho dourado em cima, um índigo embaixo e a grade discreta."""
     img = Image.new("RGB", (largura, altura), FUNDO)
     brilho = Image.new("RGBA", (largura, altura), (0, 0, 0, 0))
     d = ImageDraw.Draw(brilho)
@@ -119,6 +121,7 @@ def _fundo(largura: int = LARGURA, altura: int = ALTURA) -> "Image.Image":
 
 
 def _estrela(d: "ImageDraw.ImageDraw", cx: float, cy: float, raio: float, cor) -> None:
+    """Estrela de cinco pontas centrada em (cx, cy)."""
     import math
     pontos = []
     for i in range(10):
@@ -144,6 +147,7 @@ def _medalha(d: "ImageDraw.ImageDraw", x: int, y: int, tamanho: int) -> None:
 
 
 def _cabecalho(d: "ImageDraw.ImageDraw") -> None:
+    """Faixa de cima do cartão: ícone e nome à esquerda, endereço do site à direita."""
     _medalha(d, MARGEM - 6, 50, 64)
     d.text((MARGEM + 70, 82), "Medalhas", font=_fonte("display", 700, 36), fill=OURO_CLARO, anchor="lm")
     site = _fonte("inter", 500, 24)
@@ -219,6 +223,7 @@ def _cartao(rotulo: str, titulo: str, subtitulo: str | None, medalhas: dict, rod
 # ---------------------------------------------------------------- cartões
 
 def _siglas(premiacoes: list[dict]) -> list[str]:
+    """Siglas das olimpíadas, da que mais premiou para a que menos."""
     contagem: dict[str, int] = {}
     for r in premiacoes:
         contagem[r["competicao"]] = contagem.get(r["competicao"], 0) + 1
@@ -226,10 +231,13 @@ def _siglas(premiacoes: list[dict]) -> list[str]:
 
 
 def _posicao(rank: int | None, sufixo: str) -> str | None:
+    """'12º no ranking nacional', ou None fora dos MAX_POSICAO_NO_CARTAO primeiros."""
     return f"{numero(rank)}{sufixo}" if rank and rank <= MAX_POSICAO_NO_CARTAO else None
 
 
 def aluno(d: dict) -> bytes:
+    """Cartão (PNG 1200×630) do aluno, a partir do perfil (SessaoDeLeitura.perfil_aluno): nome, escola mais
+    recente, medalhas, período, olimpíadas e a posição nacional se estiver entre os primeiros."""
     m = d["medalhas"]
     anos = d.get("anos") or []
     periodo = (str(anos[0]) if len(anos) == 1 else f"{anos[0]}–{anos[-1]}") if anos else ""
@@ -251,6 +259,7 @@ def aluno(d: dict) -> bytes:
 
 
 def escola(d: dict) -> bytes:
+    """Cartão (PNG 1200×630) da escola, a partir do perfil (SessaoDeLeitura.perfil_escola)."""
     m = d["medalhas"]
     lugar = ", ".join(p for p in (capitalizar_nome(d["municipio"]) if d.get("municipio") else None, d.get("uf")) if p)
     plural = "aluno premiado" if d["alunos"] == 1 else "alunos premiados"
@@ -263,6 +272,7 @@ def escola(d: dict) -> bytes:
 
 
 def site(visao: dict) -> bytes:
+    """Cartão (PNG 1200×630) do site, com os totais da visão geral; usado pelas páginas sem cartão próprio."""
     t = visao["totais"]
     rodape = [f"{numero(t['total'])} premiações", f"{numero(t['alunos'])} alunos", f"{numero(t['escolas'])} escolas",
               f"{t['de']}–{t['ate']}"]
@@ -293,6 +303,11 @@ def _etiquetas_numa_linha(etiquetas: list[str], fonte, largura: float) -> list[s
 
 def _story(rotulo: str, titulo: str, subtitulo: str | None, medalhas: dict, etiquetas: list[str],
            destaque: str | None) -> bytes:
+    """Desenha um story (PNG 1080×1920): marca em cima, o bloco do meio centralizado na área que o Instagram
+    não cobre e, embaixo, o endereço do site e o espaço para o adesivo de link.
+
+    O título tenta do maior tamanho para o menor (até 3 linhas) e, se preciso, as moedas encolhem para 80%;
+    um nome que não cabe nem assim sai no menor tamanho, cortado com reticências."""
     img = _fundo(STORY_L, STORY_A)
     d = ImageDraw.Draw(img)
     largura = STORY_L - 2 * _STORY_M
@@ -391,6 +406,7 @@ def _story(rotulo: str, titulo: str, subtitulo: str | None, medalhas: dict, etiq
 
 
 def story_aluno(d: dict) -> bytes:
+    """Story do aluno, a partir do perfil: período e olimpíadas viram etiquetas."""
     m = d["medalhas"]
     anos = d.get("anos") or []
     periodo = (str(anos[0]) if len(anos) == 1 else f"{anos[0]}–{anos[-1]}") if anos else None
@@ -406,6 +422,7 @@ def story_aluno(d: dict) -> bytes:
 
 
 def story_escola(d: dict) -> bytes:
+    """Story da escola, a partir do perfil: alunos premiados e as olimpíadas."""
     lugar = ", ".join(p for p in (capitalizar_nome(d["municipio"]) if d.get("municipio") else None, d.get("uf")) if p)
     plural = "aluno premiado" if d["alunos"] == 1 else "alunos premiados"
     etiquetas = _siglas(d.get("recentes") or [])

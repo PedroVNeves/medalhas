@@ -73,6 +73,8 @@ class Limitador:
             return max(1, int(falta))
 
     def _registrar_recusa(self, ip: str, agora: float) -> None:
+        """Conta mais uma recusa do IP; ABUSO_REJEICOES recusas em ABUSO_JANELA segundos o bloqueiam.
+        Chamado com a trava já tomada."""
         recentes = [t for t in self._recusas.get(ip, []) if agora - t < ABUSO_JANELA] + [agora]
         self._recusas[ip] = recentes
         if len(recentes) >= ABUSO_REJEICOES:
@@ -141,6 +143,7 @@ class Conexoes:
             return True
 
     def sair(self, ip: str) -> None:
+        """Libera a vaga de uma conexão que terminou."""
         with self._lock:
             self._total -= 1
             self._por_ip[ip] -= 1

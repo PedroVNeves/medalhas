@@ -8,6 +8,7 @@ VERSAO = "1.1.0"
 
 def _parametro(nome: str, descricao: str, tipo: str = "string", onde: str = "query", obrigatorio: bool = False,
                exemplo=None) -> dict:
+    """Um parâmetro no formato OpenAPI. Parâmetros de caminho (onde="path") são sempre obrigatórios."""
     p = {"name": nome, "in": onde, "required": obrigatorio or onde == "path", "description": descricao,
          "schema": {"type": tipo}}
     if exemplo is not None:
@@ -16,6 +17,7 @@ def _parametro(nome: str, descricao: str, tipo: str = "string", onde: str = "que
 
 
 def _resposta(descricao: str, exemplo=None) -> dict:
+    """Uma resposta JSON no formato OpenAPI, com exemplo opcional."""
     r = {"description": descricao, "content": {"application/json": {"schema": {"type": "object"}}}}
     if exemplo:
         r["content"]["application/json"]["example"] = exemplo
@@ -55,6 +57,7 @@ ERROS = {
 
 
 def _get(resumo: str, descricao: str, parametros: list, tag: str = "Consulta", respostas: dict | None = None) -> dict:
+    """Uma operação GET; sem `respostas`, documenta o 200 e os erros comuns (400, 404, 429, 503)."""
     return {"get": {"tags": [tag], "summary": resumo, "description": descricao, "parameters": parametros,
                     "responses": respostas or {"200": _resposta("OK"), **ERROS}}}
 

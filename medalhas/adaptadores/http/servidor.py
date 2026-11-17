@@ -40,11 +40,21 @@ mimetypes.add_type("text/css", ".css")
 
 
 class Handler(BaseHTTPRequestHandler):
+    """Atende uma requisição GET/HEAD/OPTIONS. Para onde vai cada caminho (do_GET):
+
+        /api/v1/…, /api/…            API pública e API interna do site (JSON)
+        /og/…                        imagens de compartilhamento (PNG)
+        /ranking/…, /sobre…          telas do site com título e resumo próprios (paginas.TELAS)
+        /aluno|escola|cidade/{end.}  páginas de perfil
+        /sitemap.xml, /sitemaps/…    sitemaps
+        qualquer outro               arquivo estático de web/ (404 se não existe)
+    """
     server: "Servidor"
     timeout = TEMPO_OCIOSO
 
     # ------------------------------------------------ respostas
     def _cabecalhos(self, status: int, cabecalhos: dict) -> None:
+        """Status e cabeçalhos comuns a toda resposta: sem cache (salvo se pedido), CORS aberto e nosniff."""
         self.send_response(status)
         if "Cache-Control" not in cabecalhos:
             self.send_header("Cache-Control", "no-cache")
@@ -56,6 +66,8 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _enviar(self, corpo: bytes, tipo: str, status: int = 200, cabecalhos: dict | None = None) -> None:
+        """Envia o corpo inteiro, compactado em gzip se for texto acima de COMPACTAR_A_PARTIR e o cliente aceitar.
+        Em HEAD, só os cabeçalhos."""
         cab = {"Content-Type": tipo, **(cabecalhos or {})}
         # JSON e texto compactam ~85% (a visão geral cai de 67 KB para 10 KB): menos espera no celular e
         # menos transferência na cota do Firebase Hosting
@@ -70,6 +82,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(corpo)
 
     def _json(self, dados, status: int = 200, cabecalhos: dict | None = None) -> None:
+        """Envia `dados` como JSON em UTF-8 (acentos sem escape)."""
         self._enviar(json.dumps(dados, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8",
                      status, cabecalhos)
 
@@ -86,6 +99,8 @@ class Handler(BaseHTTPRequestHandler):
         self._json({"erro": mensagem, "tente_em_segundos": espera}, 429, cabecalhos)
 
     def _enviar_download(self, download: api_v1.Download, cabecalhos: dict) -> None:
+        """Envia um arquivo de exportação como anexo, com o nº de linhas em X-Total-Rows. Um .gz é enviado
+        compactado ou descompactado no caminho, conforme o cliente aceite gzip."""
         compactado = download.gzipado and self._aceita_gzip()
         cab = {"Content-Type": download.tipo, "X-Total-Rows": str(download.linhas),
                "Content-Disposition": f'attachment; filename="{download.nome}"', **cabecalhos}
@@ -98,11 +113,13 @@ class Handler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------ dados do cliente
     def _ip(self) -> str:
+        """IP do cliente: o primeiro de X-Forwarded-For atrás do proxy (confiar_proxy), senão o da conexão."""
         if self.server.confiar_proxy and self.headers.get("X-Forwarded-For"):
             return self.headers["X-Forwarded-For"].split(",")[0].strip()
         return self.client_address[0]
 
     def _aceita_gzip(self) -> bool:
+        """O cliente aceita resposta compactada (Accept-Encoding: gzip)."""
         return "gzip" in (self.headers.get("Accept-Encoding") or "")
 
     def _base(self) -> str:
@@ -117,6 +134,10 @@ class Handler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------ API
     def _api(self, caminho: str, params: dict) -> None:
+        """Uma requisição de API: rota -> cota do IP (429) -> vaga de consulta (503) -> sessão -> resposta.
+
+        A vaga de consulta é liberada antes do envio. Rotas com cache_cdn saem com Cache-Control público e sem
+        os X-RateLimit-* (que valem para um IP só)."""
         if caminho.startswith("/api/v1"):
             rota = api_v1.rota(caminho)
             if not rota:
@@ -180,6 +201,7 @@ class Handler(BaseHTTPRequestHandler):
     _CACHE_PAGINA = {"Cache-Control": f"public, max-age={CACHE_NAVEGADOR}, s-maxage=86400"}
 
     def _pagina(self, tipo: str, endereco: str) -> None:
+        """Página de perfil (aluno, escola, cidade): 200, 404, ou 301 para o endereço oficial."""
         pagina = self._com_sessao(lambda s: paginas.perfil(s, tipo, endereco, URL_SITE), pagina=True)
         if pagina is None:
             return
@@ -190,6 +212,8 @@ class Handler(BaseHTTPRequestHandler):
                          self._CACHE_PAGINA if pagina.status == 200 else None)
 
     def _tela(self, caminho: str) -> None:
+        """Tela do site com endereço próprio (ranking, estados, dados, sobre…); /ranking redireciona para
+        /ranking/alunos."""
         pagina = self._com_sessao(lambda s: paginas.tela(s, caminho, URL_SITE), pagina=True)
         if pagina is None:
             return
@@ -242,6 +266,7 @@ class Handler(BaseHTTPRequestHandler):
         self._enviar(corpo.encode("utf-8"), "text/html; charset=utf-8", status, cabecalhos)
 
     def _sitemap(self, nome: str) -> None:
+        """sitemap.xml ou um dos arquivos de /sitemaps/, gerados uma vez por versão da base; 404 se não existe."""
         versao = self.server.leitura.versao()
         resultado = self._com_sessao(lambda s: [paginas.sitemap(s, nome, URL_SITE, versao)])
         if resultado is None:   # recusado: a resposta já foi enviada
@@ -253,6 +278,7 @@ class Handler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------ site estático
     def _arquivo(self, caminho_url: str) -> None:
+        """Arquivo estático de web/ (/ é o index.html). Fora de web/, pasta ou erro.html: a página 404."""
         relativo = "index.html" if caminho_url in ("/", "") else unquote(caminho_url.lstrip("/"))
         alvo = (PASTA_WEB / relativo).resolve()
         # bloqueia ../, pastas e o modelo das páginas de erro (sem os marcadores preenchidos)
@@ -266,6 +292,7 @@ class Handler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------ métodos HTTP
     def do_OPTIONS(self) -> None:   # preflight de CORS
+        """Responde ao preflight de CORS: qualquer origem pode fazer GET e HEAD."""
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
@@ -274,6 +301,9 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self) -> None:
+        """Encaminha pelo caminho (ver a classe) e traduz erros: IP bloqueado -> 429, NaoEncontrado -> 404,
+        parâmetro inválido -> 400, bug -> 500 com o traceback no log. A API recebe JSON; quem abriu o endereço
+        no navegador recebe uma página de erro."""
         url = urlparse(self.path)
         params = {k: v[0] for k, v in parse_qs(url.query).items()}
         caminho = url.path.rstrip("/") or "/"
@@ -328,10 +358,12 @@ class Servidor(ThreadingHTTPServer):
         super().__init__(endereco, Handler)
 
     def verify_request(self, request, client_address) -> bool:
+        """Aceita a conexão só se houver vaga (limites.conexoes); recusada, ela é fechada sem criar thread."""
         # atrás de um proxy todos chegam com o IP do proxy: aí só vale o teto total
         return limites.conexoes.entrar(client_address[0], por_ip=not self.confiar_proxy)
 
     def process_request(self, request, client_address) -> None:
+        """Se a thread nem chegar a ser criada, devolve aqui a vaga ocupada em verify_request."""
         try:
             super().process_request(request, client_address)
         except Exception:
@@ -339,6 +371,7 @@ class Servidor(ThreadingHTTPServer):
             raise
 
     def process_request_thread(self, request, client_address) -> None:
+        """Atende a conexão na thread e devolve a vaga ao terminar, mesmo com erro."""
         try:
             super().process_request_thread(request, client_address)
         finally:

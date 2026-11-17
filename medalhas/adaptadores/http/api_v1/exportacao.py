@@ -60,6 +60,7 @@ class Download:
     linhas: int
 
     def tamanho(self) -> int:
+        """Tamanho do arquivo como está guardado (compactado, se gzipado), em bytes."""
         if isinstance(self.arquivo, Path):
             return self.arquivo.stat().st_size
         self.arquivo.seek(0, 2)
@@ -83,6 +84,7 @@ class Download:
 # ---------------------------------------------------------------- linhas
 
 def _linha_premiacao(r: Linha, nomes: dict) -> dict:
+    """Uma premiação nos campos de CAMPOS_PREMIACAO."""
     return {"id": r["id"], "olimpiada": r["competicao"], "olimpiada_nome": nomes.get(r["competicao"], r["competicao"]),
             "area": r["area"], "ano": r["ano"], "nivel": r["nivel"], "medalha": r["medalha"], "premio": r["premio"],
             "nome": r["nome"], "aluno_id": r["aluno_id"], "escola": r["escola"], "escola_id": r["escola_chave"],
@@ -92,6 +94,7 @@ def _linha_premiacao(r: Linha, nomes: dict) -> dict:
 
 
 def _linha_ranking(r: dict, tipo: str, ultima_escola: dict) -> dict:
+    """Um item de ranking nos campos de CAMPOS_RANKING; aluno sem escola no recorte leva a mais recente."""
     d = {"posicao": r["pos"], "id": r["id"], "nome": r["nome"], "uf": r.get("uf") if tipo != "estados" else r["id"],
          "escola": r.get("escola"), "municipio": r.get("municipio"), "rede": r.get("rede"),
          "alunos_premiados": r.get("alunos"), "escolas": r.get("escolas"),
@@ -129,6 +132,8 @@ def _escrever(saida: IO[bytes], linhas: Iterable[dict], campos: list[str], forma
 
 
 def _gerar(s: SessaoDeLeitura, params: dict, conjunto: str, formato: str, separador: str, saida: IO[bytes]) -> int:
+    """Escreve o conjunto pedido (premiações do recorte ou um ranking completo) em `saida`.
+    Devolve o nº de linhas."""
     meta = {"fonte": "Medalhas", "gerado_em": time.strftime("%Y-%m-%d %H:%M"), "conjunto": conjunto,
             "filtros": consulta(params)}
     if conjunto == "premiacoes":
@@ -177,6 +182,10 @@ def _nome_do_arquivo(params: dict, conjunto: str, formato: str) -> str:
 
 
 def exportar(s: SessaoDeLeitura, pedido: Pedido) -> Download:
+    """GET /api/v1/exportar: valida tudo antes de gerar e devolve o arquivo para o servidor enviar.
+
+    Premiações sem filtro reaproveitam o .gz da base inteira; o resto é gerado na hora, compactado se o
+    cliente aceita gzip."""
     params = pedido.params
     formato = (params.get("formato") or "csv").lower()
     if formato not in ("csv", "json"):

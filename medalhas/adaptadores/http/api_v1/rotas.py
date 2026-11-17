@@ -24,6 +24,7 @@ Funcao = Callable[[SessaoDeLeitura, Pedido], object]
 
 @dataclass(frozen=True)
 class Rota:
+    """Uma rota de API: a função que responde, o grupo de limite e quanto o CDN pode guardar."""
     funcao: Funcao
     grupo: str   # grupo de limite por IP (limites.GRUPOS)
     # segundos que o CDN do Firebase Hosting pode guardar a resposta (0 = não guarda). Só para respostas
@@ -34,6 +35,7 @@ class Rota:
 # ---------------------------------------------------------------- referência
 
 def indice(s: SessaoDeLeitura, pedido: Pedido) -> dict:
+    """GET /api/v1: rotas, exemplos, data da base e limites em vigor."""
     b = pedido.base
     base = s.resumo_base()
     return {
@@ -61,6 +63,7 @@ def indice(s: SessaoDeLeitura, pedido: Pedido) -> dict:
 
 
 def olimpiadas(s: SessaoDeLeitura, pedido: Pedido) -> dict:
+    """GET /api/v1/olimpiadas: catálogo com totais e níveis de cada olimpíada e os valores aceitos nos filtros."""
     estatisticas = s.estatisticas_olimpiadas()
     catalogo = pontuacao.catalogo()
 
@@ -81,6 +84,7 @@ def olimpiadas(s: SessaoDeLeitura, pedido: Pedido) -> dict:
 # ---------------------------------------------------------------- alunos
 
 def buscar_alunos(s: SessaoDeLeitura, pedido: Pedido) -> dict:
+    """GET /api/v1/alunos?nome=: alunos com o nome (nome exato primeiro, depois por pontos), paginado."""
     params = pedido.params
     parametros.texto(params, "nome", obrigatorio=True)
     limite, offset = parametros.paginacao(params, "alunos")
@@ -93,6 +97,7 @@ def buscar_alunos(s: SessaoDeLeitura, pedido: Pedido) -> dict:
 
 
 def aluno(s: SessaoDeLeitura, pedido: Pedido, aluno_id: str) -> dict:
+    """GET /api/v1/alunos/{id}: o aluno e as premiações dele (filtros restringem só a lista)."""
     achado = s.aluno(aluno_id, parametros.criterios(pedido.params, s, ()))
     if not achado:
         raise NaoEncontrado(f"aluno não encontrado: {aluno_id!r}. Busque o id em GET /api/v1/alunos?nome=")
@@ -103,6 +108,7 @@ def aluno(s: SessaoDeLeitura, pedido: Pedido, aluno_id: str) -> dict:
 # ---------------------------------------------------------------- escolas
 
 def buscar_escolas(s: SessaoDeLeitura, pedido: Pedido) -> dict:
+    """GET /api/v1/escolas?nome=: escolas pelo nome ou sigla, das que mais pontuam para as que menos, paginado."""
     params = pedido.params
     palavras = parametros.texto(params, "nome", obrigatorio=True)
     limite, offset = parametros.paginacao(params, "escolas")
@@ -115,6 +121,7 @@ def buscar_escolas(s: SessaoDeLeitura, pedido: Pedido) -> dict:
 
 
 def escola(s: SessaoDeLeitura, pedido: Pedido, escola_id: str) -> dict:
+    """GET /api/v1/escolas/{id}: resumo da escola e as grafias do nome nas listas oficiais."""
     achado = s.escola(escola_id)
     if not achado:
         raise NaoEncontrado(f"escola não encontrada: {escola_id!r}. Busque o id em GET /api/v1/escolas?nome=")
@@ -123,6 +130,7 @@ def escola(s: SessaoDeLeitura, pedido: Pedido, escola_id: str) -> dict:
 
 
 def medalhistas(s: SessaoDeLeitura, pedido: Pedido, escola_id: str) -> dict:
+    """GET /api/v1/escolas/{id}/medalhistas: alunos premiados pela escola, cada um com as premiações por ela."""
     params = pedido.params
     limite, offset = parametros.paginacao(params, "medalhistas")
     metodo, coluna = parametros.metodo(params)
@@ -141,6 +149,7 @@ def medalhistas(s: SessaoDeLeitura, pedido: Pedido, escola_id: str) -> dict:
 # ---------------------------------------------------------------- dados completos
 
 def premiacoes(s: SessaoDeLeitura, pedido: Pedido) -> dict:
+    """GET /api/v1/premiacoes: premiações em ordem estável, paginadas, com o link da próxima página."""
     params = pedido.params
     limite, offset = parametros.paginacao(params, "premiacoes")
     total, linhas = s.premiacoes(parametros.criterios(params, s), offset, limite)
@@ -154,6 +163,7 @@ def premiacoes(s: SessaoDeLeitura, pedido: Pedido) -> dict:
 
 
 def ranking(s: SessaoDeLeitura, pedido: Pedido, tipo: str) -> dict:
+    """GET /api/v1/ranking/{tipo}: uma página do ranking; alunos sem escola no recorte levam a mais recente."""
     params = pedido.params
     limite, offset = parametros.paginacao(params, "ranking")
     r = s.ranking_ordenado(parametros.ranking(params, tipo, s))

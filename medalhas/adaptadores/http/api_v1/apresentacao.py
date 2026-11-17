@@ -17,6 +17,7 @@ class Links:
         self.base = base
 
     def api(self, rota: str, ident: str, sufixo: str = "") -> str:
+        """Endereço de um recurso da API (/api/v1/{rota}/{id codificado}{sufixo})."""
         return f"{self.base}/api/v1/{rota}/{quote(ident, safe='')}{sufixo}"
 
     def site(self, pagina: str, ident: str) -> str:
@@ -30,6 +31,7 @@ def consulta(params: dict) -> dict:
 
 
 def nomes_das_olimpiadas() -> dict[str, str]:
+    """Sigla -> nome por extenso, do catálogo."""
     return {o["sigla"]: o["nome"] for o in pontuacao.catalogo()}
 
 
@@ -39,11 +41,13 @@ def pontos(linha: Linha) -> dict:
 
 
 def medalhas(linha: Linha) -> dict:
+    """Contagem de medalhas de um resumo ou item de ranking, nos nomes da API."""
     return {"ouro": linha["ouro"], "prata": linha["prata"], "bronze": linha["bronze"],
             "mencao_honrosa": linha["mencao"], "total": linha["total"]}
 
 
 def contar_medalhas(premiacoes: list[Linha]) -> dict:
+    """Contagem de medalhas de uma lista de premiações, no mesmo formato de medalhas()."""
     def quantas(medalha: str) -> int:
         return sum(r["medalha"] == medalha for r in premiacoes)
     return {"ouro": quantas(OURO), "prata": quantas(PRATA), "bronze": quantas(BRONZE),
@@ -68,6 +72,8 @@ def sem_repetir(valores: Iterable[str | None]) -> list[str]:
 
 
 def premiacao(r: Linha, nomes: dict[str, str]) -> dict:
+    """Uma premiação como a API a publica. nome_na_lista é o nome como veio na lista oficial; nota é a nota
+    da prova, quando publicada; pontos são os da premiação nos três métodos."""
     return {
         "id": r["id"], "olimpiada": r["competicao"], "olimpiada_nome": nomes.get(r["competicao"], r["competicao"]),
         "area": r["area"], "ano": r["ano"], "nivel": r["nivel"], "medalha": r["medalha"], "premio": r["premio"],
@@ -78,6 +84,8 @@ def premiacao(r: Linha, nomes: dict[str, str]) -> dict:
 
 
 def aluno(resumo: Linha, premiacoes: list[Linha], links: Links, incluir_premiacoes: bool) -> dict:
+    """Um aluno: carreira inteira (medalhas, pontos, posições) mais as escolas, municípios e olimpíadas das
+    premiações recebidas (as do recorte pedido). incluir_premiacoes=False omite a lista."""
     escolas: dict[str, list[str]] = {}
     for r in premiacoes:   # mais recente primeiro; grafias da mesma escola (mesma chave) viram um item só
         if r["escola_chave"]:
@@ -100,6 +108,7 @@ def aluno(resumo: Linha, premiacoes: list[Linha], links: Links, incluir_premiaco
 
 
 def escola(resumo: Linha, links: Links) -> dict:
+    """Uma escola: carreira inteira, posições e os links da API e do site."""
     return {
         "id": resumo["id"], "nome": resumo["nome"], "municipio": resumo["municipio"], "uf": resumo["uf"],
         "rede": resumo["rede"], "esfera": resumo["esfera"], "alunos_premiados": resumo["alunos"],
@@ -125,6 +134,8 @@ def medalhista(aluno_id: str, info: Linha | None, premiacoes: list[Linha], links
 
 
 def item_ranking(r: dict, tipo: str, links: Links) -> dict:
+    """Um item de ranking com os campos do tipo (alunos, escolas, cidades ou estados). pontos é o do método
+    pedido; pontos_metodos traz os três."""
     item = {"posicao": r["pos"], "id": r["id"], "nome": r["nome"]}
     if tipo == "alunos":
         item.update({"uf": r.get("uf"), "escola": r.get("escola"), "municipio": r.get("municipio")})
