@@ -231,6 +231,16 @@ class TestEnderecos(unittest.TestCase):
         self.assertEqual(e.de("escola", "A|Y|SP"), "usp-sp")       # o id menor fica com o endereço
         self.assertEqual(e.de("escola", "B|X|SP"), "usp-sp-2")
 
+    def test_endereco_da_grafia_corrigida_leva_ao_perfil_certo(self):
+        e = enderecos.Enderecos([("JOAO PRIMAKI|PR", "JOAO PRIMAKI|PR"), ("JOAO PIMAKI|SP", "JOAO PIMAKI|SP")], [],
+                                antigos_alunos=[("joao-pimaki-pr", "JOAO PRIMAKI|PR"),
+                                                ("joao-pimaki-sp", "JOAO PRIMAKI|PR"),   # é de outra pessoa
+                                                ("maria-pr", "MARIA|PR")])               # perfil que não existe
+        self.assertEqual(e.resolver("aluno", "joao-pimaki-pr"), ("JOAO PRIMAKI|PR", "joao-primaki-pr"))
+        self.assertEqual(e.resolver("aluno", "joao-pimaki-sp"), ("JOAO PIMAKI|SP", "joao-pimaki-sp"))
+        self.assertIsNone(e.resolver("aluno", "maria-pr"))
+        self.assertEqual(e.todos("aluno"), ["joao-pimaki-sp", "joao-primaki-pr"])   # fora do sitemap
+
     def test_nome_de_exibicao_da_escola(self):
         self.assertEqual(escolas.nome_de_exibicao("MILITAR DE FORTALEZA, COLEGIO"), "Colegio Militar de Fortaleza")
         self.assertEqual(escolas.nome_de_exibicao("EE PROF JOSE DA SILVA"), "EE Prof Jose da Silva")

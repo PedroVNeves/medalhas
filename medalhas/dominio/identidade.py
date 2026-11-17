@@ -27,6 +27,8 @@ GRAFIAS_CORRIGIDAS: dict[tuple[str, str], str] = {
     # OBMEP 2017 ("Moteiro") e 2019 ("Azevedo"); nas outras listas, Azeredo de Moura Monteiro (Colégio Militar do RJ)
     ("SOFIA AZEREDO DE MOURA MOTEIRO", "RJ"): "Sofia Azeredo de Moura Monteiro",
     ("SOFIA AZEVEDO DE MOURA MONTEIRO", "RJ"): "Sofia Azeredo de Moura Monteiro",
+    # OBMEP 2014 escreveu "Pimaki"; 2011 a 2017 trazem Primaki (mesma escola, em Roncador), confirmado por ele
+    ("JOAO VINICIUS PIMAKI PRADO", "PR"): "João Vinícius Primaki Prado",
 }
 
 

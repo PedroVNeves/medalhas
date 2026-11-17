@@ -196,6 +196,9 @@ dizendo a origem do erro:
 | `ESCOLAS_RENOMEADAS` | `dominio/escolas.py` | escola que mudou de nome (CEFET-ES → Ifes Vitória; Instituto de Tecnologia ORT → Escola ORT) |
 | `MENINAS_CONFIRMADAS` | `dominio/sexo.py` | alunas que pediram para entrar no filtro de meninas |
 
+Depois de uma correção em `GRAFIAS_CORRIGIDAS`, o endereço do perfil com o nome errado continua valendo:
+redireciona (301) para o perfil certo, então links já compartilhados não quebram.
+
 Achou um erro? Veja [como contribuir](#como-contribuir).
 
 ## Pontuação

@@ -3,11 +3,12 @@
 Recebem os parâmetros da URL como vieram (a API interna é tolerante: valor desconhecido vira o padrão).
 """
 from ...dominio import gamificacao, pontuacao
-from ...dominio.enderecos import Enderecos, texto_escola
+from ...dominio.enderecos import Enderecos, slug, texto_escola
 import re
 
 from ...dominio.escolas import palavras_da_busca
-from ...dominio.texto import capitalizar_nome
+from ...dominio.identidade import GRAFIAS_CORRIGIDAS
+from ...dominio.texto import capitalizar_nome, normalizar
 from ...dominio.ranking import (ORDEM_PADRAO, ORDENACOES, TIPOS, RankingOrdenado, com_pontos, com_posicoes, ordenar,
                               posicionar)
 from .conexao import Conexao, marcadores
@@ -456,8 +457,23 @@ def enderecos(con: Conexao) -> Enderecos:
         escolas = [(r[0], texto_escola(r[1], r[2], r[3])) for r in con.execute("SELECT id, nome, municipio, uf FROM escolas")]
         cidades = [(r[0], r[0]) for r in con.execute(
             "SELECT DISTINCT municipio_busca || '|' || uf FROM medalhas WHERE municipio_busca != '' AND uf IS NOT NULL")]
-        return Enderecos(alunos, escolas, cidades)
+        return Enderecos(alunos, escolas, cidades, _enderecos_antigos(con))
     return con.fixo("enderecos", montar)
+
+
+def _enderecos_antigos(con: Conexao) -> list[tuple[str, str]]:
+    """(endereço do perfil com a grafia errada, id do perfil certo) de cada grafia corrigida à mão.
+
+    O perfil certo é o das premiações que receberam o nome corrigido, nesse estado: a identidade dos alunos
+    pode tê-lo juntado a premiações de outro estado, então o id nem sempre é NOME CERTO|UF.
+    """
+    antigos = []
+    for (errado, uf), certo in GRAFIAS_CORRIGIDAS.items():
+        achado = con.execute("SELECT aluno_id FROM medalhas WHERE nome_busca = ? AND uf = ? LIMIT 1",
+                             (normalizar(certo), uf)).fetchone()
+        if achado:
+            antigos.append((slug(f"{errado}|{uf}"), achado[0]))
+    return antigos
 
 
 # ---------------------------------------------------------------- visão geral (página inicial)

@@ -41,8 +41,13 @@ class Enderecos:
     """Endereços oficiais de todas as páginas, nos dois sentidos (id -> endereço e endereço -> id)."""
 
     def __init__(self, alunos: Iterable[tuple[str, str]], escolas: Iterable[tuple[str, str]],
-                 cidades: Iterable[tuple[str, str]] = ()):
-        """alunos, escolas e cidades: pares (id, texto de onde sai o endereço)."""
+                 cidades: Iterable[tuple[str, str]] = (), antigos_alunos: Iterable[tuple[str, str]] = ()):
+        """alunos, escolas e cidades: pares (id, texto de onde sai o endereço).
+
+        antigos_alunos: pares (endereço antigo, id) de perfis que deixaram de existir porque a grafia errada
+        do nome foi corrigida (identidade.GRAFIAS_CORRIGIDAS). Continuam aceitos e levam ao perfil certo, mas
+        nunca tomam o endereço de outra pessoa.
+        """
         self._oficial: dict[str, dict[str, str]] = {}
         self._ids: dict[str, dict[str, str]] = {}
         for tipo, pares in ((ALUNO, alunos), (ESCOLA, escolas), (CIDADE, cidades)):
@@ -59,6 +64,9 @@ class Enderecos:
             # endereço montado pelo site a partir do id, quando não coincide com o oficial
             for ident in oficial:
                 ids.setdefault(slug(ident), ident)
+        for endereco, ident in antigos_alunos:
+            if ident in self._oficial[ALUNO]:
+                self._ids[ALUNO].setdefault(endereco, ident)
 
     def de(self, tipo: str, ident: str) -> str | None:
         """Endereço oficial do aluno/escola, ou None se o id não existe."""
