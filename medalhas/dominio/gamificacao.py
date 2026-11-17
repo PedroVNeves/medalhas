@@ -56,12 +56,15 @@ def maior_sequencia(anos: set[int]) -> int:
 
 def _conquista(cid: str, nome: str, descricao: str, icone: str, atual: int, meta: int,
                raridade: str = "comum") -> dict:
+    """Uma conquista com o progresso (atual de meta); desbloqueada quando atual chega à meta."""
     atual = min(atual, meta)
     return {"id": cid, "nome": nome, "descricao": descricao, "icone": icone, "raridade": raridade,
             "desbloqueada": atual >= meta, "atual": atual, "meta": meta}
 
 
 def conquistas_aluno(premiacoes: list[dict]) -> list[dict]:
+    """Conquistas do aluno a partir das premiações dele. Sem premiações, a lista serve de vitrine (tudo
+    bloqueado) na página Sobre."""
     medalhas = [r for r in premiacoes if r["medalha"] in MEDALHAS]
     ouros = [r for r in premiacoes if r["medalha"] == OURO]
     anos = {r["ano"] for r in premiacoes if r["ano"]}
@@ -104,6 +107,7 @@ def conquistas_aluno(premiacoes: list[dict]) -> list[dict]:
 
 
 def conquistas_escola(premiacoes: list[dict], posicao: int | None, posicao_uf: int | None) -> list[dict]:
+    """Conquistas da escola a partir das premiações e da posição nacional e estadual dela."""
     ouros = sum(r["medalha"] == OURO for r in premiacoes)
     anos = {r["ano"] for r in premiacoes if r["ano"]}
     alunos = {r["aluno_id"] for r in premiacoes}
@@ -130,6 +134,8 @@ def conquistas_escola(premiacoes: list[dict], posicao: int | None, posicao_uf: i
 
 
 def contar_medalhas(premiacoes: list[dict]) -> dict:
+    """Quantas de cada categoria; "outros" são prêmios fora de ouro/prata/bronze/menção ("1º Prêmio" da OBM,
+    "Elas em Destaque" da Itabirana)."""
     c = Counter(r["medalha"] for r in premiacoes)
     return {"ouro": c[OURO], "prata": c[PRATA], "bronze": c[BRONZE], "mencao": c[MENCAO],
             "outros": sum(v for k, v in c.items() if k not in (*MEDALHAS, MENCAO))}

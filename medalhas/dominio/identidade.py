@@ -50,6 +50,7 @@ def _subsequencia(curto: list[str], longo: list[str]) -> bool:
 
 
 def _alto_nivel(premiacoes: Iterable[Premiacao]) -> bool:
+    """Alguma premiação é de OBM ou internacional (quem chega lá é raro e costuma mudar de estado)."""
     return any(e_alto_nivel(p["competicao"]) for p in premiacoes)
 
 
@@ -62,6 +63,8 @@ _PALAVRAS_GENERICAS_DE_ESCOLA = frozenset({
 
 @lru_cache(maxsize=None)
 def _palavras_marcantes(escola: str) -> frozenset[str]:
+    """Palavras do nome da escola que a distinguem de outras (sem "escola", "estadual"…). Em cache: a mesma
+    escola é comparada muitas vezes."""
     return frozenset(palavras_da_chave(escola) - _PALAVRAS_GENERICAS_DE_ESCOLA)
 
 

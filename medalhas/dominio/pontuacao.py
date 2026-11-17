@@ -66,6 +66,8 @@ COLUNAS = [m["coluna"] for m in METODOS.values()]   # p_impa, p_impa3, p_site
 
 
 def _verificar_escala() -> None:
+    """Confere, ao importar o módulo, as relações entre os degraus da nossa escala: mexer num número sem
+    respeitar a hierarquia (ouro OBM = 2× ouro OBMEP…) quebra na hora, não num ranking estranho depois."""
     e = ESCALA_SITE
     assert e["OBM"]["Ouro"] == 2 * e["OBMEP"]["Ouro"], "ouro OBM deve ser o dobro do ouro OBMEP"
     assert e["OBM"]["Bronze"] > e["OBMEP"]["Ouro"], "bronze OBM deve valer mais que ouro OBMEP"
@@ -142,6 +144,7 @@ def restringir_niveis(metodo: str, niveis: str | None) -> str | None:
 # ---------------------------------------------------------------- versões serializáveis (site e API)
 
 def catalogo() -> list[dict]:
+    """O catálogo de olimpíadas com os pontos de cada medalha nos métodos, no formato do site e da API."""
     return [{"sigla": o.sigla, "nome": o.nome, "area": o.area,
              "pontos": TABELAS_IMPA.get(o.tabela_impa or "", {}),
              "pontos_site": ESCALA_SITE[o.escala],
@@ -151,4 +154,5 @@ def catalogo() -> list[dict]:
 
 
 def metodos() -> list[dict]:
+    """Os métodos de pontuação (id, nome, nome curto, descrição) para o seletor do site e a API."""
     return [{"id": k, **{c: v for c, v in m.items() if c != "coluna"}} for k, m in METODOS.items()]

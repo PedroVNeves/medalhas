@@ -15,6 +15,7 @@ ORDEM_PADRAO = "xp"
 
 
 def chave_de_ordenacao(ordem: str, coluna: str) -> Chave:
+    """Função que ordena itens pelo critério (ORDENACOES) usando a coluna de pontos do método."""
     criterio = ORDENACOES[ordem]
     return lambda r: criterio(r, coluna)
 
@@ -55,6 +56,7 @@ class RankingOrdenado:
 
     @property
     def chave(self) -> Chave:
+        """Chave de ordenação deste ranking (também decide os empates nas posições)."""
         return chave_de_ordenacao(self.ordem, self.coluna)
 
 

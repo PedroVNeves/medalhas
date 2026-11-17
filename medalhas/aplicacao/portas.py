@@ -26,7 +26,9 @@ class Coletor(Protocol):
     """Lê as premiações de uma fonte oficial."""
     sigla: str
 
-    def coletar(self, log: Callable[[str], None]) -> list[Premiacao]: ...
+    def coletar(self, log: Callable[[str], None]) -> list[Premiacao]:
+        """Todas as premiações publicadas pela fonte, já no vocabulário do domínio. Pode lançar exceção se a
+        fonte estiver fora do ar: gerar_base registra a falha e segue com as outras."""
 
 
 class RepositorioPremiacoes(Protocol):
@@ -53,37 +55,79 @@ class Criterios:
 class SessaoDeLeitura(Protocol):
     """Consultas feitas durante uma requisição (uma conexão com a base)."""
 
-    # páginas do site (parâmetros crus da URL; a validação é tolerante)
-    def busca(self, params: dict) -> dict: ...
-    def sugestoes(self, params: dict) -> dict: ...
-    def ranking(self, params: dict) -> dict: ...
-    def perfil_aluno(self, aluno_id: str, params: dict) -> dict: ...
-    def perfil_escola(self, escola_id: str, params: dict) -> dict: ...
-    def perfil_cidade(self, cidade_id: str, params: dict) -> dict: ...
-    def visao_geral(self, params: dict) -> dict: ...
+    # ------------------------------------------------ páginas do site
+    # Recebem os parâmetros crus da URL; valor desconhecido vira o padrão (a validação é tolerante).
+    def busca(self, params: dict) -> dict:
+        """Premiações que casam com o texto (q, campo nome|escola|tudo) e os filtros."""
+
+    def sugestoes(self, params: dict) -> dict:
+        """Até 8 alunos e escolas mais premiados que casam com o texto digitado (lista enquanto digita)."""
+
+    def ranking(self, params: dict) -> dict:
+        """Uma página do ranking (tipo alunos|escolas|estados|cidades), com posição e nível de cada item."""
+
+    def perfil_aluno(self, aluno_id: str, params: dict) -> dict:
+        """Perfil completo do aluno, ou {"erro": ...} se o id não existe."""
+
+    def perfil_escola(self, escola_id: str, params: dict) -> dict:
+        """Perfil completo da escola, ou {"erro": ...} se o id não existe."""
+
+    def perfil_cidade(self, cidade_id: str, params: dict) -> dict:
+        """Resumo da cidade (id MUNICIPIO|UF), ou {"erro": ...} se ela não tem premiações."""
+
+    def visao_geral(self, params: dict) -> dict:
+        """Tudo o que a página inicial mostra: totais, séries, destaques, catálogo e métodos."""
+
     def enderecos(self) -> Enderecos:
         """Endereços legíveis de todas as páginas de aluno, escola e cidade (/aluno/maria-souza-lima-al)."""
 
-    # API pública (critérios já validados pelo adaptador HTTP)
-    def resumo_base(self) -> dict: ...
-    def estatisticas_olimpiadas(self) -> dict: ...
-    def niveis(self) -> set[str]: ...
-    def ranking_ordenado(self, params: dict) -> RankingOrdenado: ...
-    def ultima_escola_dos_alunos(self) -> dict[str, tuple[str | None, str | None]]: ...
+    # ------------------------------------------------ API pública
+    # Recebem critérios já validados pelo adaptador HTTP (api_v1.parametros).
+    def resumo_base(self) -> dict:
+        """Data da última geração e total de premiações."""
+
+    def estatisticas_olimpiadas(self) -> dict:
+        """Por olimpíada: total de premiações, primeiro e último ano, e premiações por nível."""
+
+    def niveis(self) -> set[str]:
+        """Todos os níveis que aparecem na base (para validar o filtro nivel)."""
+
+    def ranking_ordenado(self, params: dict) -> RankingOrdenado:
+        """O ranking inteiro do recorte, já ordenado (a API e a exportação paginam por cima)."""
+
+    def ultima_escola_dos_alunos(self) -> dict[str, tuple[str | None, str | None]]:
+        """aluno_id -> (escola, município) mais recentes, para completar rankings filtrados."""
+
     def buscar_alunos(self, criterios: Criterios, nome: str, coluna: str, offset: int,
-                      limite: int) -> tuple[int, list[tuple[Linha, list[Linha]]]]: ...
-    def aluno(self, aluno_id: str, criterios: Criterios) -> tuple[Linha, list[Linha]] | None: ...
+                      limite: int) -> tuple[int, list[tuple[Linha, list[Linha]]]]:
+        """(total, [(resumo do aluno, premiações no recorte)]) da página; nome exato primeiro."""
+
+    def aluno(self, aluno_id: str, criterios: Criterios) -> tuple[Linha, list[Linha]] | None:
+        """(resumo, premiações no recorte) do aluno, ou None se o id não existe."""
+
     def buscar_escolas(self, criterios: Criterios, coluna: str, offset: int,
-                       limite: int) -> tuple[int, list[Linha]]: ...
-    def escola(self, escola_id: str) -> tuple[Linha, list[str]] | None: ...
+                       limite: int) -> tuple[int, list[Linha]]:
+        """(total, resumos) das escolas com premiações no recorte, das que mais pontuam para as que menos."""
+
+    def escola(self, escola_id: str) -> tuple[Linha, list[str]] | None:
+        """(resumo, grafias do nome nas listas oficiais) da escola, ou None se o id não existe."""
+
     def medalhistas(self, escola_id: str, criterios: Criterios, ordem: str, coluna: str, offset: int,
-                    limite: int) -> tuple[Linha, int, list[tuple[str, Linha | None, list[Linha]]]] | None: ...
-    def premiacoes(self, criterios: Criterios, offset: int, limite: int) -> tuple[int, list[Linha]]: ...
-    def iterar_premiacoes(self, criterios: Criterios) -> Iterator[Linha]: ...
+                    limite: int) -> tuple[Linha, int, list[tuple[str, Linha | None, list[Linha]]]] | None:
+        """(resumo da escola, total, [(aluno_id, resumo do aluno, premiações pela escola)]), ou None."""
+
+    def premiacoes(self, criterios: Criterios, offset: int, limite: int) -> tuple[int, list[Linha]]:
+        """(total, uma página de premiações) do recorte, em ordem estável (id)."""
+
+    def iterar_premiacoes(self, criterios: Criterios) -> Iterator[Linha]:
+        """Todas as premiações do recorte, em fluxo (exportação sem carregar tudo na memória)."""
 
 
 class FonteDeLeitura(Protocol):
-    def sessao(self) -> AbstractContextManager[SessaoDeLeitura]: ...
+    """A base de leitura: abre sessões e diz a versão atual."""
+
+    def sessao(self) -> AbstractContextManager[SessaoDeLeitura]:
+        """Uma sessão (conexão) para uma requisição; fechada ao sair do bloco with."""
 
     def versao(self) -> int:
         """Muda sempre que a base é regerada (serve para invalidar arquivos derivados)."""

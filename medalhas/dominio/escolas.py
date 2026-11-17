@@ -125,6 +125,7 @@ def expandir_palavra(palavra: str) -> list[str]:
 
 
 def _expandir(palavras: list[str]) -> Expansao:
+    """Cada palavra com a sua expansão (sigla ou abreviação), já no formato usado pela busca."""
     pares = [(p, expandir_palavra(p)) for p in palavras]
     # em nomes de instituto/centro federal, a UF ("DO RN", "DE PE") vira o nome do estado
     if any("FEDERAL" in exp for _, exp in pares):

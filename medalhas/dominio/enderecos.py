@@ -32,6 +32,8 @@ def slug(texto: str | None) -> str:
 
 
 def texto_escola(nome: str | None, municipio: str | None, uf: str | None) -> str:
+    """Texto de onde sai o endereço da escola: nome + município + UF (o mesmo nome em outra cidade é outra
+    página)."""
     return " ".join(p for p in (nome, municipio, uf) if p)
 
 

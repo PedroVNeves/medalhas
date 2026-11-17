@@ -13,6 +13,7 @@ Log = Callable[[str], None]
 
 @dataclass
 class Relatorio:
+    """Resultado da geração: quantas premiações foram gravadas e quais fontes falharam."""
     premiacoes: int = 0
     falhas: list[str] = field(default_factory=list)   # "SIGLA: erro" das fontes que não responderam
 
@@ -31,6 +32,12 @@ def indexar(p: Premiacao) -> dict:
 
 
 def gerar_base(coletores: Iterable[Coletor], repositorio: RepositorioPremiacoes, log: Log = print) -> Relatorio:
+    """Coleta todas as fontes, aplica as regras do domínio e grava a base nova de uma vez.
+
+    Ordem: correções à mão -> identidade dos alunos (UF dos que vieram sem, mesma pessoa entre estados) ->
+    cidade das escolas -> filtro de meninas -> indexação (campos de busca, chave da escola, pontos). Uma fonte
+    que falha entra no relatório e não impede as outras.
+    """
     relatorio = Relatorio()
     premiacoes: list[Premiacao] = []
     for coletor in coletores:

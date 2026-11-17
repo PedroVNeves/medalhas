@@ -1,7 +1,8 @@
 """Cadastro das olimpíadas suportadas.
 
 Para adicionar uma olimpíada nova:
-  1. cadastre-a em CATALOGO (nome, área, escala de pontos e regra do IMPA Tech, se houver);
+  1. cadastre-a no fim de CATALOGO (nome, área, escala de pontos e regra do IMPA Tech, se houver): a ordem
+     do catálogo é a ordem de coleta, que define o id das premiações;
   2. escreva o coletor em medalhas/adaptadores/coletores/<sigla>.py e registre-o em
      medalhas/adaptadores/coletores/__init__.py;
   3. rode `python build_db.py`.
@@ -14,6 +15,7 @@ _OBM = "https://www.obm.org.br"
 
 @dataclass(frozen=True)
 class Olimpiada:
+    """Uma olimpíada do catálogo e as regras de pontuação que valem para ela."""
     sigla: str
     nome: str
     area: str
@@ -84,10 +86,12 @@ CATALOGO: dict[str, Olimpiada] = {o.sigla: o for o in [
 
 
 def buscar(sigla: str) -> Olimpiada | None:
+    """A olimpíada da sigla, ou None se ela não está no catálogo."""
     return CATALOGO.get(sigla)
 
 
 def area(sigla: str) -> str | None:
+    """Área da olimpíada (Matemática, Informática, Química…), ou None se ela não está no catálogo."""
     o = CATALOGO.get(sigla)
     return o.area if o else None
 
