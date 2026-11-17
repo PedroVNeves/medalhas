@@ -13,7 +13,11 @@ __all__ = ["LeituraSqlite", "RepositorioSqlite", "SessaoSqlite"]
 
 
 class SessaoSqlite:
-    """Implementa aplicacao.portas.SessaoDeLeitura sobre uma conexão somente leitura."""
+    """Implementa aplicacao.portas.SessaoDeLeitura sobre uma conexão somente leitura.
+
+    Cada método só repassa a conexão da sessão para a consulta de mesmo nome: as das páginas do site estão em
+    consultas_site, as da API pública em consultas_api. O contrato de cada um (o que recebe e devolve) está
+    documentado na porta, em aplicacao.portas.SessaoDeLeitura."""
 
     def __init__(self, con: Conexao):
         self._con = con
@@ -90,6 +94,7 @@ class LeituraSqlite:
 
     @contextmanager
     def sessao(self) -> Iterator[SessaoSqlite]:
+        """Abre uma conexão própria para o bloco with e a fecha ao sair, mesmo em caso de erro."""
         con = Conexao(self.caminho, self._cache)
         try:
             yield SessaoSqlite(con)
@@ -97,4 +102,5 @@ class LeituraSqlite:
             con.close()
 
     def versao(self) -> int:
+        """Data de modificação do arquivo da base, em segundos: muda a cada base gerada (a troca é atômica)."""
         return int(self.caminho.stat().st_mtime)

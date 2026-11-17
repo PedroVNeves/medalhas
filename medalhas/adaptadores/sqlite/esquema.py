@@ -78,4 +78,5 @@ CREATE INDEX idx_escolas_uf ON escolas(uf);
 
 
 def insert(tabela: str, campos: list[str]) -> str:
+    """INSERT com um marcador (?) por campo. Tabela e campos vêm das constantes deste módulo, nunca do usuário."""
     return f"INSERT INTO {tabela} ({', '.join(campos)}) VALUES ({', '.join('?' * len(campos))})"

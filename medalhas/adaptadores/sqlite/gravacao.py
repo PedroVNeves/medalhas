@@ -21,6 +21,8 @@ class RepositorioSqlite:
         self.caminho = caminho
 
     def substituir(self, registros: list[dict], atualizado_em: str) -> None:
+        """Grava as premiações (já indexadas), a data da atualização e as tabelas-resumo num arquivo .tmp e
+        troca a base por ele. Se algo falhar no meio, a base atual fica intacta."""
         self.caminho.parent.mkdir(exist_ok=True)
         temporario = self.caminho.with_suffix(".tmp")
         temporario.unlink(missing_ok=True)
@@ -38,6 +40,7 @@ class RepositorioSqlite:
 
 
 def _zerado(base: dict) -> dict:
+    """Os campos de `base` com as contagens de medalhas e os pontos em todos os métodos zerados."""
     return {**base, "ouro": 0, "prata": 0, "bronze": 0, "mencao": 0, "total": 0, **{c: 0 for c in PONTOS}}
 
 

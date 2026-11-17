@@ -24,6 +24,7 @@ def _por_aluno(con: Conexao, sql_where: str, args: list, ids: list[str]) -> dict
 
 
 def _resumos(con: Conexao, tabela: str, ids: list[str], colunas: str = "*") -> dict[str, sqlite3.Row]:
+    """id -> linha da tabela-resumo (alunos ou escolas) dos ids pedidos; os que não existem ficam de fora."""
     if not ids:
         return {}
     sql = f"SELECT {colunas} FROM {tabela} WHERE id IN ({marcadores(len(ids))})"
@@ -33,6 +34,7 @@ def _resumos(con: Conexao, tabela: str, ids: list[str], colunas: str = "*") -> d
 # ---------------------------------------------------------------- referência
 
 def resumo_base(con: Conexao) -> dict:
+    """Data da última atualização e total de premiações na base."""
     meta = dict(con.execute("SELECT chave, valor FROM meta").fetchall())
     total = con.execute("SELECT COUNT(*) FROM medalhas").fetchone()[0]
     return {"atualizado_em": meta.get("atualizado_em"), "premiacoes": total}
@@ -52,6 +54,7 @@ def estatisticas_olimpiadas(con: Conexao) -> dict:
 
 
 def niveis(con: Conexao) -> set[str]:
+    """Todos os níveis que aparecem na base (para validar o filtro nivel da API). Em cache."""
     return con.em_cache("v1_niveis", lambda: {r[0] for r in con.execute(
         "SELECT DISTINCT nivel FROM medalhas WHERE nivel IS NOT NULL")})
 
@@ -80,6 +83,8 @@ def buscar_alunos(con: Conexao, criterios: Criterios, nome: str, coluna: str, of
 
 
 def aluno(con: Conexao, aluno_id: str, criterios: Criterios) -> tuple[sqlite3.Row, list[sqlite3.Row]] | None:
+    """(resumo da carreira, premiações no recorte, mais recentes primeiro), ou None se o aluno não existe.
+    O resumo é sempre o da carreira inteira; só a lista de premiações respeita os filtros."""
     resumo = con.execute("SELECT * FROM alunos WHERE id = ?", (aluno_id,)).fetchone()
     if not resumo:
         return None

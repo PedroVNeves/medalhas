@@ -32,12 +32,17 @@ def _com_metodo(params: dict) -> tuple[dict, str, str]:
 
 
 def _filtros(params: dict) -> dict:
+    """Só as chaves de filtro reconhecidas e preenchidas (também servem de chave do cache)."""
     return {k: params[k] for k in CHAVES_FILTRO if params.get(k)}
 
 
 # ---------------------------------------------------------------- busca
 
 def busca(con: Conexao, params: dict) -> dict:
+    """Premiações que casam com o texto (q, no campo nome, escola ou tudo) e os filtros, com os pontos do método.
+
+    Devolve o total e no máximo MAX_RESULTADOS_BUSCA linhas, ordenadas por escola na busca por escola e por
+    nome nas outras. Sem texto e sem recorte (ano, UF, município ou escola), devolve vazio."""
     params, _, coluna = _com_metodo(params)
     campo = params.get("campo") if params.get("campo") in ("nome", "escola", "tudo") else "nome"
     palavras = palavras_da_busca(params.get("q", ""))
@@ -104,6 +109,8 @@ def _casa(texto: str, palavras, com_siglas: bool) -> bool:
 
 
 def _mais_pontuados(con: Conexao, tipo: str, palavras, metodo: int, limite: int) -> list[dict]:
+    """Até `limite` alunos ou escolas que casam com as palavras, dos mais pontuados no método (índice em
+    pontuacao.COLUNAS) para os menos, com pontos e posição nacional."""
     com_siglas = tipo == "escolas"
     ids: list[str] = []
     for texto, ident in _indice_de_sugestoes(con)[(tipo, metodo)]:
@@ -146,6 +153,7 @@ def _pontos_da_carreira(con: Conexao, tabela: str, ids: list[str], coluna: str) 
 
 
 def _ultima_escola(con: Conexao, aluno_ids: list[str]) -> dict:
+    """id -> escola, chave da escola e município mais recentes de cada aluno (da tabela-resumo)."""
     if not aluno_ids:
         return {}
     return {r["id"]: {"escola": r["escola"], "escola_chave": r["escola_chave"], "municipio": r["municipio"]}
@@ -217,6 +225,11 @@ def ranking_ordenado(con: Conexao, params: dict) -> RankingOrdenado:
 
 
 def ranking(con: Conexao, params: dict) -> dict:
+    """Uma página do ranking (limite até MAX_POR_PAGINA, a partir de offset), com posição e tier de cada item.
+
+    Escolas levam o nome da tabela-resumo; alunos sem escola no recorte levam a mais recente. O tier é sempre
+    o da carreira inteira, mesmo com filtros. No método IMPA oficial, nivel_forcado traz os níveis que ele
+    aceita (o filtro de nível fica restrito a eles)."""
     limite = min(int(params.get("limite", 50)), MAX_POR_PAGINA)
     offset = max(int(params.get("offset", 0)), 0)
     r = ranking_ordenado(con, params)
@@ -258,6 +271,8 @@ def _participantes(con: Conexao, tabela: str, coluna: str, uf: str | None) -> tu
 
 
 def perfil_aluno(con: Conexao, aluno_id: str, params: dict) -> dict:
+    """Página do aluno: premiações, escolas, posições nacional e estadual, tier, conquistas e o "próximo alvo"
+    (quem está logo acima no ranking nacional). {"erro": …} se o aluno não existe."""
     metodo, coluna = pontuacao.resolver_metodo(params.get("metodo"))
     premiacoes = con.linhas(
         """SELECT competicao, ano, nivel, nome, escola, escola_chave, rede, esfera, municipio, uf,
@@ -295,6 +310,8 @@ def perfil_aluno(con: Conexao, aluno_id: str, params: dict) -> dict:
 
 
 def perfil_escola(con: Conexao, escola_id: str, params: dict) -> dict:
+    """Página da escola: outras grafias do nome, posições, medalhas por ano, os 15 alunos que mais pontuaram,
+    conquistas e as 60 premiações mais recentes. {"erro": …} se a escola não existe."""
     metodo, coluna = pontuacao.resolver_metodo(params.get("metodo"))
     premiacoes = con.linhas(
         """SELECT competicao, ano, nivel, nome, escola, rede, esfera, municipio, uf, premio, medalha,
@@ -433,6 +450,7 @@ def perfil_cidade(con: Conexao, cidade_id: str, params: dict) -> dict:
 # ---------------------------------------------------------------- endereços das páginas
 
 def enderecos(con: Conexao) -> Enderecos:
+    """Endereços legíveis de todos os alunos, escolas (nome, cidade e UF) e cidades. Um cálculo por versão da base."""
     def montar() -> Enderecos:
         alunos = [(r[0], r[0]) for r in con.execute("SELECT id FROM alunos")]
         escolas = [(r[0], texto_escola(r[1], r[2], r[3])) for r in con.execute("SELECT id, nome, municipio, uf FROM escolas")]
@@ -482,6 +500,8 @@ def _visao_geral_fixa(con: Conexao) -> dict:
 
 
 def visao_geral(con: Conexao, params: dict) -> dict:
+    """Página inicial: a parte fixa (em cache) mais os totais em pontos e os destaques (10 alunos, 10 escolas,
+    estados) no método pedido, cada destaque em cache por método."""
     metodo, coluna = pontuacao.resolver_metodo(params.get("metodo"))
     dados = dict(con.em_cache("visao_geral", lambda: _visao_geral_fixa(con)))
     dados["totais"] = com_pontos(dict(dados["totais"]), coluna)

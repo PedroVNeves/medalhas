@@ -62,6 +62,7 @@ def condicao_de_palavra(campo: str, palavra: str, expansao: list[str]) -> tuple[
 
 
 def condicoes_de_texto(campo: str, palavras: Expansao) -> tuple[list[str], list]:
+    """Uma condição por palavra digitada (unidas por AND): todas as palavras precisam casar."""
     where: list[str] = []
     args: list = []
     for palavra, expansao in palavras:

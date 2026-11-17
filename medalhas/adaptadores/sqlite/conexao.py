@@ -30,6 +30,10 @@ class Cache:
             return valor
 
     def obter(self, chave: Any, calcular: Callable[[], T]) -> T:
+        """Valor guardado para a chave nesta versão da base, ou calcular() guardado agora.
+
+        Guarda só os _MAX_ITENS_CACHE mais recentes (o mais antigo sai primeiro). Duas requisições com a mesma
+        chave ao mesmo tempo podem calcular as duas: é raro e só custa tempo, o resultado é igual."""
         versao = self._caminho.stat().st_mtime
         with self._trava:
             achado = self._itens.get(chave)
@@ -45,7 +49,10 @@ class Cache:
 
 
 class Conexao:
-    """sqlite3.Connection somente leitura com acesso ao cache compartilhado."""
+    """sqlite3.Connection somente leitura com acesso ao cache compartilhado.
+
+    execute devolve as linhas como sqlite3.Row (acesso por nome de coluna); linhas já as converte em dict,
+    para quem vai alterá-las ou serializá-las. em_cache e fixo repassam para Cache.obter e Cache.fixo."""
 
     def __init__(self, caminho: Path, cache: Cache):
         self._con = sqlite3.connect(f"file:{caminho}?mode=ro", uri=True)
