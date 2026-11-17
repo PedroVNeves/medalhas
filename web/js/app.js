@@ -14,6 +14,8 @@ const TITULOS = {
 };
 // telas do site; outro endereço mostra "página não encontrada"
 const TELAS = ["home", "busca", "ranking", "estados", "sobre", "dados", "aluno", "escola", "cidade"];
+// filtros da tela de ranking e o valor de cada um sem filtro
+const FILTROS_DO_RANKING = { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", sexo: "", municipio: "", ordem: "xp" };
 // endereços que o site abre sem recarregar a página
 const ROTA_INTERNA = /^\/(busca|ranking(\/(alunos|escolas|estados|cidades))?|estados|sobre|dados|(aluno|escola|cidade)\/[^/]+)?$/;
 
@@ -24,7 +26,7 @@ function app() {
     route: { name: "home", param: "", query: {} },
     metodo: METODO,
     aviso: null, _avisoT: null,
-    ov: null,
+    ov: null, ovErro: "",
     yearComp: "",
     yearLog: true,
     mapMetric: "xp",
@@ -37,7 +39,7 @@ function app() {
     sug: { lista: [], onde: "", ativo: -1, q: "" }, _ts: null,
     bf: { uf: "", area: "", competicao: "", medalha: "", ano: "", nivel: "", rede: "", sexo: "" },
     // ranking
-    rk: { tipo: "alunos", itens: [], total: 0, loading: false, f: { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", sexo: "", municipio: "", ordem: "xp" } },
+    rk: { tipo: "alunos", itens: [], total: 0, loading: false, erro: "", f: { ...FILTROS_DO_RANKING } },
     // perfis
     aluno: null, escola: null, cidade: null, loadingPerfil: false,
     // exportação e documentação da API
@@ -64,7 +66,11 @@ function app() {
         if (ROTA_INTERNA.test(url.pathname)) { e.preventDefault(); this.navegar(url.pathname + url.search + url.hash); }
       });
       window.addEventListener("keydown", e => {
-        if (e.key === "/" && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); (this.is("home") ? this.$refs.q : this.is("busca") ? this.$refs.qBusca : this.$refs.qNav)?.focus(); }
+        if (e.key !== "/" || /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+        e.preventDefault();
+        const campo = this.is("home") ? this.$refs.q : this.is("busca") ? this.$refs.qBusca : this.$refs.qNav;
+        // a barra de busca do topo só aparece em telas largas: nas outras, "/" abre a página de busca
+        if (campo?.offsetParent) campo.focus(); else this.go("/busca");
       });
       this.onRoute(true);  // a rota não espera a visão geral: perfis e rankings carregam sozinhos
       await this.loadOverview();
@@ -73,8 +79,11 @@ function app() {
     // ainda não escolheu e redesenha a tela inicial ou o mapa
     async loadOverview() {
       const d = await API("overview");
+      // sem a visão geral a tela inicial fica vazia: em vez de "carregando…" eterno, um cartão com "Tentar de novo"
+      this.ovErro = d.erro || "";
       if (d.erro) { this.avisar(d.erro, { label: "Tentar de novo", fn: () => this.loadOverview() }); return; }
       this.ov = d;
+      if (this._ancora) this.irParaAncora();
       if (!this.metodo) { this.metodo = METODO = this.ov.metodo; }
       if (this.is("home")) this.$nextTick(() => this.drawHome());
       if (this.is("estados")) this.$nextTick(() => this.drawMap());
@@ -99,12 +108,10 @@ function app() {
     async setMetodo(m) {
       if (m === this.metodo) return;
       this.metodo = METODO = m;
-      localStorage.setItem("metodo", m);
+      guardado.set("metodo", m);
       if (m === "impa3") this.avisar(`Pontuação IMPA edital ativada: o filtro de níveis foi aplicado automaticamente (${descreveImpa(this.ov?.niveis_impa)}), como no edital do IMPA Tech.`);
-      const y = window.scrollY;
-      this.onRoute(true);
+      this.onRoute(true, true);
       await this.loadOverview();
-      window.scrollTo({ top: y, behavior: "instant" });
     },
 
     // ------------------------------------------------ roteamento
@@ -117,8 +124,9 @@ function app() {
       this.onRoute();
     },
     // lê o endereço atual e prepara a tela: título, método vindo do link, filtros da URL e os dados da tela.
-    // forcar=true recarrega mesmo sem o endereço ter mudado (troca de método)
-    onRoute(forcar = false) {
+    // forcar=true recarrega mesmo sem o endereço ter mudado (troca de método); manter=true recarrega os dados
+    // sem rolar a página nem esvaziar a tela (o conteúdo antigo fica até o novo chegar)
+    onRoute(forcar = false, manter = false) {
       const atual = location.pathname + location.search + location.hash;
       if (atual === this._rotaAtual && !forcar) return;   // popstate e hashchange chegam juntos
       this._rotaAtual = atual;
@@ -126,7 +134,7 @@ function app() {
       let caminho = location.pathname + location.search;
       if (location.hash.startsWith("#/")) {   // link antigo
         const perfil = location.hash.match(/^#\/(aluno|escola)\/([^?]+)/);
-        caminho = perfil ? `/${perfil[1]}/${slug(decodeURIComponent(perfil[2]))}`
+        caminho = perfil ? `/${perfil[1]}/${slug(decodificar(perfil[2]))}`
           : location.hash.slice(1).replace(/^\/api(?=\?|$)/, "/dados");
         history.replaceState(null, "", caminho);
         this._rotaAtual = caminho;
@@ -134,17 +142,21 @@ function app() {
       const [path, qs] = caminho.split("?");
       const parts = (path || "/").split("/").filter(Boolean);
       const query = Object.fromEntries(new URLSearchParams(qs || ""));
-      this.route = { name: parts[0] || "home", param: decodeURIComponent(parts.slice(1).join("/")), query };
+      this.route = { name: parts[0] || "home", param: decodificar(parts.slice(1).join("/")), query };
       if (!["aluno", "escola", "cidade"].includes(this.route.name)) document.title = TITULOS[path] || TITULO_SITE;
       // links podem fixar o método: /ranking/alunos?metodo=impa3
       if (["impa", "impa3", "site"].includes(query.metodo) && query.metodo !== this.metodo) {
         this.metodo = METODO = query.metodo;
-        localStorage.setItem("metodo", query.metodo);
+        guardado.set("metodo", query.metodo);
         if (this.ov) this.loadOverview();
       }
-      window.scrollTo({ top: 0, behavior: "instant" });
+      if (!manter) window.scrollTo({ top: 0, behavior: "instant" });
       const r = this.route;
-      if (r.name === "home") this.$nextTick(() => this.drawHome());
+      if (r.name === "home") {
+        this.$nextTick(() => this.drawHome());
+        // com teclado e mouse, o campo de busca já vem pronto para digitar (no toque, abriria o teclado à toa)
+        if (!this.toque && !manter) this.$nextTick(() => this.$refs.q?.focus({ preventScroll: true }));
+      }
       if (r.name === "busca") {
         this.q = query.q || ""; this.campo = query.campo || "nome";
         for (const k of Object.keys(this.bf)) this.bf[k] = query[k] || "";
@@ -152,14 +164,51 @@ function app() {
         if (!this.q) this.$nextTick(() => this.$refs.qBusca?.focus());   // veio pelo menu: já pode digitar
       }
       if (r.name === "ranking" && !r.param) { history.replaceState(null, "", this.rankLink("alunos")); this._rotaAtual = location.pathname + location.search; r.param = "alunos"; }
-      if (r.name === "ranking") { this.rk.tipo = r.param || "alunos"; Object.assign(this.rk.f, { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", sexo: "", municipio: "", ordem: "xp" }, Object.fromEntries(Object.entries(query).filter(([k]) => k !== "metodo"))); this.loadRanking(); }
+      if (r.name === "ranking") {
+        const tipo = r.param || "alunos";
+        if (tipo !== this.rk.tipo) { this.rk.itens = []; this.rk.total = 0; }   // itens de outro tipo não servem
+        this.rk.tipo = tipo;
+        // da URL só entram os filtros que a tela conhece: outra chave (tipo, limite…) mudaria o pedido à API
+        for (const k of Object.keys(FILTROS_DO_RANKING)) this.rk.f[k] = query[k] || FILTROS_DO_RANKING[k];
+        this.loadRanking();
+      }
       if (r.name === "estados") { this.mapSel = ""; this.$nextTick(() => this.drawMap()); }
       if (r.name === "dados") this.loadDoc();
-      if (r.name === "aluno") this.loadAluno(r.param);
-      if (r.name === "escola") this.loadEscola(r.param);
-      if (r.name === "cidade") this.loadCidade(r.param);
+      if (r.name === "aluno") this.loadAluno(r.param, manter);
+      if (r.name === "escola") this.loadEscola(r.param, manter);
+      if (r.name === "cidade") this.loadCidade(r.param, manter);
+      // link para um trecho da página (/sobre#contato): rola até ele quando a tela estiver montada. Se os números
+      // do site ainda não chegaram, espera por eles: o conteúdo que aparece acima empurraria o trecho para baixo
+      this._ancora = !manter && location.hash.length > 1 && !location.hash.startsWith("#/") ? location.hash.slice(1) : "";
+      if (this._ancora && this.ov) this.irParaAncora();
+    },
+    irParaAncora() {
+      const id = this._ancora;
+      this._ancora = "";
+      if (!id) return;
+      const ir = () => document.getElementById(id)?.scrollIntoView({ behavior: "instant" });
+      // fontes e gráficos que terminam de carregar mudam a altura do que está acima do trecho: durante 1,5 s a
+      // página volta para ele a cada mudança de altura, até a pessoa rolar ou tocar na tela
+      let mexeu = false;
+      for (const ev of ["wheel", "touchstart", "keydown"]) addEventListener(ev, () => (mexeu = true), { once: true, passive: true });
+      const observador = new ResizeObserver(() => !mexeu && ir());
+      this.$nextTick(() => {
+        ir();
+        observador.observe(document.body);
+        setTimeout(() => observador.disconnect(), 1500);
+      });
     },
     is(name) { return this.route.name === name; },
+    // "OMOP,OITM,OBMEP,OBM,OBI" -> "OMOP + OITM + OBMEP +2"
+    resumoOlimpiadas(siglas) {
+      const s = (siglas || "").split(",").filter(Boolean);
+      return s.slice(0, 3).join(" + ") + (s.length > 3 ? ` +${s.length - 3}` : "");
+    },
+    // outras grafias do nome da escola, sem repetir a que já está no título
+    get variantesDaEscola() {
+      const titulo = prettySchool(this.escola?.nome);
+      return [...new Set((this.escola?.variantes || []).map(prettySchool))].filter(v => v && v !== titulo);
+    },
     get naoEncontrada() { return !TELAS.includes(this.route.name); },
     alunoLink(id) { return "/aluno/" + slug(id); },
     escolaLink(id) { return "/escola/" + slug(id); },
@@ -176,10 +225,11 @@ function app() {
     // gráfico de medalhas por ano, de todas as olimpíadas ou só da escolhida (yearComp)
     drawYears() {
       const by = {};
-      for (const r of this.ov.serie) {
-        if (this.yearComp && r.competicao !== this.yearComp) continue;
-        const o = by[r.ano] ||= { ano: r.ano, ouro: 0, prata: 0, bronze: 0 };
-        o.ouro += r.ouro; o.prata += r.prata; o.bronze += r.bronze;
+      // cada linha da série: [ano, olimpíada, ouro, prata, bronze, menção]
+      for (const [ano, competicao, ouro, prata, bronze, mencao] of this.ov.serie) {
+        if (this.yearComp && competicao !== this.yearComp) continue;
+        const o = by[ano] ||= { ano, ouro: 0, prata: 0, bronze: 0, mencao: 0 };
+        o.ouro += ouro; o.prata += prata; o.bronze += bronze; o.mencao += mencao;
       }
       stackedYears(this.$refs.yearsChart, "years", Object.values(by).sort((a, b) => a.ano - b.ano), this.yearLog);
     },
@@ -284,37 +334,32 @@ function app() {
       this.runSearch();
     },
     limparBuscaFiltros() { for (const k of Object.keys(this.bf)) this.bf[k] = ""; this.setBuscaFilter("uf", ""); },
-    // busca completa: agrupa as premiações por aluno (ou por escola, no campo escola) e ordena os grupos por pontos.
-    // Resposta de uma busca já substituída por outra é descartada
-    async runSearch() {
+    // busca completa: o servidor devolve os alunos (ou escolas, no campo escola) que mais pontuam, já somados, e
+    // as premiações de cada um que a tela mostra. Resposta de uma busca já substituída por outra é descartada
+    // mais=true: pede a próxima página de cartões e junta à lista (o servidor manda 30 por vez, em ordem de pontos,
+    // cada um com as contagens de todas as premiações dele e só as mais recentes)
+    async runSearch(mais = false) {
       const q = this.q.trim();
       // sem texto, a busca só roda com um filtro que restrinja bem (estado, ano ou escola)
       if (q.length < 2 && !(this.bf.uf || this.bf.ano || this.route.query.escola_chave)) {
+        this._lastSearch = null;   // uma busca ainda a caminho não pode repor os resultados que acabaram de sair
         this.busca = { loading: false, total: 0, grupos: [] }; return;
       }
-      this.busca.loading = true;
+      if (mais) this.busca.carregandoMais = true; else this.busca.loading = true;
       const params = this.buscaQuery({ q, campo: this.campo });
       const key = JSON.stringify(params);
       this._lastSearch = key;
-      const d = await API("busca", params);
+      const d = await API("busca", { ...params, offset: mais ? this.busca.grupos.length : 0 });
       if (this._lastSearch !== key) return;
-      if (d.erro) { this.busca = { loading: false, total: 0, grupos: [], erro: d.erro }; this.avisar(d.erro); return; }
-      const byEscola = this.campo === "escola";
-      const map = new Map();
-      for (const r of d.resultados) {
-        const k = byEscola ? r.escola_chave : r.aluno_id;
-        if (!k) continue;   // escola sem estado (lista sem UF) não tem página: fica de fora do agrupamento por escola
-        if (!map.has(k)) map.set(k, { id: k, itens: [] });
-        map.get(k).itens.push(r);
+      if (d.erro) {
+        if (mais) { this.busca.carregandoMais = false; this.avisar(d.erro, { label: "Tentar de novo", fn: () => this.runSearch(true) }); return; }
+        this.busca = { loading: false, total: 0, grupos: [], erro: d.erro }; this.avisar(d.erro); return;
       }
-      const grupos = [...map.values()].map(g => {
-        const f = g.itens[0];
-        const cnt = m => g.itens.filter(i => i.medalha === m).length;
-        return { ...g, nome: byEscola ? prettySchool(f.escola) : (g.itens.find(i => i.competicao === "OBM") || f).nome,
-          sub: byEscola ? [prettySchool(f.municipio), f.uf].filter(Boolean).join(" · ") : [...new Set(g.itens.map(i => i.uf).filter(Boolean))].join(" · "),
-          ouro: cnt("Ouro"), prata: cnt("Prata"), bronze: cnt("Bronze"), xp: g.itens.reduce((s, i) => s + i.xp, 0) };
-      }).sort((a, b) => b.xp - a.xp);
-      this.busca = { loading: false, total: d.total, limite: d.limite, grupos, byEscola };
+      const byEscola = this.campo === "escola";
+      const grupos = d.grupos.map(g => ({ ...g, nome: byEscola ? prettySchool(g.nome) : g.nome,
+        sub: byEscola ? [prettySchool(g.municipio), g.uf].filter(Boolean).join(" · ") : g.uf || "" }));
+      this.busca = { loading: false, carregandoMais: false, total: d.total, totalGrupos: d.total_grupos, byEscola,
+        grupos: mais ? this.busca.grupos.concat(grupos) : grupos };
     },
 
     // ------------------------------------------------ ranking
@@ -322,6 +367,8 @@ function app() {
     pushRanking() {
       const p = Object.fromEntries(Object.entries(this.rk.f).filter(([k, v]) => v && !(k === "ordem" && v === "xp")));
       history.replaceState(null, "", this.rankLink(this.rk.tipo, p));
+      this._rotaAtual = location.pathname + location.search + location.hash;
+      this.route.query = p;
       this.loadRanking();
     },
     // cada pedido ganha um número: resposta de um pedido antigo (filtro trocado no meio) é descartada
@@ -332,6 +379,7 @@ function app() {
       const d = await API("ranking", { tipo: this.rk.tipo, ...this.rk.f, limite: 50, offset });
       if (pedido !== this._pedidoRanking) return;
       this.rk.loading = false;
+      this.rk.erro = d.erro || "";
       if (d.erro) {   // mantém o que já estava na tela e explica
         this.avisar(d.erro, { label: "Tentar de novo", fn: () => this.loadRanking(more) });
         return;
@@ -367,7 +415,7 @@ function app() {
     get rkLeader() { return this.rk.itens.length ? Math.max(1, this.rk.itens[0].xp) : 1; },
     get rkPodio() { return ["alunos", "escolas"].includes(this.rk.tipo) ? this.rk.itens.slice(0, 3) : []; },
     get filtrosAtivos() { return Object.entries(this.rk.f).filter(([k, v]) => v && k !== "ordem").length; },
-    limparFiltros() { Object.assign(this.rk.f, { uf: "", area: "", competicao: "", ano_de: "", ano_ate: "", nivel: "", rede: "", sexo: "", municipio: "" }); this.pushRanking(); },
+    limparFiltros() { Object.assign(this.rk.f, FILTROS_DO_RANKING, { ordem: this.rk.f.ordem }); this.pushRanking(); },
 
     // ------------------------------------------------ estados
     drawMap() {
@@ -375,7 +423,8 @@ function app() {
       // no toque, o clique abre o mini card (com "ver ranking"); com mouse, o tooltip já mostra os números
       brazilMap(this.$refs.mapChart, "map", this.ov.estados, this.mapMetric,
         uf => this.toque ? this.tocarEstado(uf) : this.go(this.rankLink("alunos", { uf })), !this.toque)
-        .then(() => this.mapSel && destacarEstado("map", this.mapSel));   // trocar o indicador redesenha o mapa
+        .then(() => this.mapSel && destacarEstado("map", this.mapSel))   // trocar o indicador redesenha o mapa
+        .catch(() => this.avisar("Não deu para carregar o mapa.", { label: "Tentar de novo", fn: () => this.drawMap() }));
     },
     tocarEstado(uf) {
       this.mapSel = uf;   // rola até o card se ele nascer abaixo da dobra da tela
@@ -399,40 +448,40 @@ function app() {
     // perfis também descartam respostas de um perfil anterior (trocar rápido de página)
     _novoPedidoPerfil() { return (this._pedidoPerfil = (this._pedidoPerfil || 0) + 1); },
     // perfil do aluno; com algum ouro, confete na primeira visita da sessão
-    async loadAluno(endereco) {
+    async loadAluno(endereco, manter = false) {
       const pedido = this._novoPedidoPerfil();
-      this.loadingPerfil = true; this.aluno = null;
+      if (!manter) { this.loadingPerfil = true; this.aluno = null; }
       const d = await API("aluno", { endereco });
       if (pedido !== this._pedidoPerfil) return;
       this.aluno = d; this.loadingPerfil = false;
       this.perfilCarregado(d);
       const id = d.id;
-      if (d.medalhas?.ouro && !sessionStorage.getItem("cf:" + id)) { sessionStorage.setItem("cf:" + id, 1); setTimeout(celebrate, 350); }
+      if (d.medalhas?.ouro && !daSessao.get("cf:" + id)) { daSessao.set("cf:" + id, 1); setTimeout(celebrate, 350); }
     },
     // perfil da escola e o gráfico por ano; com 10 ouros ou mais, confete na primeira visita da sessão
-    async loadEscola(endereco) {
+    async loadEscola(endereco, manter = false) {
       const pedido = this._novoPedidoPerfil();
-      this.loadingPerfil = true; this.escola = null;
+      if (!manter) { this.loadingPerfil = true; this.escola = null; }
       const d = await API("escola", { endereco });
       if (pedido !== this._pedidoPerfil) return;
       this.escola = d; this.loadingPerfil = false;
       this.perfilCarregado(d);
       const id = d.id;
       this.$nextTick(() => {
-        if (d.serie) stackedYears(this.$refs.schoolChart, "school", d.serie.map(s => ({ ano: s.ano, ouro: s.Ouro, prata: s.Prata, bronze: s.Bronze })));
-        if (d.medalhas?.ouro >= 10 && !sessionStorage.getItem("cf:" + id)) { sessionStorage.setItem("cf:" + id, 1); setTimeout(celebrate, 350); }
+        if (d.serie) stackedYears(this.$refs.schoolChart, "school", d.serie.map(s => ({ ano: s.ano, ouro: s.Ouro, prata: s.Prata, bronze: s.Bronze, mencao: s["Menção Honrosa"] })));
+        if (d.medalhas?.ouro >= 10 && !daSessao.get("cf:" + id)) { daSessao.set("cf:" + id, 1); setTimeout(celebrate, 350); }
       });
     },
     // perfil da cidade e o gráfico por ano
-    async loadCidade(endereco) {
+    async loadCidade(endereco, manter = false) {
       const pedido = this._novoPedidoPerfil();
-      this.loadingPerfil = true; this.cidade = null;
+      if (!manter) { this.loadingPerfil = true; this.cidade = null; }
       const d = await API("cidade", { endereco });
       if (pedido !== this._pedidoPerfil) return;
       this.cidade = d; this.loadingPerfil = false;
       this.perfilCarregado(d);
       this.$nextTick(() => {
-        if (d.serie) stackedYears(this.$refs.cityChart, "city", d.serie.map(s => ({ ano: s.ano, ouro: s.Ouro, prata: s.Prata, bronze: s.Bronze })));
+        if (d.serie) stackedYears(this.$refs.cityChart, "city", d.serie.map(s => ({ ano: s.ano, ouro: s.Ouro, prata: s.Prata, bronze: s.Bronze, mencao: s["Menção Honrosa"] })));
       });
     },
     // premiações do aluno agrupadas por ano, na ordem em que vieram (mais recente primeiro)

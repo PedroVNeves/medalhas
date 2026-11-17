@@ -1,7 +1,21 @@
 /* Utilidades compartilhadas: chamada à API do site, formatação de números e nomes, ícones. */
 
+// localStorage e sessionStorage que nunca lançam erro: com cookies bloqueados o navegador recusa o acesso
+// (SecurityError), e aí o valor fica só na memória, até a página ser fechada.
+const guardar = nome => {
+  const memoria = {};
+  const area = () => { try { return window[nome]; } catch { return null; } };
+  return {
+    get(chave) { try { return area()?.getItem(chave) ?? memoria[chave] ?? null; } catch { return memoria[chave] ?? null; } },
+    set(chave, valor) { memoria[chave] = String(valor); try { area()?.setItem(chave, valor); } catch { /* fica na memória */ } },
+  };
+};
+const guardado = guardar("localStorage"), daSessao = guardar("sessionStorage");
+// decodeURIComponent que não lança erro: um % solto no endereço ("/aluno/100%") fica como está
+const decodificar = t => { try { return decodeURIComponent(t); } catch { return t; } };
+
 // método de pontuação escolhido no topo (impa | impa3 | site); vai em toda chamada à API
-let METODO = localStorage.getItem("metodo") || "";
+let METODO = guardado.get("metodo") || "";
 // Nunca lança erro: falha do servidor (429, 503, 500…) ou de rede vira { erro: "mensagem" }, que a tela mostra.
 const API = async (path, params = {}) => {
   const all = { ...params, metodo: METODO };

@@ -1,8 +1,8 @@
 /* Gráficos (ECharts), confete e contador animado. Ficam fora do Alpine para não virarem proxies reativos. */
 
 const charts = {};
-const VIZ = { ouro: "#b5870c", prata: "#6688d6", bronze: "#b5602b", text: "#a3abc2", muted: "#6b7489", grid: "rgba(255,255,255,.06)", surface: "#0f1424" };
-let brGeo = null;
+const VIZ = { ouro: "#b5870c", prata: "#6688d6", bronze: "#b5602b", mencao: "#3f9d6a", text: "#a3abc2", muted: "#6b7489", grid: "rgba(255,255,255,.06)", surface: "#0f1424" };
+let brGeo = null;   // promessa do contorno dos estados: baixado uma vez, mesmo com dois desenhos ao mesmo tempo
 
 // Mercator em graus; y cresce para baixo, como na tela (norte em cima)
 const RAD = Math.PI / 180;
@@ -55,7 +55,8 @@ function stackedYears(el, key, rows, log = false) {
     xAxis: { type: "category", data: anos, axisLine: { lineStyle: { color: VIZ.grid } }, axisTick: { show: false }, axisLabel: { color: VIZ.muted, fontFamily: "Inter" } },
     yAxis: { type: log ? "log" : "value", min: log ? 1 : undefined, logBase: 10,
       splitLine: { lineStyle: { color: VIZ.grid } }, axisLabel: { color: VIZ.muted, fontFamily: "Inter", formatter: v => fmt(v) } },
-    series: [serie("Ouro", "ouro", VIZ.ouro), serie("Prata", "prata", VIZ.prata), serie("Bronze", "bronze", VIZ.bronze, true)],
+    series: [serie("Ouro", "ouro", VIZ.ouro), serie("Prata", "prata", VIZ.prata), serie("Bronze", "bronze", VIZ.bronze),
+      serie("Menção", "mencao", VIZ.mencao, true)],
   }, true);
 }
 
@@ -64,12 +65,17 @@ function stackedYears(el, key, rows, log = false) {
 async function brazilMap(el, key, estados, metric, onClick, comTooltip = true) {
   const c = chart(el, key); if (!c) return;
   c.showLoading({ text: "", color: "#f5c542", maskColor: "transparent" });
-  if (!brGeo) {
-    // contorno dos estados (name = sigla da UF), simplificado a partir do brazil-states.geojson do
-    // projeto click_that_hood (Code for Germany): ~150 KB compactado em vez de 3,4 MB de um CDN externo
-    const geo = await fetch("/brasil-uf.json").then(r => r.json());
-    echarts.registerMap("BR", geo);
-    brGeo = geo;
+  // contorno dos estados (name = sigla da UF), simplificado a partir do brazil-states.geojson do
+  // projeto click_that_hood (Code for Germany): ~150 KB compactado em vez de 3,4 MB de um CDN externo
+  brGeo ||= fetch("/brasil-uf.json")
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(geo => echarts.registerMap("BR", geo));
+  try {
+    await brGeo;
+  } catch (e) {
+    brGeo = null;   // a próxima tentativa baixa de novo
+    c.hideLoading();
+    throw e;        // quem chamou avisa o usuário
   }
   c.hideLoading();
   const labels = { xp: "Pontos", ouro: "Ouros", total: "Premiações", alunos: "Alunos premiados" };
@@ -80,7 +86,7 @@ async function brazilMap(el, key, estados, metric, onClick, comTooltip = true) {
       const e = p.data?.raw; if (!e) return p.name;
       return `<b>${UF_NOMES[e.id]}</b> <span style="color:${VIZ.muted}">#${e.pos}</span><br>
         ${labels[metric]}: <b>${fmt(e[metric])}</b><br>
-        <span style="color:${VIZ.ouro}">●</span> ${fmt(e.ouro)} &nbsp;<span style="color:${VIZ.prata}">●</span> ${fmt(e.prata)} &nbsp;<span style="color:${VIZ.bronze}">●</span> ${fmt(e.bronze)}`;
+        <span style="color:${VIZ.ouro}">●</span> ${fmt(e.ouro)} &nbsp;<span style="color:${VIZ.prata}">●</span> ${fmt(e.prata)} &nbsp;<span style="color:${VIZ.bronze}">●</span> ${fmt(e.bronze)} &nbsp;<span style="color:${VIZ.mencao}">●</span> ${fmt(e.mencao)}`;
     } },
     visualMap: { min: 0, max, calculable: false, orient: "horizontal", left: "center", bottom: 0, itemWidth: 12, itemHeight: 180,
       text: [fmt(max), "0"], textStyle: { color: VIZ.text, fontFamily: "Inter" },

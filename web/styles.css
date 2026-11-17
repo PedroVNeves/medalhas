@@ -21,6 +21,8 @@
 }
 
 html { scroll-behavior: smooth; }
+/* âncoras (/sobre#contato) não ficam escondidas atrás do cabeçalho fixo */
+[id] { scroll-margin-top: 7rem; }
 body {
   background: var(--bg);
   color: var(--text);
@@ -69,6 +71,7 @@ i[x-icon] { display: inline-block; flex: none; vertical-align: -0.125em; }
 }
 .dot { display: inline-block; width: .55rem; height: .55rem; border-radius: 999px; vertical-align: middle; }
 .dot.ouro { background: #f5c542; } .dot.prata { background: #c3cbdb; } .dot.bronze { background: #cd7f32; }
+.dot.mencao { background: #4bbf7f; }
 .hairline { border-color: var(--line); }
 .glow-gold { box-shadow: 0 0 0 1px rgba(245,197,66,.35), 0 10px 40px -10px rgba(245,197,66,.45); }
 
@@ -260,3 +263,6 @@ i[x-icon] { display: inline-block; flex: none; vertical-align: -0.125em; }
 .method { font-family: ui-monospace, Consolas, monospace; font-size: .7rem; font-weight: 700; letter-spacing: .05em; padding: .15rem .45rem; border-radius: .4rem;
   color: #052e1a; background: #4ade80; }
 details > summary::-webkit-details-marker { display: none; }
+
+/* no celular o botão Exportar da busca e do ranking fica à esquerda: o menu abre para a direita, dentro da tela */
+@media (max-width: 639px) { .menu.menu-esq { left: 0; right: auto; max-width: calc(100vw - 2rem); } }

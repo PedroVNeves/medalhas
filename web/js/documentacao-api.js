@@ -152,8 +152,8 @@ const FILTROS = [
   P("medalha", "texto", "Ouro, Prata, Bronze ou Menção Honrosa"),
   P("nivel", "lista", "Um ou mais níveis. Ex.: 3 ou 1,2,3,Universitário"),
   P("ano · ano_de · ano_ate", "inteiro", "Ano exato ou intervalo"),
-  P("rede", "texto", "publica ou privada (só OBMEP)"),
-  P("sexo", "texto", "F: só alunas premiadas na EGMO, PAGMO ou EGOI (com todas as premiações delas)"),
+  P("rede", "texto", "publica ou privada (OBMEP, OMIF e Itabirana; as outras listas não informam)"),
+  P("sexo", "texto", "F: só alunas premiadas na EGMO, PAGMO, EGOI ou na etapa Elas em Destaque da Itabirana (com todas as premiações delas)"),
 ];
 FILTROS.forEach(f => (f.comum = true));  // marcados para a referência mostrar "aceita os filtros comuns"
 const OFFSET = P("offset", "inteiro", "Quantos itens pular (paginação)");
@@ -194,8 +194,8 @@ const ROTAS = [
   { id: "exportar", path: "/api/v1/exportar", titulo: "Baixar dados (CSV ou JSON)",
     desc: "Sem filtros, baixa a base inteira de premiações. Com filtros, só o recorte. conjunto=alunos|escolas|estados|cidades baixa o ranking completo. O CSV é UTF-8 com BOM; separador=; abre direto no Excel em português. A transferência é compactada (gzip) quando o cliente aceita. Tem limite próprio por IP.",
     params: [P("formato", "texto", "csv (padrão) ou json"), P("conjunto", "texto", "premiacoes (padrão), alunos, escolas, estados ou cidades"),
-      P("separador", "texto", ", (padrão) ou ;"), P("aluno_id · escola_id", "texto", "Só deste aluno / desta escola"),
-      P("nome · escola · busca", "texto", "Busca por texto, como em /premiacoes"), METODO_P, ...FILTROS],
+      P("separador", "texto", ", (padrão) ou ;"), P("aluno_id · escola_id", "texto", "Só deste aluno (conjunto=premiacoes) / desta escola"),
+      P("nome · escola · busca", "texto", "Busca por texto, como em /premiacoes (só com conjunto=premiacoes)"), METODO_P, ...FILTROS],
     teste: null },
   { id: "olimpiadas", path: "/api/v1/olimpiadas", titulo: "Olimpíadas e valores aceitos",
     desc: "Siglas, nomes, áreas, níveis existentes, anos e pontuação de cada olimpíada. Use para montar filtros.",

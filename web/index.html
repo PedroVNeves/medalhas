@@ -37,7 +37,9 @@
       "url": "https://medalhas.online/", "isAccessibleForFree": true, "inLanguage": "pt-BR",
       "keywords": ["OBMEP", "OBM", "OBI", "IMO", "olimpíadas de matemática", "medalhistas", "olimpíadas científicas", "Brasil"],
       "temporalCoverage": "1979/..", "spatialCoverage": { "@type": "Place", "name": "Brasil" },
-      "includedInDataCatalog": { "@id": "https://medalhas.online/#site" },
+      "creator": { "@type": "Organization", "name": "Medalhas", "url": "https://medalhas.online/" },
+      "license": "https://medalhas.online/dados#uso-dos-dados",
+      "includedInDataCatalog": { "@type": "DataCatalog", "name": "Medalhas", "url": "https://medalhas.online/" },
       "distribution": [
         { "@type": "DataDownload", "encodingFormat": "text/csv", "contentUrl": "https://medalhas.online/api/v1/exportar?formato=csv" },
         { "@type": "DataDownload", "encodingFormat": "application/json", "contentUrl": "https://medalhas.online/api/v1/exportar?formato=json" }
@@ -59,17 +61,19 @@
      vinham do CDN, para as mesmas regras continuarem valendo. -->
 <link rel="stylesheet" href="/css/site.css">
 
-<script defer src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.10.0/styles/github-dark.min.css">
-<script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.10.0/highlight.min.js"></script>
+<!-- bibliotecas do CDN com a versão fixa e o hash do arquivo (integrity): se o conteúdo mudar, o navegador
+     recusa. Ao trocar de versão, recalcule: curl -sL URL | openssl dgst -sha384 -binary | openssl base64 -A -->
+<script defer src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js" integrity="sha384-Mx5lkUEQPM1pOJCwFtUICyX45KNojXbkWdYhkKUKsbv391mavbfoAmONbzkgYPzR" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js" integrity="sha384-sPwMflxqfAN+Q5mvlkLmHiX3PORGbZSXHiSGPTXT9VHCD/AB+b+r+vJWsqprv+7k" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/lucide@0.468.0/dist/umd/lucide.min.js" integrity="sha384-uTYyvsSSUZeaPhb5RbKlQa0zY/WpX/QHfvg2mczXyBQOpkWPEDy9lczyp+w7SKXu" crossorigin="anonymous"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.10.0/styles/github-dark.min.css" integrity="sha384-wH75j6z1lH97ZOpMOInqhgKzFkAInZPPSPlZpYKYTOqsaizPvhQZmAtLcPKXpLyH" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.10.0/highlight.min.js" integrity="sha384-GdEWAbCjn+ghjX0gLx7/N1hyTVmPAjdC2OvoAA0RyNcAOhqwtT8qnbCxWle2+uJX" crossorigin="anonymous"></script>
 <!-- ordem importa: scripts "defer" rodam na ordem, e o Alpine (último) precisa de app() já definido -->
 <script defer src="/js/util.js"></script>
 <script defer src="/js/graficos.js"></script>
 <script defer src="/js/documentacao-api.js"></script>
 <script defer src="/js/app.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js" integrity="sha384-X9kJyAubVxnP0hcA+AMMs21U445qsnqhnUF8EBlEpP3a42Kh/JwWjlv2ZcvGfphb" crossorigin="anonymous"></script>
 </head>
 
 <body x-data="app()" class="min-h-screen overflow-x-clip antialiased">
@@ -117,7 +121,7 @@
     <div class="ml-auto hidden flex-none xl:block"><div class="seg flex-nowrap" title="Como os pontos são calculados em todo o site">
       <span class="hidden self-center px-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 xl:inline">Pontuação</span>
       <template x-for="m in ov?.metodos || []" :key="m.id">
-        <button @click="setMetodo(m.id)" :class="metodo===m.id && 'on'" :title="`${m.nome}: ${m.descricao}`">
+        <button @click="setMetodo(m.id)" :class="metodo===m.id && 'on'" :aria-pressed="String(!!(metodo===m.id))" :title="`${m.nome}: ${m.descricao}`">
           <span x-text="m.curto"></span><i x-show="m.id==='impa3'" x-icon="'badge-check'" class="ml-1 h-3.5 w-3.5 text-emerald-300"></i>
         </button>
       </template>
@@ -125,7 +129,7 @@
     <div class="relative hidden w-full min-w-0 max-w-xs xl:block" x-show="!is('home') && !is('busca')" x-cloak @click.outside="sug.onde==='nav' && fecharSugestoes()">
       <label class="relative block">
         <i x-icon="'search'" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"></i>
-        <input x-ref="qNav" x-model="q" @input="typed('nav')" @focus="pedirSugestoes('nav')" @keydown="teclaSugestoes($event, 'nav')" type="search" enterkeyhint="search" placeholder="Buscar aluno ou escola…"
+        <input x-ref="qNav" x-model="q" @input="typed('nav')" @focus="pedirSugestoes('nav')" @keydown="teclaSugestoes($event, 'nav')" type="search" enterkeyhint="search" placeholder="Buscar aluno ou escola…" aria-label="Buscar aluno ou escola"
           autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="sugestoes-nav" :aria-expanded="sugAberta && sug.onde==='nav'"
           class="w-full rounded-xl border hairline bg-white/5 py-2 pl-9 pr-10 text-sm placeholder:text-slate-500 focus:border-gold-400/50 focus:outline-none">
         <span class="kbd absolute right-2.5 top-1/2 -translate-y-1/2">/</span>
@@ -143,12 +147,12 @@
       <div class="flex flex-none items-center gap-1">
         <span class="coin sm" :class="!s.ouro && 'zero'" x-text="s.ouro"></span>
         <span class="coin sm prata" :class="!s.prata && 'zero'" x-text="s.prata"></span>
-        <span class="coin sm bronze" :class="!s.bronze && 'zero'" x-text="s.bronze"></span>
+        <span class="coin sm bronze" :class="!s.bronze && 'zero'" x-text="s.bronze"></span><span class="coin sm mencao" :class="!s.mencao && 'zero'" title="Menções honrosas" x-text="s.mencao"></span>
       </div>
     </a>
   </template>
   <p x-show="!sug.lista.length" class="px-3 py-3 text-sm text-slate-400">Nenhuma sugestão. Tente outra grafia ou só o sobrenome, ou veja a busca completa.</p>
-  <button type="button" class="sug-rodape" :class="sug.ativo===sug.lista.length && 'on'" @mouseenter="sug.ativo=sug.lista.length" @click="buscar()">
+  <button type="button" class="sug-rodape" :class="sug.ativo===sug.lista.length && 'on'" :aria-pressed="String(!!(sug.ativo===sug.lista.length))" @mouseenter="sug.ativo=sug.lista.length" @click="buscar()">
     <i x-icon="'search'" class="h-3.5 w-3.5"></i><span class="truncate">Ver todos os resultados para “<span x-text="q.trim()"></span>”</span><span class="kbd ml-auto hidden sm:inline">Enter</span>
   </button>
 </div>
@@ -165,7 +169,7 @@
   </nav>
   <div class="flex items-center gap-2 px-4 pb-2 sm:px-6 xl:hidden"><span class="hidden text-[11px] font-semibold uppercase tracking-wider text-slate-500 min-[360px]:inline">Pontuação</span><div class="seg" title="Como os pontos são calculados em todo o site">
       <template x-for="m in ov?.metodos || []" :key="m.id">
-        <button @click="setMetodo(m.id)" :class="metodo===m.id && 'on'" :title="`${m.nome}: ${m.descricao}`">
+        <button @click="setMetodo(m.id)" :class="metodo===m.id && 'on'" :aria-pressed="String(!!(metodo===m.id))" :title="`${m.nome}: ${m.descricao}`">
           <span x-text="m.curto"></span><i x-show="m.id==='impa3'" x-icon="'badge-check'" class="ml-1 h-3.5 w-3.5 text-emerald-300"></i>
         </button>
       </template>
@@ -193,7 +197,7 @@
     <div>
       <span class="inline-flex items-center gap-2 rounded-full border hairline bg-white/5 px-3 py-1 text-xs font-medium text-slate-300">
         <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400"></span>
-        <span x-text="ov ? `${fmt(ov.totais.total)} premiações · ${ov.totais.de}–${ov.totais.ate}` : 'carregando…'"></span>
+        <span x-text="ov ? `${fmt(ov.totais.total)} premiações · ${ov.totais.de}–${ov.totais.ate}` : (ovErro ? 'não carregou' : 'carregando…')"></span>
       </span>
       <h1 class="font-display mt-5 text-4xl font-bold leading-[1.02] sm:text-6xl lg:text-7xl">
         Quem <span class="text-gold-grad">brilhou</span><br>nas olimpíadas<br>de conhecimento<br>do Brasil.
@@ -205,15 +209,15 @@
         <div class="flex flex-col gap-2 p-2 sm:flex-row sm:items-center">
           <div class="relative flex-1">
             <i x-icon="'search'" class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gold-400"></i>
-            <input x-ref="q" x-model="q" @input="typed('home')" @focus="pedirSugestoes('home')" @keydown="teclaSugestoes($event, 'home')" type="search" enterkeyhint="search" autofocus
+            <input x-ref="q" x-model="q" @input="typed('home')" @focus="pedirSugestoes('home')" @keydown="teclaSugestoes($event, 'home')" type="search" enterkeyhint="search" aria-label="Buscar aluno ou escola"
               autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="sugestoes-home" :aria-expanded="sugAberta && sug.onde==='home'"
               :placeholder="campo === 'escola' ? 'Nome da escola, sigla (IFAL, ETEC)…' : campo === 'tudo' ? 'Nome, escola ou cidade…' : 'Nome do aluno…'"
               class="w-full bg-transparent py-3.5 pl-12 pr-4 text-lg placeholder:text-slate-500 focus:outline-none">
           </div>
           <div class="seg self-start sm:self-auto">
-            <button @click="setCampo('nome')" :class="campo==='nome' && 'on'"><i x-icon="'user'" class="mr-1 inline h-3.5 w-3.5"></i>Pessoa</button>
-            <button @click="setCampo('escola')" :class="campo==='escola' && 'on'"><i x-icon="'school'" class="mr-1 inline h-3.5 w-3.5"></i>Escola</button>
-            <button @click="setCampo('tudo')" :class="campo==='tudo' && 'on'">Tudo</button>
+            <button @click="setCampo('nome')" :class="campo==='nome' && 'on'" :aria-pressed="String(!!(campo==='nome'))"><i x-icon="'user'" class="mr-1 inline h-3.5 w-3.5"></i>Pessoa</button>
+            <button @click="setCampo('escola')" :class="campo==='escola' && 'on'" :aria-pressed="String(!!(campo==='escola'))"><i x-icon="'school'" class="mr-1 inline h-3.5 w-3.5"></i>Escola</button>
+            <button @click="setCampo('tudo')" :class="campo==='tudo' && 'on'" :aria-pressed="String(!!(campo==='tudo'))">Tudo</button>
           </div>
           <button @click="buscar()" class="btn btn-gold justify-center !px-5 !py-3 !text-base"><i x-icon="'search'" class="h-4 w-4"></i>Buscar</button>
         </div>
@@ -231,12 +235,12 @@
       <div class="flex flex-none items-center gap-1">
         <span class="coin sm" :class="!s.ouro && 'zero'" x-text="s.ouro"></span>
         <span class="coin sm prata" :class="!s.prata && 'zero'" x-text="s.prata"></span>
-        <span class="coin sm bronze" :class="!s.bronze && 'zero'" x-text="s.bronze"></span>
+        <span class="coin sm bronze" :class="!s.bronze && 'zero'" x-text="s.bronze"></span><span class="coin sm mencao" :class="!s.mencao && 'zero'" title="Menções honrosas" x-text="s.mencao"></span>
       </div>
     </a>
   </template>
   <p x-show="!sug.lista.length" class="px-3 py-3 text-sm text-slate-400">Nenhuma sugestão. Tente outra grafia ou só o sobrenome, ou veja a busca completa.</p>
-  <button type="button" class="sug-rodape" :class="sug.ativo===sug.lista.length && 'on'" @mouseenter="sug.ativo=sug.lista.length" @click="buscar()">
+  <button type="button" class="sug-rodape" :class="sug.ativo===sug.lista.length && 'on'" :aria-pressed="String(!!(sug.ativo===sug.lista.length))" @mouseenter="sug.ativo=sug.lista.length" @click="buscar()">
     <i x-icon="'search'" class="h-3.5 w-3.5"></i><span class="truncate">Ver todos os resultados para “<span x-text="q.trim()"></span>”</span><span class="kbd ml-auto hidden sm:inline">Enter</span>
   </button>
 </div>
@@ -279,6 +283,11 @@
   </div>
 
   <!-- números -->
+  <div x-show="!ov && ovErro" x-cloak class="glass card mt-14 p-8 text-center" role="alert">
+    <p class="font-display text-lg font-semibold text-white">Não deu para carregar os números do site</p>
+    <p class="mt-1 text-sm text-slate-400" x-text="ovErro"></p>
+    <button @click="loadOverview()" class="btn mt-4">Tentar de novo</button>
+  </div>
   <div class="mt-14 grid grid-cols-2 gap-4 lg:grid-cols-4" x-show="ov">
     <template x-for="s in ov ? [
         {l:'Premiações', v: ov.totais.total, i:'award', c:'text-indigo-300'},
@@ -306,10 +315,10 @@
             <div class="avatar h-9 w-9 text-xs" :style="tierStyle(a.tier)" x-text="initials(a.nome)"></div>
             <div class="min-w-0 flex-1">
               <div class="truncate font-medium" x-text="a.nome"></div>
-              <div class="truncate text-xs text-slate-500" x-text="[a.uf, a.competicoes?.replace(',', ' + ')].filter(Boolean).join(' · ')"></div>
+              <div class="truncate text-xs text-slate-500" x-text="[a.uf, resumoOlimpiadas(a.competicoes)].filter(Boolean).join(' · ')"></div>
             </div>
             <div class="hidden items-center gap-1 sm:flex">
-              <span class="coin" x-text="a.ouro"></span><span class="coin prata" x-text="a.prata"></span><span class="coin bronze" x-text="a.bronze"></span>
+              <span class="coin" x-text="a.ouro"></span><span class="coin prata" x-text="a.prata"></span><span class="coin bronze" x-text="a.bronze"></span><span class="coin mencao" :class="!a.mencao && 'zero'" title="Menções honrosas" x-text="a.mencao"></span>
             </div>
             <span class="tabular w-16 text-right text-sm font-semibold text-gold-300" x-text="fmt(a.xp)"></span>
           </a></li>
@@ -325,13 +334,13 @@
         <template x-for="e in ov?.top_escolas || []" :key="e.id">
           <li><a :href="escolaLink(e.id)" class="lb-row -mx-2 flex items-center gap-3 rounded-xl px-2 py-2.5">
             <span class="rank-num tabular" :class="e.pos<=3 && 'rank-'+e.pos" x-text="e.pos"></span>
-            <div class="grid h-9 w-9 flex-none place-items-center rounded-xl border hairline bg-white/5"><i x-icon="'school'" class="h-4 w-4" :style="`color:${e.tier.cor}`"></i></div>
+            <div class="grid h-9 w-9 flex-none place-items-center rounded-xl border hairline bg-white/5"><i x-icon="'school'" class="h-4 w-4" :style="`color:${e.tier?.cor}`"></i></div>
             <div class="min-w-0 flex-1">
               <div class="truncate font-medium" x-text="prettySchool(e.nome)"></div>
               <div class="truncate text-xs text-slate-500" x-text="`${prettySchool(e.municipio)} · ${e.uf} · ${fmt(e.alunos)} alunos`"></div>
             </div>
             <div class="hidden items-center gap-1 sm:flex">
-              <span class="coin" x-text="e.ouro"></span><span class="coin prata" x-text="e.prata"></span><span class="coin bronze" x-text="e.bronze"></span>
+              <span class="coin" x-text="e.ouro"></span><span class="coin prata" x-text="e.prata"></span><span class="coin bronze" x-text="e.bronze"></span><span class="coin mencao" :class="!e.mencao && 'zero'" title="Menções honrosas" x-text="e.mencao"></span>
             </div>
           </a></li>
         </template>
@@ -344,7 +353,7 @@
     <div class="mb-2 flex flex-wrap items-center justify-between gap-3">
       <div>
         <h3 class="font-display text-lg font-semibold">Medalhas por ano</h3>
-        <p class="text-xs text-slate-500">Ouro, prata e bronze distribuídos a cada edição</p>
+        <p class="text-xs text-slate-500">Ouro, prata, bronze e menções honrosas a cada edição</p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <!-- escala log: com todas as olimpíadas, os anos antigos (dezenas de medalhas) sumiriam ao lado dos ~9 mil de hoje -->
@@ -358,10 +367,10 @@
             <span x-text="yearComp || 'Todas as olimpíadas'"></span><i x-icon="'chevron-down'" class="h-3.5 w-3.5 opacity-60"></i>
           </button>
           <div x-show="aberto" x-cloak x-transition.opacity.duration.150ms class="menu menu-lista" role="listbox">
-            <button type="button" class="menu-item" role="option" :aria-selected="!yearComp" :class="!yearComp && 'on'"
+            <button type="button" class="menu-item" role="option" :aria-selected="!yearComp" :class="!yearComp && 'on'" :aria-pressed="String(!!(!yearComp))"
                     @click="aberto = false; escolherYearComp('')">Todas as olimpíadas</button>
             <template x-for="o in ov?.olimpiadas || []" :key="o.sigla">
-              <button type="button" class="menu-item" role="option" :aria-selected="yearComp === o.sigla" :class="yearComp === o.sigla && 'on'"
+              <button type="button" class="menu-item" role="option" :aria-selected="yearComp === o.sigla" :class="yearComp === o.sigla && 'on'" :aria-pressed="String(!!(yearComp === o.sigla))"
                       @click="aberto = false; escolherYearComp(o.sigla)"><span>
                 <span x-text="o.sigla"></span><small x-text="o.nome"></small></span></button>
             </template>
@@ -387,9 +396,9 @@
           class="w-full bg-transparent py-3.5 pl-12 pr-4 text-lg placeholder:text-slate-500 focus:outline-none">
       </div>
       <div class="seg self-start sm:self-auto">
-        <button @click="setCampo('nome')" :class="campo==='nome' && 'on'"><i x-icon="'user'" class="mr-1 inline h-3.5 w-3.5"></i>Pessoa</button>
-        <button @click="setCampo('escola')" :class="campo==='escola' && 'on'"><i x-icon="'school'" class="mr-1 inline h-3.5 w-3.5"></i>Escola</button>
-        <button @click="setCampo('tudo')" :class="campo==='tudo' && 'on'">Tudo</button>
+        <button @click="setCampo('nome')" :class="campo==='nome' && 'on'" :aria-pressed="String(!!(campo==='nome'))"><i x-icon="'user'" class="mr-1 inline h-3.5 w-3.5"></i>Pessoa</button>
+        <button @click="setCampo('escola')" :class="campo==='escola' && 'on'" :aria-pressed="String(!!(campo==='escola'))"><i x-icon="'school'" class="mr-1 inline h-3.5 w-3.5"></i>Escola</button>
+        <button @click="setCampo('tudo')" :class="campo==='tudo' && 'on'" :aria-pressed="String(!!(campo==='tudo'))">Tudo</button>
       </div>
     </div>
   </div>
@@ -402,27 +411,27 @@
       <i x-icon="'chevron-down'" class="ml-auto h-4 w-4 text-slate-500 transition-transform" :class="abertos && 'rotate-180'"></i>
     </button>
     <i x-icon="'sliders-horizontal'" class="filtros-icone ml-1 h-4 w-4 text-slate-500"></i>
-    <select class="select" @change="setBuscaFilter('uf', $event.target.value)">
+    <select class="select" aria-label="Estado" @change="setBuscaFilter('uf', $event.target.value)">
       <option value="">Todo o Brasil</option>
       <template x-for="u in ov?.ufs || []" :key="u"><option :value="u" x-text="`${u} · ${UF_NOMES[u]}`" :selected="u===bf.uf"></option></template>
     </select>
 
-    <select class="select" @change="setBuscaFilter('medalha', $event.target.value)">
+    <select class="select" aria-label="Prêmio" @change="setBuscaFilter('medalha', $event.target.value)">
       <option value="">Todos os prêmios</option>
       <template x-for="m in ['Ouro','Prata','Bronze','Menção Honrosa']" :key="m"><option :value="m" x-text="m" :selected="m===bf.medalha"></option></template>
     </select>
-    <select class="select" @change="setBuscaFilter('ano', $event.target.value)">
+    <select class="select" aria-label="Ano" @change="setBuscaFilter('ano', $event.target.value)">
       <option value="">Todos os anos</option>
       <template x-for="a in ov?.anos || []" :key="a"><option :value="a" x-text="a" :selected="String(a)===String(bf.ano)"></option></template>
     </select>
-<select class="select" x-show="(ov?.areas || []).length > 1" @change="setBuscaFilter('area', $event.target.value)">
+<select class="select" aria-label="Área" x-show="(ov?.areas || []).length > 1" @change="setBuscaFilter('area', $event.target.value)">
       <option value="">Todas as áreas</option>
       <template x-for="a in ov?.areas || []" :key="a"><option :value="a" x-text="a" :selected="a===bf.area"></option></template>
     </select>
     <div class="seg flex-wrap" title="Escolha uma ou mais olimpíadas. Nenhuma marcada = todas.">
       <span class="self-center px-2 text-xs text-slate-500">Olimpíadas</span>
       <template x-for="o in olimpiadasVisiveis(bf.area)" :key="o.sigla">
-        <button @click="toggleMulti('busca', 'competicao', o.sigla)" :class="temValor(bf.competicao, o.sigla) && 'on'" :title="o.nome" x-text="o.sigla"></button>
+        <button @click="toggleMulti('busca', 'competicao', o.sigla)" :class="temValor(bf.competicao, o.sigla) && 'on'" :aria-pressed="String(!!(temValor(bf.competicao, o.sigla)))" :title="o.nome" x-text="o.sigla"></button>
       </template>
     </div>
     <div class="seg flex-wrap" title="Escolha um ou mais níveis. Nenhum marcado = todos.">
@@ -432,10 +441,10 @@
       </template>
     </div>
     <div class="seg" title="Só alunas premiadas em olimpíadas para meninas (EGMO, PAGMO, EGOI), com todas as medalhas delas.">
-      <button @click="setBuscaFilter('sexo', '')" :class="!bf.sexo && 'on'">Todos</button>
-      <button @click="setBuscaFilter('sexo', 'F')" :class="bf.sexo==='F' && 'on'">Meninas</button>
+      <button @click="setBuscaFilter('sexo', '')" :class="!bf.sexo && 'on'" :aria-pressed="String(!!(!bf.sexo))">Todos</button>
+      <button @click="setBuscaFilter('sexo', 'F')" :class="bf.sexo==='F' && 'on'" :aria-pressed="String(!!(bf.sexo==='F'))">Meninas</button>
     </div>
-    <select class="select" @change="setBuscaFilter('rede', $event.target.value)">
+    <select class="select" aria-label="Rede de ensino" @change="setBuscaFilter('rede', $event.target.value)">
       <option value="">Pública + privada</option><option value="Pública" :selected="bf.rede==='Pública'">Escola pública</option><option value="Privada" :selected="bf.rede==='Privada'">Escola privada</option>
     </select>
     <button x-show="buscaFiltrosAtivos" @click="limparBuscaFiltros()" class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-400 hover:text-white"><i x-icon="'x'" class="h-3.5 w-3.5"></i>limpar filtros</button>
@@ -453,15 +462,15 @@
   <div class="mt-5 flex flex-wrap items-center justify-between gap-3" x-show="!busca.loading && busca.grupos.length">
     <p class="text-sm text-slate-400">
       <span x-text="fmt(busca.total)"></span> premiações ·
-      <span x-text="busca.grupos.length"></span> <span x-text="busca.byEscola ? 'escolas' : 'pessoas'"></span>
-      <span x-show="busca.total > busca.limite" class="text-amber-300"> · mostrando as primeiras <span x-text="fmt(busca.limite)"></span>, refine a busca</span>
+      <span x-text="fmt(busca.totalGrupos)"></span> <span x-text="busca.byEscola ? (busca.totalGrupos === 1 ? 'escola' : 'escolas') : (busca.totalGrupos === 1 ? 'pessoa' : 'pessoas')"></span>
+      <span x-show="busca.totalGrupos > busca.grupos.length"> · mostrando <span x-text="fmt(busca.grupos.length)"></span>, de quem mais pontua para quem menos</span>
     </p>
       <template x-if="busca.total > 0">
   <div class="relative " x-data="{ aberto: false }" @click.outside="aberto = false" @keydown.escape.window="aberto = false">
     <button type="button" class="btn" @click="aberto = !aberto" :disabled="exportando" :aria-expanded="aberto" aria-haspopup="menu">
       <i x-icon="exportando ? 'loader-circle' : 'download'" class="h-4 w-4" :class="exportando && 'animate-spin'"></i><span>Exportar</span><i x-icon="'chevron-down'" class="h-3.5 w-3.5 opacity-60"></i>
     </button>
-    <div x-show="aberto" x-cloak x-transition.opacity.duration.150ms class="menu" role="menu">
+    <div x-show="aberto" x-cloak x-transition.opacity.duration.150ms class="menu menu-esq" role="menu">
       <div class="menu-titulo">Todas as premiações desta busca</div>
       <button class="menu-item" @click="aberto = false; baixar(exportBusca, 'csv')"><i x-icon="'file-spreadsheet'"></i><span>CSV<small>planilhas, Python, R</small></span></button>
       <button class="menu-item" @click="aberto = false; baixar(exportBusca, 'excel')"><i x-icon="'sheet'"></i><span>Excel<small>CSV com ; para o Excel em português</small></span></button>
@@ -477,24 +486,25 @@
   </div>
 
   <div class="stagger mt-6 grid gap-3" x-show="!busca.loading">
-    <template x-for="g in busca.grupos.slice(0, 150)" :key="g.id">
+    <template x-for="g in busca.grupos" :key="g.id">
       <div class="glass card overflow-hidden">
-        <a :href="busca.byEscola ? escolaLink(g.id) : alunoLink(g.id)" class="lb-row flex items-center gap-4 p-4">
+        <a :href="busca.byEscola ? escolaLink(g.id) : alunoLink(g.id)" class="lb-row flex flex-wrap items-center gap-x-4 gap-y-2 p-4 sm:flex-nowrap">
           <template x-if="!busca.byEscola"><div class="avatar h-11 w-11 text-sm" style="--tc:#f5c542" x-text="initials(g.nome)"></div></template>
           <template x-if="busca.byEscola"><div class="grid h-11 w-11 flex-none place-items-center rounded-xl border hairline bg-white/5"><i x-icon="'school'" class="h-5 w-5 text-indigo-300"></i></div></template>
           <div class="min-w-0 flex-1">
             <div class="truncate text-lg font-semibold" x-text="g.nome"></div>
             <div class="truncate text-xs text-slate-500" x-text="g.sub"></div>
           </div>
-          <div class="flex items-center gap-1">
+          <!-- no celular as moedas vão para a 2ª linha, alinhadas com o nome, para o nome caber inteiro -->
+          <div class="order-last flex basis-full items-center gap-1 pl-[3.75rem] sm:order-none sm:basis-auto sm:pl-0">
             <span class="coin" :class="!g.ouro && 'zero'" x-text="g.ouro"></span>
             <span class="coin prata" :class="!g.prata && 'zero'" x-text="g.prata"></span>
-            <span class="coin bronze" :class="!g.bronze && 'zero'" x-text="g.bronze"></span>
+            <span class="coin bronze" :class="!g.bronze && 'zero'" x-text="g.bronze"></span><span class="coin mencao" :class="!g.mencao && 'zero'" title="Menções honrosas" x-text="g.mencao"></span>
           </div>
           <i x-icon="'chevron-right'" class="h-5 w-5 text-slate-600"></i>
         </a>
         <div class="border-t hairline px-4 py-2">
-          <template x-for="r in g.itens.slice(0, busca.byEscola ? 6 : 20)" :key="r.fonte + r.nome + r.ano + r.nivel">
+          <template x-for="r in g.premiacoes" :key="r.id">
             <div class="flex items-center gap-3 py-1.5 text-sm">
               <span class="tabular w-11 font-semibold text-slate-300" x-text="r.ano"></span>
               <span class="w-14 text-xs font-semibold uppercase tracking-wide text-slate-500" x-text="r.competicao"></span>
@@ -509,10 +519,15 @@
               <a :href="r.fonte" target="_blank" rel="noopener" class="text-slate-600 hover:text-gold-300" title="Fonte oficial"><i x-icon="'external-link'" class="h-3.5 w-3.5"></i></a>
             </div>
           </template>
-          <a x-show="g.itens.length > (busca.byEscola ? 6 : 20)" :href="busca.byEscola ? escolaLink(g.id) : alunoLink(g.id)" class="block py-1.5 text-xs text-gold-300">+ ver todas as <span x-text="g.itens.length"></span> premiações →</a>
+          <a x-show="g.total > g.premiacoes.length" :href="busca.byEscola ? escolaLink(g.id) : alunoLink(g.id)" class="block py-1.5 text-xs text-gold-300">+ ver todas as <span x-text="fmt(g.total)"></span> premiações →</a>
         </div>
       </div>
     </template>
+  </div>
+  <div class="mt-6 text-center" x-show="!busca.loading && busca.grupos.length < busca.totalGrupos">
+    <button @click="runSearch(true)" :disabled="busca.carregandoMais" class="inline-flex items-center gap-2 rounded-xl border hairline bg-white/5 px-5 py-2.5 text-sm font-medium hover:border-gold-400/40 hover:text-gold-300 disabled:opacity-50">
+      <i x-icon="'chevrons-down'" class="h-4 w-4"></i><span x-text="busca.carregandoMais ? 'carregando…' : 'Mostrar mais'"></span>
+    </button>
   </div>
 </section>
 
@@ -533,7 +548,7 @@
     <button type="button" class="btn" @click="aberto = !aberto" :disabled="exportando" :aria-expanded="aberto" aria-haspopup="menu">
       <i x-icon="exportando ? 'loader-circle' : 'download'" class="h-4 w-4" :class="exportando && 'animate-spin'"></i><span>Exportar</span><i x-icon="'chevron-down'" class="h-3.5 w-3.5 opacity-60"></i>
     </button>
-    <div x-show="aberto" x-cloak x-transition.opacity.duration.150ms class="menu" role="menu">
+    <div x-show="aberto" x-cloak x-transition.opacity.duration.150ms class="menu menu-esq" role="menu">
       <div class="menu-titulo">Ranking completo com estes filtros</div>
       <button class="menu-item" @click="aberto = false; baixar(exportRanking(rk.tipo), 'csv')"><i x-icon="'file-spreadsheet'"></i><span>CSV<small>planilhas, Python, R</small></span></button>
       <button class="menu-item" @click="aberto = false; baixar(exportRanking(rk.tipo), 'excel')"><i x-icon="'sheet'"></i><span>Excel<small>CSV com ; para o Excel em português</small></span></button>
@@ -555,27 +570,27 @@
       <i x-icon="'chevron-down'" class="ml-auto h-4 w-4 text-slate-500 transition-transform" :class="abertos && 'rotate-180'"></i>
     </button>
     <i x-icon="'sliders-horizontal'" class="filtros-icone ml-1 h-4 w-4 text-slate-500"></i>
-    <select class="select" x-show="rk.tipo!=='estados'" @change="setFilter('uf', $event.target.value)">
+    <select class="select" aria-label="Estado" x-show="rk.tipo!=='estados'" @change="setFilter('uf', $event.target.value)">
       <option value="">Todo o Brasil</option>
       <template x-for="u in ov?.ufs || []" :key="u"><option :value="u" x-text="`${u} · ${UF_NOMES[u]}`" :selected="u===rk.f.uf"></option></template>
     </select>
 
-    <select class="select" @change="setFilter('ano_de', $event.target.value)">
+    <select class="select" aria-label="A partir do ano" @change="setFilter('ano_de', $event.target.value)">
       <option value="">Desde o início</option>
       <template x-for="a in ov?.anos || []" :key="a"><option :value="a" x-text="'De ' + a" :selected="String(a)===String(rk.f.ano_de)"></option></template>
     </select>
-    <select class="select" @change="setFilter('ano_ate', $event.target.value)">
+    <select class="select" aria-label="Até o ano" @change="setFilter('ano_ate', $event.target.value)">
       <option value="">Até hoje</option>
       <template x-for="a in ov?.anos || []" :key="a"><option :value="a" x-text="'Até ' + a" :selected="String(a)===String(rk.f.ano_ate)"></option></template>
     </select>
-<select class="select" x-show="(ov?.areas || []).length > 1" @change="setFilter('area', $event.target.value)">
+<select class="select" aria-label="Área" x-show="(ov?.areas || []).length > 1" @change="setFilter('area', $event.target.value)">
       <option value="">Todas as áreas</option>
       <template x-for="a in ov?.areas || []" :key="a"><option :value="a" x-text="a" :selected="a===rk.f.area"></option></template>
     </select>
     <div class="seg flex-wrap" title="Escolha uma ou mais olimpíadas. Nenhuma marcada = todas.">
       <span class="self-center px-2 text-xs text-slate-500">Olimpíadas</span>
       <template x-for="o in olimpiadasVisiveis(rk.f.area)" :key="o.sigla">
-        <button @click="toggleMulti('rk', 'competicao', o.sigla)" :class="temValor(rk.f.competicao, o.sigla) && 'on'" :title="o.nome" x-text="o.sigla"></button>
+        <button @click="toggleMulti('rk', 'competicao', o.sigla)" :class="temValor(rk.f.competicao, o.sigla) && 'on'" :aria-pressed="String(!!(temValor(rk.f.competicao, o.sigla)))" :title="o.nome" x-text="o.sigla"></button>
       </template>
     </div>
     <div class="seg flex-wrap" title="Escolha um ou mais níveis. Nenhum marcado = todos.">
@@ -585,21 +600,21 @@
       </template>
     </div>
     <div class="seg" title="Só alunas premiadas em olimpíadas para meninas (EGMO, PAGMO, EGOI), com todas as medalhas delas.">
-      <button @click="setFilter('sexo', '')" :class="!rk.f.sexo && 'on'">Todos</button>
-      <button @click="setFilter('sexo', 'F')" :class="rk.f.sexo==='F' && 'on'">Meninas</button>
+      <button @click="setFilter('sexo', '')" :class="!rk.f.sexo && 'on'" :aria-pressed="String(!!(!rk.f.sexo))">Todos</button>
+      <button @click="setFilter('sexo', 'F')" :class="rk.f.sexo==='F' && 'on'" :aria-pressed="String(!!(rk.f.sexo==='F'))">Meninas</button>
     </div>
-    <select class="select" x-show="rk.tipo!=='estados'" @change="setFilter('rede', $event.target.value)">
+    <select class="select" aria-label="Rede de ensino" x-show="rk.tipo!=='estados'" @change="setFilter('rede', $event.target.value)">
       <option value="">Pública + privada</option><option value="Pública" :selected="rk.f.rede==='Pública'">Escola pública</option><option value="Privada" :selected="rk.f.rede==='Privada'">Escola privada</option>
     </select>
     <button x-show="filtrosAtivos" @click="limparFiltros()" class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-400 hover:text-white"><i x-icon="'x'" class="h-3.5 w-3.5"></i>limpar</button>
     <div class="seg filtros-fixo ml-auto max-w-full overflow-x-auto">
-      <button @click="setFilter('ordem','xp')" :class="rk.f.ordem==='xp' && 'on'" title="Soma de pontos (XP)">Pontos</button>
-      <button @click="setFilter('ordem','medalhas')" :class="rk.f.ordem==='medalhas' && 'on'" title="Ouro, depois prata, depois bronze">Quadro de medalhas</button>
-      <button @click="setFilter('ordem','total')" :class="rk.f.ordem==='total' && 'on'" title="Total de medalhas">Total</button>
+      <button @click="setFilter('ordem','xp')" :class="rk.f.ordem==='xp' && 'on'" :aria-pressed="String(!!(rk.f.ordem==='xp'))" title="Soma de pontos (XP)">Pontos</button>
+      <button @click="setFilter('ordem','medalhas')" :class="rk.f.ordem==='medalhas' && 'on'" :aria-pressed="String(!!(rk.f.ordem==='medalhas'))" title="Ouro, depois prata, depois bronze">Quadro de medalhas</button>
+      <button @click="setFilter('ordem','total')" :class="rk.f.ordem==='total' && 'on'" :aria-pressed="String(!!(rk.f.ordem==='total'))" title="Total de medalhas">Total</button>
     </div>
     <div x-show="rk.f.sexo" x-cloak class="filtros-fixo flex w-full items-center gap-2 rounded-xl border border-pink-400/25 bg-pink-400/5 px-3 py-2 text-xs text-pink-100">
       <i x-icon="'info'" class="h-3.5 w-3.5 flex-none"></i>
-      <span class="flex-1">As listas oficiais não informam o sexo. Por isso aqui entram só as alunas premiadas em olimpíadas para meninas (EGMO, PAGMO, EGOI), com todas as medalhas delas, inclusive OBMEP, OBM e OBI. Outras meninas medalhistas não aparecem neste filtro: se você é uma delas e quer entrar no ranking, <a href="mailto:pedro.vasconcelosneves@gmail.com?subject=Medalhas%3A%20incluir%20no%20ranking%20das%20meninas" class="underline">entre em contato</a>. <a href="/sobre#como-funciona" class="underline">Como funciona</a></span>
+      <span class="flex-1">As listas oficiais não informam o sexo. Por isso aqui entram só as alunas premiadas em olimpíadas ou etapas para meninas (EGMO, PAGMO, EGOI, Elas em Destaque da Itabirana), com todas as medalhas delas, inclusive OBMEP, OBM e OBI. Outras meninas medalhistas não aparecem neste filtro: se você é uma delas e quer entrar no ranking, <a href="mailto:pedro.vasconcelosneves@gmail.com?subject=Medalhas%3A%20incluir%20no%20ranking%20das%20meninas" class="underline">entre em contato</a>. <a href="/sobre#como-funciona" class="underline">Como funciona</a></span>
     </div>
 
     <div x-show="impa3" class="filtros-fixo flex w-full items-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-200">
@@ -608,7 +623,7 @@
       <button @click="setMetodo('impa')" class="rounded-lg border border-emerald-400/30 px-2 py-0.5 hover:bg-emerald-400/10">usar IMPA · todos os níveis</button>
     </div>
   </div>
-  <p class="mt-2 min-h-[1rem] text-xs text-slate-500" x-show="!rk.loading || rk.itens.length">
+  <p class="mt-2 min-h-[1rem] text-xs text-slate-400" role="status" x-show="(!rk.loading || rk.itens.length) && !rk.erro">
     <span x-text="fmt(rk.total)"></span> <span x-text="{alunos:'alunos', escolas:'escolas', estados:'estados', cidades:'cidades'}[rk.tipo]"></span> no ranking
     <span x-show="rk.f.uf" x-text="' · ' + UF_NOMES[rk.f.uf]"></span>
     <span x-show="rk.f.municipio" x-cloak class="ml-1 inline-flex items-center gap-1 rounded-full border border-sky-400/30 bg-sky-400/10 px-2 py-0.5 text-sky-200">só <span x-text="rk.f.municipio"></span>
@@ -620,17 +635,17 @@
   </p>
 
   <!-- pódio -->
-  <div class="mt-6 grid grid-cols-3 items-end gap-3 sm:gap-6" x-show="rkPodio.length === 3 && !rk.loading">
+  <div class="mt-6 grid grid-cols-3 items-end gap-3 sm:gap-6" x-show="rkPodio.length === 3 && !(rk.loading && !rk.itens.length)">
     <template x-for="(p, i) in [rkPodio[1], rkPodio[0], rkPodio[2]]" :key="(p?.id || '') + i">
       <a :href="p && (rk.tipo==='alunos' ? alunoLink(p.id) : escolaLink(p.id))" class="group flex flex-col items-center text-center">
         <template x-if="p">
           <div class="flex w-full flex-col items-center">
             <i x-show="i===1" x-icon="'crown'" class="mb-1 h-7 w-7 text-gold-400 drop-shadow-[0_0_12px_rgba(245,197,66,.9)]"></i>
             <template x-if="rk.tipo==='alunos'"><div class="avatar mb-3 transition group-hover:scale-105" :class="i===1 ? 'h-20 w-20 text-2xl' : 'h-16 w-16 text-xl'" :style="tierStyle(p.tier)" x-text="initials(p.nome)"></div></template>
-            <template x-if="rk.tipo==='escolas'"><div class="mb-3 grid place-items-center rounded-2xl border hairline bg-white/5 transition group-hover:scale-105" :class="i===1 ? 'h-20 w-20' : 'h-16 w-16'"><i x-icon="'school'" class="h-8 w-8" :style="`color:${p.tier.cor}`"></i></div></template>
+            <template x-if="rk.tipo==='escolas'"><div class="mb-3 grid place-items-center rounded-2xl border hairline bg-white/5 transition group-hover:scale-105" :class="i===1 ? 'h-20 w-20' : 'h-16 w-16'"><i x-icon="'school'" class="h-8 w-8" :style="`color:${p.tier?.cor}`"></i></div></template>
             <div class="line-clamp-2 text-sm font-semibold leading-tight group-hover:text-gold-300 sm:text-base" x-text="rk.tipo==='escolas' ? prettySchool(p.nome) : p.nome"></div>
             <div class="mt-1 text-xs text-slate-500" x-text="[prettySchool(p.municipio), p.uf].filter(Boolean).join(' · ')"></div>
-            <div class="mt-2 flex gap-1"><span class="coin" x-text="p.ouro"></span><span class="coin prata" x-text="p.prata"></span><span class="coin bronze" x-text="p.bronze"></span></div>
+            <div class="mt-2 flex gap-1"><span class="coin" x-text="p.ouro"></span><span class="coin prata" x-text="p.prata"></span><span class="coin bronze" x-text="p.bronze"></span><span class="coin mencao" :class="!p.mencao && 'zero'" title="Menções honrosas" x-text="p.mencao"></span></div>
             <div class="podium-step mt-4 flex w-full flex-col items-center pt-4" :class="['podium-2','podium-1','podium-3'][i] + ' ' + ['h-28','h-40','h-24'][i]">
               <span class="font-display text-4xl font-bold" :class="['rank-2','rank-1','rank-3'][i]" x-text="p.pos"></span>
               <span class="tabular text-xs font-semibold text-slate-300" x-text="fmt(p.xp) + ' pts'"></span>
@@ -651,11 +666,11 @@
       <template x-for="it in rk.itens" :key="it.id">
         <li>
           <a :href="rk.tipo==='alunos' ? alunoLink(it.id) : rk.tipo==='escolas' ? escolaLink(it.id) : rk.tipo==='cidades' ? '/cidade/' + slug(it.id) : rankLink('alunos', {uf: it.id})"
-             class="lb-row grid grid-cols-[2.6rem_minmax(0,1fr)_auto] items-center gap-3 px-3 py-3 md:grid-cols-[3rem_minmax(0,1fr)_9rem_10rem] md:gap-4 md:px-4">
+             class="lb-row grid grid-cols-[2.6rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-3 py-3 md:grid-cols-[3rem_minmax(0,1fr)_9rem_10rem] md:gap-4 md:px-4">
             <span class="rank-num tabular" :class="it.pos<=3 && 'rank-'+it.pos" x-text="it.pos"></span>
             <div class="flex min-w-0 items-center gap-3">
               <template x-if="rk.tipo==='alunos'"><div class="avatar h-10 w-10 text-xs" :style="tierStyle(it.tier)" x-text="initials(it.nome)"></div></template>
-              <template x-if="rk.tipo==='escolas'"><div class="grid h-10 w-10 flex-none place-items-center rounded-xl border hairline bg-white/5"><i x-icon="'school'" class="h-4 w-4" :style="`color:${it.tier.cor}`"></i></div></template>
+              <template x-if="rk.tipo==='escolas'"><div class="grid h-10 w-10 flex-none place-items-center rounded-xl border hairline bg-white/5"><i x-icon="'school'" class="h-4 w-4" :style="`color:${it.tier?.cor}`"></i></div></template>
               <template x-if="rk.tipo==='estados'"><div class="font-display grid h-10 w-10 flex-none place-items-center rounded-xl border hairline bg-white/5 text-sm font-bold text-gold-300" x-text="it.id"></div></template>
               <template x-if="rk.tipo==='cidades'"><div class="grid h-10 w-10 flex-none place-items-center rounded-xl border hairline bg-white/5"><i x-icon="'building-2'" class="h-4 w-4 text-sky-300"></i></div></template>
               <div class="min-w-0">
@@ -669,12 +684,12 @@
                   : `${fmt(it.alunos)} alunos · ${fmt(it.escolas)} escolas`"></div>
               </div>
             </div>
-            <div class="flex items-center justify-center gap-1">
+            <div class="col-start-2 row-start-2 flex items-center gap-1 justify-self-start md:col-start-auto md:row-start-auto md:justify-self-center">
               <span class="coin" :class="!it.ouro && 'zero'" x-text="it.ouro"></span>
               <span class="coin prata" :class="!it.prata && 'zero'" x-text="it.prata"></span>
-              <span class="coin bronze" :class="!it.bronze && 'zero'" x-text="it.bronze"></span>
+              <span class="coin bronze" :class="!it.bronze && 'zero'" x-text="it.bronze"></span><span class="coin mencao" :class="!it.mencao && 'zero'" title="Menções honrosas" x-text="it.mencao"></span>
             </div>
-            <div class="col-span-3 md:col-span-1">
+            <div class="col-start-2 row-start-2 justify-self-end md:col-start-auto md:row-start-auto md:justify-self-stretch">
               <div class="flex items-center justify-end gap-3">
                 <div class="bar hidden flex-1 md:block"><span :style="`width:${Math.max(3, it.xp / rkLeader * 100)}%`"></span></div>
                 <span class="tabular w-20 text-right text-sm font-bold text-gold-300" x-text="fmt(it.xp)"></span>
@@ -684,7 +699,12 @@
         </li>
       </template>
     </ol>
-    <div x-show="!rk.loading && !rk.itens.length" class="p-12 text-center text-slate-400">
+    <div x-show="!rk.loading && !rk.itens.length && rk.erro" class="p-12 text-center text-slate-300" role="alert">
+      <p class="font-display text-lg font-semibold text-white">Não deu para carregar o ranking</p>
+      <p class="mt-1 text-sm text-slate-400" x-text="rk.erro"></p>
+      <button @click="loadRanking()" class="btn mt-4">Tentar de novo</button>
+    </div>
+    <div x-show="!rk.loading && !rk.itens.length && !rk.erro" class="p-12 text-center text-slate-400">
       <template x-if="rk.f.ordem === 'xp' && metodo !== 'site'">
         <div>Nenhum premiado <b>pontua</b> com esses filtros no método <b x-text="metodoAtual?.nome"></b>.
           <div class="mt-1 text-xs text-slate-500">A tabela do IMPA Tech só cobre OBMEP, OBM e OBI (além de OBFEP e OBQ). Competições internacionais como IMO e Ibero não pontuam nela.</div>
@@ -742,6 +762,7 @@
                   <div><span class="text-slate-500">ouro</span> <b x-text="fmt(mapEstado.ouro)"></b> <span class="dot ouro"></span></div>
                   <div><span class="text-slate-500">prata</span> <b x-text="fmt(mapEstado.prata)"></b> <span class="dot prata"></span></div>
                   <div><span class="text-slate-500">bronze</span> <b x-text="fmt(mapEstado.bronze)"></b> <span class="dot bronze"></span></div>
+                  <div><span class="text-slate-500">menção</span> <b x-text="fmt(mapEstado.mencao)"></b> <span class="dot mencao"></span></div>
                 </div>
               </div>
               <a :href="rankLink('alunos', { uf: mapEstado.id })" class="btn mt-3 w-full justify-center">Ver ranking do estado<i x-icon="'arrow-right'" class="h-4 w-4"></i></a>
@@ -790,9 +811,9 @@
       </div>
       <!-- hero -->
       <div class="glass card relative overflow-hidden p-6 sm:p-8">
-        <div class="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full blur-3xl" :style="`background:${aluno.tier.cor}22`"></div>
+        <div class="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full blur-3xl" :style="`background:${aluno.tier?.cor}22`"></div>
         <div class="relative flex flex-col gap-6 md:flex-row md:items-center">
-          <div class="ring-progress self-start" :style="`--p:${aluno.tier.progresso};--tc:${aluno.tier.cor}`">
+          <div class="ring-progress self-start" :style="`--p:${aluno.tier.progresso};--tc:${aluno.tier?.cor}`">
             <div class="avatar h-28 w-28 text-4xl" :style="tierStyle(aluno.tier)" x-text="initials(aluno.nome)"></div>
           </div>
           <div class="min-w-0 flex-1">
@@ -812,7 +833,7 @@
                 <span class="font-semibold text-gold-300"><span class="tabular" x-text="fmt(aluno.xp)"></span> pontos</span>
                 <span class="text-slate-500" x-text="aluno.tier.proximo ? `faltam ${fmt(aluno.tier.falta)} para ${aluno.tier.proximo}` : 'nível máximo alcançado 🔥'"></span>
               </div>
-              <div class="bar !h-2.5"><span :style="`width:${aluno.tier.progresso*100}%; background:linear-gradient(90deg, ${aluno.tier.cor}, #fff8)`"></span></div>
+              <div class="bar !h-2.5"><span :style="`width:${aluno.tier.progresso*100}%; background:linear-gradient(90deg, ${aluno.tier?.cor}, #fff8)`"></span></div>
             </div>
           </div>
           <div class="grid grid-cols-3 gap-3 md:w-80 md:grid-cols-1">
@@ -901,7 +922,7 @@
                 <span class="tl-dot" style="top:.3rem; left:-1.45rem"></span>
                 <div class="font-display text-xl font-bold" x-text="y.ano"></div>
                 <div class="mt-2 space-y-2">
-                  <template x-for="r in y.itens" :key="r.fonte + r.nivel + r.medalha">
+                  <template x-for="r in y.itens" :key="r.id">
                     <div class="flex items-center gap-3 rounded-xl border hairline bg-white/[.03] px-3 py-2">
                       <span class="coin" :class="medalClass(r.medalha)">★</span>
                       <div class="min-w-0 flex-1">
@@ -967,8 +988,8 @@
         </div>
       </div>
 
-      <div class="mt-6 grid grid-cols-3 gap-4">
-        <template x-for="m in [['ouro','Ouro',''],['prata','Prata','prata'],['bronze','Bronze','bronze']]" :key="m[0]">
+      <div class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <template x-for="m in [['ouro','Ouro',''],['prata','Prata','prata'],['bronze','Bronze','bronze'],['mencao','Menção honrosa','mencao']]" :key="m[0]">
           <div class="glass card flex items-center gap-4 p-4">
             <span class="coin xl" :class="m[2]" x-text="fmt(cidade.medalhas[m[0]])"></span>
             <div class="hidden sm:block"><div class="font-display text-lg font-semibold" x-text="m[1]"></div><div class="text-xs text-slate-500">medalhas</div></div>
@@ -996,7 +1017,7 @@
               <li><a :href="escolaLink(e.id)" class="lb-row -mx-2 flex items-center gap-3 rounded-xl px-2 py-2">
                 <span class="rank-num tabular !w-8" :class="i<3 && 'rank-'+(i+1)" x-text="e.pos"></span>
                 <div class="min-w-0 flex-1"><div class="truncate font-medium" x-text="prettySchool(e.nome)"></div><div class="text-xs text-slate-500" x-text="[e.rede, fmt(e.alunos) + ' medalhistas'].filter(Boolean).join(' · ')"></div></div>
-                <span class="flex gap-1"><span class="coin !h-6 !w-6 !text-[10px]" :class="!e.ouro && 'zero'" x-text="e.ouro"></span><span class="coin prata !h-6 !w-6 !text-[10px]" :class="!e.prata && 'zero'" x-text="e.prata"></span><span class="coin bronze !h-6 !w-6 !text-[10px]" :class="!e.bronze && 'zero'" x-text="e.bronze"></span></span>
+                <span class="flex gap-1"><span class="coin !h-6 !w-6 !text-[10px]" :class="!e.ouro && 'zero'" x-text="e.ouro"></span><span class="coin prata !h-6 !w-6 !text-[10px]" :class="!e.prata && 'zero'" x-text="e.prata"></span><span class="coin bronze !h-6 !w-6 !text-[10px]" :class="!e.bronze && 'zero'" x-text="e.bronze"></span><span class="coin mencao !h-6 !w-6 !text-[10px]" :class="!e.mencao && 'zero'" title="Menções honrosas" x-text="e.mencao"></span></span>
                 <span class="tabular w-12 text-right text-sm font-semibold text-gold-300" x-text="fmt(e.xp)"></span>
               </a></li>
             </template>
@@ -1010,7 +1031,7 @@
               <li><a :href="alunoLink(a.id)" class="lb-row -mx-2 flex items-center gap-3 rounded-xl px-2 py-2">
                 <span class="rank-num tabular !w-8" :class="i<3 && 'rank-'+(i+1)" x-text="a.pos"></span>
                 <div class="min-w-0 flex-1"><div class="truncate font-medium" x-text="a.nome"></div><div class="truncate text-xs text-slate-500" x-text="a.escola ? prettySchool(a.escola) : ''"></div></div>
-                <span class="flex gap-1"><span class="coin !h-6 !w-6 !text-[10px]" :class="!a.ouro && 'zero'" x-text="a.ouro"></span><span class="coin prata !h-6 !w-6 !text-[10px]" :class="!a.prata && 'zero'" x-text="a.prata"></span><span class="coin bronze !h-6 !w-6 !text-[10px]" :class="!a.bronze && 'zero'" x-text="a.bronze"></span></span>
+                <span class="flex gap-1"><span class="coin !h-6 !w-6 !text-[10px]" :class="!a.ouro && 'zero'" x-text="a.ouro"></span><span class="coin prata !h-6 !w-6 !text-[10px]" :class="!a.prata && 'zero'" x-text="a.prata"></span><span class="coin bronze !h-6 !w-6 !text-[10px]" :class="!a.bronze && 'zero'" x-text="a.bronze"></span><span class="coin mencao !h-6 !w-6 !text-[10px]" :class="!a.mencao && 'zero'" title="Menções honrosas" x-text="a.mencao"></span></span>
                 <span class="tabular w-12 text-right text-sm font-semibold text-gold-300" x-text="fmt(a.xp)"></span>
               </a></li>
             </template>
@@ -1045,10 +1066,10 @@
   </div>
       </div>
       <div class="glass card relative overflow-hidden p-6 sm:p-8">
-        <div class="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full blur-3xl" :style="`background:${escola.tier.cor}22`"></div>
+        <div class="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full blur-3xl" :style="`background:${escola.tier?.cor}22`"></div>
         <div class="relative flex flex-col gap-6 md:flex-row md:items-center">
-          <div class="ring-progress self-start" :style="`--p:${escola.tier.progresso};--tc:${escola.tier.cor}`">
-            <div class="grid h-28 w-28 place-items-center rounded-full bg-ink-800"><i x-icon="'school'" class="h-12 w-12" :style="`color:${escola.tier.cor}`"></i></div>
+          <div class="ring-progress self-start" :style="`--p:${escola.tier.progresso};--tc:${escola.tier?.cor}`">
+            <div class="grid h-28 w-28 place-items-center rounded-full bg-ink-800"><i x-icon="'school'" class="h-12 w-12" :style="`color:${escola.tier?.cor}`"></i></div>
           </div>
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-2">
@@ -1057,13 +1078,13 @@
             </div>
             <h1 class="font-display mt-2 text-3xl font-bold sm:text-4xl" x-text="prettySchool(escola.nome)"></h1>
             <div class="mt-1 text-sm text-slate-400"><i x-icon="'map-pin'" class="mr-1 inline h-3.5 w-3.5"></i><template x-if="escola.municipio"><span><a :href="cidadeLink(escola.municipio, escola.uf)" class="hover:text-gold-300 hover:underline" x-text="prettySchool(escola.municipio)" title="Ver todas as medalhas da cidade"></a> · </span></template><span x-text="UF_NOMES[escola.uf]"></span></div>
-            <div x-show="escola.variantes.length" class="mt-1 text-xs text-slate-500">também escrita como: <span x-text="escola.variantes.map(prettySchool).join('; ')"></span></div>
+            <div x-show="variantesDaEscola.length" class="mt-1 text-xs text-slate-400">também escrita como: <span x-text="variantesDaEscola.join('; ')"></span></div>
             <div class="mt-5 max-w-xl">
               <div class="mb-1.5 flex justify-between text-xs">
                 <span class="font-semibold text-gold-300"><span class="tabular" x-text="fmt(escola.xp)"></span> pontos <span class="font-normal text-slate-500" x-text="`· ${metodoAtual?.nome || ''}`"></span></span>
                 <span class="text-slate-500" x-text="escola.tier.proximo ? `faltam ${fmt(escola.tier.falta)} para ${escola.tier.proximo}` : 'nível máximo alcançado 🔥'"></span>
               </div>
-              <div class="bar !h-2.5"><span :style="`width:${escola.tier.progresso*100}%; background:linear-gradient(90deg, ${escola.tier.cor}, #fff8)`"></span></div>
+              <div class="bar !h-2.5"><span :style="`width:${escola.tier.progresso*100}%; background:linear-gradient(90deg, ${escola.tier?.cor}, #fff8)`"></span></div>
             </div>
           </div>
           <div class="grid grid-cols-3 gap-3 md:w-80 md:grid-cols-1">
@@ -1086,8 +1107,8 @@
         </div>
       </div>
 
-      <div class="mt-6 grid grid-cols-3 gap-4">
-        <template x-for="m in [['ouro','Ouro',''],['prata','Prata','prata'],['bronze','Bronze','bronze']]" :key="m[0]">
+      <div class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <template x-for="m in [['ouro','Ouro',''],['prata','Prata','prata'],['bronze','Bronze','bronze'],['mencao','Menção honrosa','mencao']]" :key="m[0]">
           <div class="glass card flex items-center gap-4 p-4">
             <span class="coin xl" :class="m[2]" x-text="fmt(escola.medalhas[m[0]])"></span>
             <div class="hidden sm:block"><div class="font-display text-lg font-semibold" x-text="m[1]"></div><div class="text-xs text-slate-500">medalhas</div></div>
@@ -1128,7 +1149,7 @@
               <li><a :href="alunoLink(a.id)" class="lb-row -mx-2 flex items-center gap-3 rounded-xl px-2 py-2">
                 <span class="rank-num tabular !w-8" :class="i<3 && 'rank-'+(i+1)" x-text="i+1"></span>
                 <div class="min-w-0 flex-1"><div class="truncate font-medium" x-text="a.nome"></div><div class="text-xs text-slate-500" x-text="a.anos.join(', ')"></div></div>
-                <span class="flex gap-1"><span class="coin !h-6 !w-6 !text-[10px]" :class="!a.ouro && 'zero'" x-text="a.ouro"></span><span class="coin prata !h-6 !w-6 !text-[10px]" :class="!a.prata && 'zero'" x-text="a.prata"></span><span class="coin bronze !h-6 !w-6 !text-[10px]" :class="!a.bronze && 'zero'" x-text="a.bronze"></span></span>
+                <span class="flex gap-1"><span class="coin !h-6 !w-6 !text-[10px]" :class="!a.ouro && 'zero'" x-text="a.ouro"></span><span class="coin prata !h-6 !w-6 !text-[10px]" :class="!a.prata && 'zero'" x-text="a.prata"></span><span class="coin bronze !h-6 !w-6 !text-[10px]" :class="!a.bronze && 'zero'" x-text="a.bronze"></span><span class="coin mencao !h-6 !w-6 !text-[10px]" :class="!a.mencao && 'zero'" title="Menções honrosas" x-text="a.mencao"></span></span>
                 <span class="tabular w-12 text-right text-sm font-semibold text-gold-300" x-text="a.xp"></span>
               </a></li>
             </template>
@@ -1353,6 +1374,11 @@
     Acesso livre, sem cadastro e sem chave, a todas as <b class="text-white" x-text="ov ? fmt(ov.totais.total) : '…'"></b> premiações da base.
     Consulte um aluno ou uma escola pela API, ou baixe os dados inteiros ou filtrados em CSV e JSON.
     As respostas são JSON em UTF-8, e a API pode ser chamada de qualquer site (CORS liberado).
+  </p>
+  <p id="uso-dos-dados" class="mt-3 max-w-3xl text-sm text-slate-400">
+    <b class="text-slate-200">Uso dos dados.</b> As premiações vêm das listas oficiais públicas de cada olimpíada, e cada
+    registro traz o link da sua fonte. Você pode baixá-las e usá-las, citando o Medalhas e a lista oficial de cada
+    premiação. Para correção ou remoção de dados, veja <a class="link" href="/sobre#contato">contato e correções</a>.
   </p>
   <div class="mt-4 flex flex-wrap items-center gap-2 text-sm">
     <span class="text-slate-500">Endereço base</span>
@@ -1616,7 +1642,7 @@
 </div>
 
 <!-- aviso flutuante -->
-<div x-show="aviso" x-cloak x-transition.opacity.duration.200ms class="fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
+<div x-show="aviso" x-cloak x-transition.opacity.duration.200ms role="status" aria-live="polite" class="fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
   <div class="glass card flex max-w-xl items-start gap-3 !rounded-2xl border-emerald-400/30 bg-ink-800/95 px-4 py-3 text-sm shadow-2xl shadow-black/60">
     <i x-icon="'info'" class="mt-0.5 h-4 w-4 flex-none text-emerald-300"></i>
     <span class="flex-1 text-slate-200" x-text="aviso?.texto"></span>

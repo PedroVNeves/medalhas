@@ -7,4 +7,12 @@ Allow: /api/v1$
 Allow: /api/v1/openapi.json
 Disallow: /api/
 
+# Robôs de ferramentas comerciais de SEO: não trazem visitantes e gastam a cota de transferência do site
+User-agent: AhrefsBot
+User-agent: SemrushBot
+User-agent: MJ12bot
+User-agent: DotBot
+User-agent: BLEXBot
+Disallow: /
+
 Sitemap: https://medalhas.online/sitemap.xml
