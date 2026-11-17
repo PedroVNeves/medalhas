@@ -24,11 +24,14 @@ NIVEIS = {
 
 
 def edicoes() -> list[tuple[int, str]]:
+    """(ano, página da edição) de cada OBI listada em /passadas/, em ordem de ano."""
     pagina = baixar(f"{BASE}/passadas/") or ""
     return sorted({(int(a), f"{BASE}/passadas/OBI{a}/") for a in re.findall(r'href="/passadas/OBI(\d{4})/"', pagina)})
 
 
 def nivel_da_pagina(pagina: str, codigo: str) -> str:
+    """Nome do nível de um quadro: pelo código da página (NIVEIS), senão pelo título "Modalidade …",
+    senão o próprio código em maiúsculas."""
     if codigo.lower() in NIVEIS:
         return NIVEIS[codigo.lower()]
     m = re.search(r"<h2[^>]*>(.*?)</h2>", pagina, re.S | re.I)
@@ -37,6 +40,8 @@ def nivel_da_pagina(pagina: str, codigo: str) -> str:
 
 
 def ler_quadro(pagina: str) -> list[dict]:
+    """Medalhistas de um quadro de mérito: as colunas do cabeçalho (nome, escola, cidade, estado, pontos)
+    mais a medalha, tirada da imagem da primeira célula ou do texto "HM". Linhas sem medalha ficam de fora."""
     linhas, colunas = [], None
     for trecho in re.findall(r"<tr\b[^>]*>(.*?)</tr>", pagina, re.S | re.I):
         brutas = re.findall(r"<t[dh]\b[^>]*>(.*?)</t[dh]>", trecho, re.S | re.I)
@@ -62,6 +67,8 @@ def ler_quadro(pagina: str) -> list[dict]:
 
 
 def coletar(log=print) -> list[Premiacao]:
+    """Premiações de todas as edições e modalidades. "HM" vira o prêmio "Honra ao Mérito" (medalha Menção
+    Honrosa); a UF só é aceita se tiver duas letras."""
     premiacoes: list[Premiacao] = []
     for ano, url in edicoes():
         indice = baixar(url) or ""

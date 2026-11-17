@@ -118,6 +118,8 @@ def _pdfs_do_ano(ano: int) -> list[tuple[str, str]]:
 
 
 def coletar(log=print) -> list[Premiacao]:
+    """Premiações das modalidades A e B de cada ano desde 2025. Demais participantes e linhas antes do
+    primeiro rótulo de faixa não entram."""
     premiacoes: list[Premiacao] = []
     for ano in range(PRIMEIRO_ANO, time.localtime().tm_year + 1):
         for modalidade, url in _pdfs_do_ano(ano):

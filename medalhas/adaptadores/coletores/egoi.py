@@ -14,6 +14,10 @@ CORES = {"#fee101": OURO, "#d7d7d7": PRATA, "#d28140": BRONZE}
 
 
 def ler_resultados(pagina: str) -> list[dict]:
+    """(ano, nome, medalha, pontos) de cada medalhista da página do Brasil; quem ficou sem medalha fica de fora.
+
+    O ano só aparece na primeira linha de cada edição (rowspan) e vale para as seguintes. A nota total é a
+    penúltima coluna (a última é a colocação)."""
     linhas, ano = [], None
     for trecho in re.findall(r"<tr\b[^>]*>(.*?)</tr>", pagina, re.S | re.I):
         brutas = re.findall(r"<td\b([^>]*)>(.*?)</td>", trecho, re.S | re.I)
@@ -33,6 +37,7 @@ def ler_resultados(pagina: str) -> list[dict]:
 
 
 def coletar(log=print) -> list[Premiacao]:
+    """Medalhas do Brasil em todas as edições da EGOI. Sem a página, devolve lista vazia."""
     pagina = baixar(URL) or ""
     premiacoes: list[Premiacao] = [{
         "competicao": "EGOI", "ano": r["ano"], "nivel": None, "nome": r["nome"], "escola": None, "rede": None,

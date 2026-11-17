@@ -60,6 +60,10 @@ def ler_relatorio(pagina: str) -> tuple[int | None, list[dict]]:
 
 
 def coletar(log=print) -> list[Premiacao]:
+    """Premiações de todas as edições: um relatório por medalha (ouro, prata, bronze) e rede (pública, privada).
+
+    Relatórios que não existem ou vêm sem tabela são pulados. O ano vem do título do relatório ou, sem ele,
+    do nome da pasta; a esfera (E, M, F, P) vira o nome por extenso."""
     premiacoes: list[Premiacao] = []
     for pasta in pastas_das_edicoes():
         for medalha in MEDALHAS:

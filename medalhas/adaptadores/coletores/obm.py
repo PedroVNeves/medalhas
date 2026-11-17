@@ -24,6 +24,7 @@ _NIVEIS = [
 
 
 def paginas_dos_anos() -> list[str]:
+    """Endereços das páginas premiados-obm-AAAA linkadas no índice da OBM, sem repetição."""
     pagina = baixar(INDICE) or ""
     return sorted(set(re.findall(r"https://www\.obm\.org\.br/premiados-obm-\d{4}/", pagina)))
 
@@ -63,6 +64,10 @@ def separar_cidade(valor: str | None) -> tuple[str | None, str | None]:
 
 
 def ler_pagina(pagina: str) -> tuple[int | None, list[dict]]:
+    """(ano do título ou None, linhas) de uma página de premiados.
+
+    Cada tabela recebe o nível citado no texto entre ela e a tabela anterior. As colunas vêm do cabeçalho
+    (COLUNAS); tabela sem cabeçalho é lida como Nome | Prêmio | Cidade."""
     corpo = corpo_do_artigo(pagina)
     m = re.search(r"Premiados\s*(?:&#8211;|–|-)?\s*OBM\s*(?:&#8211;|–|-)?\s*(\d{4})", pagina)
     ano = int(m.group(1)) if m else None
@@ -91,6 +96,8 @@ def ler_pagina(pagina: str) -> tuple[int | None, list[dict]]:
 
 
 def coletar(log=print) -> list[Premiacao]:
+    """Premiações de todos os anos. Sem ano no título, vale o do endereço; o texto original do prêmio fica
+    em "premio" e a categoria (Ouro, Prata…) em "medalha"."""
     premiacoes: list[Premiacao] = []
     for url in paginas_dos_anos():
         pagina = baixar(url)

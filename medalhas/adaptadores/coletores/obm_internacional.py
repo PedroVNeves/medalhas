@@ -23,11 +23,16 @@ _TERMINA_EM_UF = r"[–-]\s*[A-Z]{2}\.?$"
 
 
 def _ano(t: str) -> int | None:
+    """Ano da edição no título antes da tabela: o último "(AAAA)", senão o último ano solto; None se não há."""
     anos = re.findall(r"\((\d{4})\)", t) or re.findall(r"\b(19[5-9]\d|20[0-4]\d)\b", t)
     return int(anos[-1]) if anos else None
 
 
 def ler_pagina(pagina: str, nivel_fixo: str | None) -> list[dict]:
+    """Linhas de todas as tabelas da página, cada uma com o ano e o nível da sua edição.
+
+    O nível é nivel_fixo (competições universitárias) ou o citado logo antes da tabela. Linhas sem ano
+    conhecido ficam de fora."""
     corpo = corpo_do_artigo(pagina)
     linhas, fim_anterior, ano = [], 0, None
     for tabela in re.finditer(r"<table\b.*?</table>", corpo, re.S | re.I):
@@ -59,6 +64,8 @@ def ler_pagina(pagina: str, nivel_fixo: str | None) -> list[dict]:
 
 
 def coletar(sigla: str, log=print) -> list[Premiacao]:
+    """Premiações do Brasil na competição `sigla` (uma de SIGLAS), lidas da página `site` dela no catálogo.
+    Sem a página, registra no log e devolve lista vazia."""
     url = CATALOGO[sigla].site
     pagina = baixar(url)
     if not pagina:

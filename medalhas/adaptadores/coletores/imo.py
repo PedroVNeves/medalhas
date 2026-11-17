@@ -12,6 +12,7 @@ PRIMEIRA_PARTICIPACAO = 1979
 
 
 def ler_resultados(pagina: str) -> list[dict]:
+    """(nome, prêmio em código G/S/B/HM ou vazio, pontos) de cada integrante da equipe na página do ano."""
     linhas = []
     for trecho in re.findall(r"<tr\b[^>]*>(.*?)</tr>", pagina, re.S | re.I):
         celulas = [texto(c) for c in re.findall(r"<t[dh]\b[^>]*>(.*?)</t[dh]>", trecho, re.S | re.I)]
@@ -23,6 +24,10 @@ def ler_resultados(pagina: str) -> list[dict]:
 
 
 def coletar(log=print) -> list[Premiacao]:
+    """Premiações do Brasil na IMO, ano a ano desde 1979 até o ano corrente.
+
+    Anos sem página ou sem tabela de participantes (o Brasil não foi, ou a edição ainda não aconteceu) são
+    pulados; quem só participou, sem prêmio, não entra."""
     premiacoes: list[Premiacao] = []
     for ano in range(PRIMEIRA_PARTICIPACAO, time.localtime().tm_year + 1):
         url = URL.format(ano=ano)

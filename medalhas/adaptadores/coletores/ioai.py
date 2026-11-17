@@ -16,6 +16,10 @@ PREMIOS = {"gold": OURO, "silver": PRATA, "bronze": BRONZE, "honourable mention"
 
 
 def ler_resultados(pagina: str) -> list[dict]:
+    """(nome, medalha, pontos) dos brasileiros premiados numa página de resultados.
+
+    As colunas são achadas pelo cabeçalho (Name, Team ou Country or Region, Award ou Medal, Total), porque
+    a ordem e os nomes mudam entre edições; a coluna de pontos pode não existir."""
     linhas, colunas = [], None
     for trecho in re.findall(r"<tr\b[^>]*>(.*?)</tr>", pagina, re.S | re.I):
         celulas = [texto(c) for c in re.findall(r"<t[dh]\b[^>]*>(.*?)</t[dh]>", trecho, re.S | re.I)]
@@ -50,6 +54,7 @@ def edicoes() -> dict[int, str]:
 
 
 def coletar(log=print) -> list[Premiacao]:
+    """Premiações do Brasil em todas as edições que o menu do site lista. Pontos com vírgula viram ponto."""
     premiacoes: list[Premiacao] = []
     for ano, url in edicoes().items():
         for r in ler_resultados(baixar(url) or ""):

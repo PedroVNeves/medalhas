@@ -44,6 +44,11 @@ def _rede(texto: str | None) -> str | None:
 
 
 def ler_pdf(paginas_do_pdf) -> list[dict]:
+    """(nome, escola, cidade, nível, faixa, rede) de cada premiado do PDF, na ordem do arquivo.
+
+    A faixa de um título vale para as linhas seguintes até o próximo título; uma coluna Premiação na própria
+    linha tem prioridade. Linhas sem nível, sem faixa ou com nome de uma palavra só ficam de fora, assim como
+    as de nome e escola juntos quando não se acha onde a escola começa."""
     registros, faixa, tem_cidade = [], None, False
     for pagina in paginas_do_pdf:
         for _, linha in linhas(pagina):
@@ -79,6 +84,10 @@ def ler_pdf(paginas_do_pdf) -> list[dict]:
 
 
 def coletar(log=print) -> list[Premiacao]:
+    """Premiações de todas as edições desde 2018: cada PDF linkado na página de premiados do ano.
+
+    A UF só é preenchida (MG) quando o PDF traz a cidade; nos outros anos fica para dominio.identidade.
+    O PDF escaneado de 2023 não tem texto e não rende ninguém."""
     premiacoes: list[Premiacao] = []
     for ano in range(PRIMEIRO_ANO, time.localtime().tm_year + 1):
         pagina = baixar(f"{SITE}/noticias/premiados{ano}/") or ""

@@ -58,6 +58,7 @@ def uf_da_instituicao(instituicao: str) -> str | None:
 
 
 def _premio(texto: str) -> str | None:
+    """'Medalha de OURO', 'Prata', 'Menção Honrosa' -> faixa; None se o texto não é uma faixa."""
     t = normalizar(texto)
     t = re.sub(r"^MEDALHA DE ", "", t)
     return _PREMIOS.get(t)
@@ -106,6 +107,8 @@ def _pdfs_da_edicao(ano: int) -> list[tuple[str, str | None]]:
 
 
 def coletar(log=print) -> list[Premiacao]:
+    """Premiações de todas as edições desde 2018. Todos os alunos são de rede pública federal; a escola é a
+    instituição e campus, e a UF sai dela (uf_da_instituicao)."""
     premiacoes: list[Premiacao] = []
     for ano in range(PRIMEIRO_ANO, time.localtime().tm_year + 1):
         for url, premio in _pdfs_da_edicao(ano):
