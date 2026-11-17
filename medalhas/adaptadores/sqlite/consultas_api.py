@@ -97,7 +97,7 @@ def buscar_escolas(con: Conexao, criterios: Criterios, coluna: str, offset: int,
     sql_where, args = where_de(criterios)
     grupos = con.execute(
         f"""SELECT escola_chave, SUM({coluna}) AS pts, COUNT(*) AS n FROM medalhas
-            WHERE {sql_where} AND escola_chave IS NOT NULL GROUP BY escola_chave || ''
+            WHERE {sql_where} AND escola_chave != '' GROUP BY escola_chave || ''
             ORDER BY pts DESC, n DESC, escola_chave""", args).fetchall()
     ids = [g["escola_chave"] for g in grupos[offset:offset + limite]]
     resumos = _resumos(con, "escolas", ids)

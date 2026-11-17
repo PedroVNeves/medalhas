@@ -17,6 +17,8 @@ from medalhas.adaptadores.http import imagens
 from medalhas.adaptadores.http.servidor import Servidor
 from medalhas.adaptadores.sqlite import LeituraSqlite, RepositorioSqlite
 from medalhas.aplicacao.gerar_base import gerar_base
+from medalhas.aplicacao.portas import Criterios
+from medalhas.dominio.escolas import palavras_da_busca
 
 
 def p(nome, uf, competicao, ano, medalha, nivel="3", escola=None, municipio=None) -> dict:
@@ -43,6 +45,27 @@ class ColetorFalso:
         if self._falhar:
             raise ConnectionError("fora do ar")
         return [dict(x) for x in self._premiacoes]
+
+
+class TestSemEstado(unittest.TestCase):
+    """Premiações de listas sem UF (Itabirana 2020+): sem posição estadual e sem página de escola."""
+
+    def test_sem_posicao_estadual_e_busca_de_escolas_sem_grupo_vazio(self):
+        com_uf = p("ANA COSTA", "SP", "OBMEP", 2020, "Ouro", escola="Colégio Kennedy", municipio="São Paulo")
+        sem_uf = {**p("ZEBEDEU QUINTANILHA", None, "OITM", 2021, "Ouro", escola="Colégio Kennedy"),
+                  "competicao": "OITM"}
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / "medalhas.db"
+            gerar_base([ColetorFalso("OBMEP", [com_uf]), ColetorFalso("OITM", [sem_uf])],
+                       RepositorioSqlite(caminho), log=lambda _: None)
+            with LeituraSqlite(caminho).sessao() as s:
+                perfil = s.perfil_aluno("ZEBEDEU QUINTANILHA|", {"metodo": "site"})
+                self.assertIsNotNone(perfil["rank"])
+                self.assertIsNone(perfil["rank_uf"])   # "sem estado" não é um estado
+                self.assertEqual(perfil["rank_uf_total"], 0)
+                total, escolas = s.buscar_escolas(Criterios({}, (("escola", palavras_da_busca("kennedy")),)),
+                                                  "p_site", 0, 10)
+                self.assertEqual((total, len(escolas)), (1, 1))   # a premiação sem UF não vira escola
 
 
 class TestPontaAPonta(unittest.TestCase):

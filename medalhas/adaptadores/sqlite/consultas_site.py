@@ -251,7 +251,9 @@ def _pontuacoes(resumo) -> dict:
 def _participantes(con: Conexao, tabela: str, coluna: str, uf: str | None) -> tuple[int, int]:
     """Quantos pontuam no método (no Brasil e na UF): o "de N" da posição."""
     total = con.execute(f"SELECT COUNT(*) FROM {tabela} WHERE {coluna} > 0").fetchone()[0]
-    total_uf = con.execute(f"SELECT COUNT(*) FROM {tabela} WHERE uf IS ? AND {coluna} > 0", (uf,)).fetchone()[0]
+    if not uf:
+        return total, 0   # sem estado não há posição estadual
+    total_uf = con.execute(f"SELECT COUNT(*) FROM {tabela} WHERE uf = ? AND {coluna} > 0", (uf,)).fetchone()[0]
     return total, total_uf
 
 

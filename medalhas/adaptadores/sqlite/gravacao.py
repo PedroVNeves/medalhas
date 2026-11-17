@@ -34,8 +34,7 @@ class RepositorioSqlite:
             con.commit()
         finally:
             con.close()
-        self.caminho.unlink(missing_ok=True)
-        temporario.rename(self.caminho)
+        temporario.replace(self.caminho)   # troca atômica: nunca há um instante sem base
 
 
 def _zerado(base: dict) -> dict:
@@ -88,11 +87,14 @@ def gravar_resumos(con: sqlite3.Connection) -> None:
 
     for grupo in (alunos, escolas):
         itens = list(grupo.values())
-        por_uf: dict[str | None, list[dict]] = {}
+        por_uf: dict[str, list[dict]] = {}
         for item in itens:
-            por_uf.setdefault(item["uf"], []).append(item)
+            if item["uf"]:   # sem estado (listas que não informam a UF) não há posição estadual
+                por_uf.setdefault(item["uf"], []).append(item)
         for c in PONTOS:
             preencher_posicoes(itens, c, f"{c}_pos")
+            for item in itens:
+                item[f"{c}_pos_uf"] = None
             for da_uf in por_uf.values():
                 preencher_posicoes(da_uf, c, f"{c}_pos_uf")
 
