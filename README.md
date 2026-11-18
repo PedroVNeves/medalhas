@@ -158,16 +158,19 @@ O aluno é identificado por **nome (sem acento) + estado**: o id `MARIA SOUZA LI
   tem outra leitura entre os nomes da mesma cidade ("B" pode ser Batista ou Barbosa); e, se a diferença é só de
   partícula ou de uma letra, o nome é pouco comum. Erro no prenome (Natan/Natani: quase sempre irmãos) e
   palavras omitidas ficam de fora de propósito. Os perfis se juntam com restrições: dois grupos que não cabem
-  numa pessoa nunca viram um por tabela. Fica o id do nome mais completo, e o endereço dos outros redireciona
-  para ele. A regra foi escolhida comparando, na base inteira, iniciais com e sem prova de contexto, distâncias
+  numa pessoa nunca viram um por tabela. Fica o id do nome mais completo; entre nomes igualmente completos, a
+  grafia que a pessoa claramente mais recebeu (3 premiações ou mais e o dobro das outras: Trevizan, não
+  Trevisan) ou, sem maioria clara, a mais comum na base. O endereço dos outros redireciona para ele, e o
+  endereço de qualquer perfil que deixe de existir numa nova geração da base leva ao perfil que ficou com as
+  premiações dele. A regra foi escolhida comparando, na base inteira, iniciais com e sem prova de contexto, distâncias
   de texto (Levenshtein, Jaro-Winkler, cosseno de n-gramas), embeddings de modelos de linguagem e um modelo
   probabilístico (Fellegi-Sunter): só o contexto (escola, cidade, anos) dá precisão, e a regra adotada erra em
   cerca de 0,06% das junções, contra 6% a 84% dos métodos só de texto. Detalhes e números em
   [`docs/identidade-regras.md`](docs/identidade-regras.md).
 - O estado do perfil é o da premiação **mais recente**; se a pessoa ganha uma medalha nova em outro estado,
   o endereço do perfil muda.
-- O nome exibido é a grafia do id (num perfil que juntou grafias, a mais completa) e, entre as premiações com
-  essa grafia, prefere a da OBM, que publica com acentos e maiúsculas certas.
+- O nome exibido é a grafia do id e, entre as premiações com essa grafia, prefere a da OBM, que publica com
+  acentos e maiúsculas certas.
 
 ### Escolas
 
@@ -286,7 +289,9 @@ critério da lista do ranking (pontos, depois ouros, pratas e bronzes; empate em
 
 ## O site
 
-Página única (Alpine.js, ECharts, Lucide e canvas-confetti via CDN) servida pelo `server.py`.
+Página única (Alpine.js, ECharts, Lucide e canvas-confetti via CDN) servida pelo `server.py`, com tema claro
+(papel) e escuro (tinta): segue o sistema e o botão no topo troca e guarda a escolha. Fontes Newsreader
+(títulos) e Public Sans (texto).
 
 - **Busca** por pessoa, escola (com siglas) ou tudo. Enquanto você digita, aparecem os alunos e escolas mais
   premiados que casam com o texto (`/api/sugestoes`); a página `/busca` mostra todas as premiações, com
@@ -556,31 +561,29 @@ python -m unittest discover -s tests
 
 ## Como contribuir
 
-**Correção de dados** (nome errado, perfis duplicados, escola que mudou de nome, pedido de remoção ou para
-entrar no filtro de meninas): escreva para **pedro.vasconcelosneves@gmail.com** ou abra uma *issue* com o
-link do perfil no site. Pedidos de remoção são atendidos.
+Contribuições são bem-vindas: correções de dados, olimpíadas que faltam, melhorias nas regras e no site. O guia
+completo está em [`CONTRIBUTING.md`](CONTRIBUTING.md); o resumo:
 
-**Código** (pull requests são bem-vindos):
+- **Corrigir um dado** (perfil dividido ou juntado por engano, nome errado, escola que mudou de nome, entrar
+  no filtro de meninas, pedido de remoção): abra uma *issue* com o link do perfil no site ou escreva para
+  **pedro.vasconcelosneves@gmail.com**. Pedidos de remoção são sempre atendidos, por e-mail.
+- **Sugerir ou relatar um problema**: abra uma [*issue*](https://github.com/PedroVNeves/medalhas/issues) com a
+  página, o que você esperava e o que aconteceu.
+- **Incluir uma olimpíada**: ela precisa de lista oficial pública de premiados. Sem programar, abra uma *issue*
+  com o site e os links das listas; programando, cadastre-a no **fim** do catálogo
+  (`medalhas/dominio/olimpiadas.py`), escreva o coletor em `medalhas/adaptadores/coletores/`, teste a leitura
+  com um trecho real da lista e conte no pull request o que entrou na base.
+- **Melhorar uma regra** (quem é a mesma pessoa, qual é a mesma escola, pontuação): traga os casos que a regra
+  atual erra, testes dos que devem e dos que **não** podem mudar, e os números da base antes e depois. Juntar
+  duas pessoas diferentes é o erro mais grave; as regras atuais estão em
+  [`docs/identidade-regras.md`](docs/identidade-regras.md).
+- **Código e site**: *fork*, branch, testes passando (`python -m unittest discover -s tests`) e um pull request
+  explicando o porquê. Para desenvolver, a base sem as menções da OBMEP basta
+  (`python build_db.py --sem-mencoes-obmep`, ~1,5 min).
 
-1. Faça um *fork* e uma branch.
-2. Rode os testes (`python -m unittest discover -s tests`) e, se mexer em coleta, gere a base
-   (`python build_db.py`) e confira o que mudou.
-3. Abra o pull request explicando o porquê da mudança.
-
-Para **adicionar uma olimpíada**:
-1. cadastre-a no fim de `CATALOGO` (`dominio/olimpiadas.py`): nome, área, degrau da escala e, se o edital do
-   IMPA aceitar, `tabela_impa` e `niveis_impa`;
-2. escreva o coletor em `adaptadores/coletores/<sigla>.py`, com uma função `coletar(log)` que devolve
-   premiações (`dominio/premiacao.py`), e registre-o em `coletores/__init__.py` (um teste acusa se faltar);
-3. rode `python build_db.py`. Os filtros do site e da API são montados a partir dos dados.
-
-**Padrão de código:**
-- Python 3.10+, só biblioteca padrão no servidor. Nomes e comentários em português (o domínio é
-  brasileiro); mensagens de commit em inglês ([Conventional Commits](https://www.conventionalcommits.org)).
-- Linhas de até 120 caracteres; *type hints* nas funções públicas; docstring em todo módulo dizendo a
-  responsabilidade dele.
-- Comentários explicam o **porquê** (uma regra do edital, uma armadilha do site oficial), não o quê.
-- SQL sempre com parâmetros (`?`); nomes de coluna interpolados vêm só de listas fixas do código.
+**Padrão de código:** arquitetura hexagonal (o domínio não faz entrada e saída), nomes e comentários em
+português, mensagens de commit em inglês ([Conventional Commits](https://www.conventionalcommits.org)), linhas
+de até 120 caracteres, SQL sempre com parâmetros e nenhuma dependência nova no servidor sem conversa antes.
 
 ## Licença
 
