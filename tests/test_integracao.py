@@ -486,6 +486,25 @@ class TestRevisao(TestPontaAPonta):
 
 
 
+class TestGrafiasJuntadas(unittest.TestCase):
+    """Perfis de grafias diferentes juntados (identidade.juntar_grafias): o endereço antigo leva ao perfil que
+    ficou, e o nome exibido é a grafia do id, mesmo quando a premiação mais recente é a abreviada."""
+
+    def test_endereco_antigo_e_nome_exibido(self):
+        premiacoes = [p(nome, "AL", "OBMEP", ano, medalha, nivel, escola="EE Um", municipio="Maceió")
+                      for nome, ano, medalha, nivel in (("ZULEICA MARTA PRADO LINS", 2020, "Ouro", "1"),
+                                                        ("ZULEICA MARTA P LINS", 2021, "Prata", "2"))]
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / "medalhas.db"
+            gerar_base([ColetorFalso("OBMEP", premiacoes)], RepositorioSqlite(caminho), log=lambda _: None)
+            with LeituraSqlite(caminho).sessao() as s:
+                self.assertEqual(s.enderecos().resolver("aluno", "zuleica-marta-p-lins-al"),
+                                 ("ZULEICA MARTA PRADO LINS|AL", "zuleica-marta-prado-lins-al"))
+                resumo, lista = s.aluno("ZULEICA MARTA PRADO LINS|AL", Criterios())
+                self.assertIsNone(s.aluno("ZULEICA MARTA P LINS|AL", Criterios()))
+        self.assertEqual((resumo["nome"], resumo["total"], len(lista)), ("Zuleica Marta Prado Lins", 2, 2))
+
+
 class TestPerfisSoComMencao(unittest.TestCase):
     """Perfis só com menções da OBMEP existem e aparecem na busca, mas ficam fora do sitemap e com noindex."""
 
