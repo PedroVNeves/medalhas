@@ -256,6 +256,24 @@ class TestGrafiasDiferentes(unittest.TestCase):
               em("JOAO VINICIUS PRIMAKI PRADO", 2015, "CE ANTONIO", "RONCADOR", "PR")]
         self.assertEqual(juntar(ps), {"JOAO VINICIUS PIMAKI PRADO|PR": "JOAO VINICIUS PRIMAKI PRADO|PR"})
 
+    def test_perfil_fica_com_a_grafia_que_a_pessoa_mais_recebeu(self):
+        # caso real: 3 listas com Trevisan e 24 com Trevizan, em Canoas; Trevisan ser mais comum na base
+        # (outras pessoas) não pode decidir o nome dele
+        ps = [em("BERNARDO PERUZZO TREVISAN", 2013, None, "Canoas", "RS", "OBM", MENCAO, "1"),
+              em("BERNARDO PERUZZO TREVISAN", 2015, None, "Canoas", "RS", "OBM", "Ouro", "2"),
+              *[em("BERNARDO PERUZZO TREVIZAN", ano, None, "Canoas", "RS", olimpiada, "Ouro", nivel)
+                for olimpiada in ("OBM", "CONESUL") for ano, nivel in ((2014, "1"), (2016, "2"), (2017, "3"))],
+              *[em(f"Outro{i} Trevisan", 2010, f"Escola {i}", f"Cidade {i}", "RS") for i in range(5)]]
+        self.assertEqual(juntar(ps), {"BERNARDO PERUZZO TREVISAN|RS": "BERNARDO PERUZZO TREVIZAN|RS"})
+
+    def test_sem_maioria_clara_fica_a_grafia_usual(self):
+        # 2 listas com um erro (Pereria) contra 1 certa: pouco para decidir; fica a grafia usual na base
+        ps = [em("ADRIANO BORGES PERERIA FERREIRA", 2016, "EE Um", "Maceió", nivel="2"),
+              em("ADRIANO BORGES PERERIA FERREIRA", 2017, "EE Um", "Maceió"),
+              em("ADRIANO BORGES PEREIRA FERREIRA", 2018, "EE Um", "Maceió"),
+              *[em(f"Outro{i} Pereira", 2010, f"Escola {i}", f"Cidade {i}") for i in range(5)]]
+        self.assertEqual(juntar(ps), {"ADRIANO BORGES PERERIA FERREIRA|AL": "ADRIANO BORGES PEREIRA FERREIRA|AL"})
+
     def test_mesma_edicao_sao_duas_pessoas(self):
         for escola in ("EE Beta", "EE Alfa"):   # em escolas diferentes da cidade, ou gêmeos na mesma escola
             with self.subTest(escola=escola):

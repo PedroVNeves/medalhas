@@ -34,6 +34,7 @@ MAX_ANOS_SEM_PREMIO = 8             # intervalo sem premiação que, numa carrei
 MAX_ANOS_MESMO_NIVEL = {"1": 3, "2": 3, "3": 5}
 LIMITE_HOMONIMOS = 0.3              # nº esperado de pessoas com o nome, abaixo do qual o nome é "raro"
 LIMITE_HOMONIMOS_ALTO_NIVEL = 3.0   # mais tolerante quando há OBM/internacional em 2+ UFs
+MAIORIA_CLARA = (3, 2)             # a grafia da pessoa decide o nome: 3+ premiações e o dobro das outras
 
 
 # Grafias erradas nas listas oficiais que partem uma pessoa em dois perfis, corrigidas à mão a pedido
@@ -742,14 +743,24 @@ def _agrupar(arestas: list[tuple[_Perfil, _Perfil]]) -> list[list[_Perfil]]:
 
 
 def _quem_fica(grupo: list[_Perfil], frequencia: dict[str, int]) -> _Perfil:
-    """O perfil que dá o id ao grupo: o de nome mais completo (menos palavras de até 3 letras: iniciais e
-    abreviações); no empate, o de grafia mais usual (a palavra mais rara do nome é mais frequente na base:
-    Cavalcanti, não Cacalcanti), o de mais premiações além das menções da OBMEP, o de mais premiações, o mais
-    recente e, por fim, o id em ordem alfabética (o resultado não depende da ordem das listas)."""
-    return min(grupo, key=lambda p: (sum(len(w) <= 3 for w in p.palavras),
-                                     -min(frequencia.get(w, 0) for w in p.palavras),
-                                     -sum(not de_massa(r) for r in p.registros), -len(p.registros),
-                                     -max(r["ano"] for r in p.registros), p.ident))
+    """O perfil que dá o id ao grupo, entre os de nome mais completo (menos palavras de até 3 letras: iniciais e
+    abreviações).
+
+    Se uma grafia é claramente a da pessoa (MAIORIA_CLARA: 24 listas com Trevizan contra 3 com Trevisan), fica
+    ela, por mais comum que a outra seja na base. Senão (2 contra 1, 1 contra 1: pode ser só um erro repetido),
+    fica a grafia mais usual na base (a palavra mais rara do nome é a mais frequente: Cavalcanti, não
+    Cacalcanti), depois a de mais premiações além das menções da OBMEP, a de mais premiações, a mais recente e,
+    por fim, o id em ordem alfabética (o resultado não depende da ordem das listas)."""
+    menos_abreviado = min(sum(len(w) <= 3 for w in p.palavras) for p in grupo)
+    completos = [p for p in grupo if sum(len(w) <= 3 for w in p.palavras) == menos_abreviado]
+    maior = max(completos, key=lambda p: (len(p.registros), p.ident))
+    minimo, vezes = MAIORIA_CLARA
+    if len(maior.registros) >= minimo and all(len(maior.registros) >= vezes * len(p.registros)
+                                              for p in completos if p is not maior):
+        return maior
+    return min(completos, key=lambda p: (-min(frequencia.get(w, 0) for w in p.palavras),
+                                         -sum(not de_massa(r) for r in p.registros), -len(p.registros),
+                                         -max(r["ano"] for r in p.registros), p.ident))
 
 
 def juntar_grafias(premiacoes: list[Premiacao]) -> dict[str, str]:
