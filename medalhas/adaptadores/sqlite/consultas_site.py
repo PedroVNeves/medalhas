@@ -56,7 +56,7 @@ def busca(con: Conexao, params: dict) -> dict:
 
     sql_where = " AND ".join(where) or "1"
     por_escola = campo == "escola"
-    chave = "escola_chave" if por_escola else "aluno_id"
+    chave = "escola_chave" if por_escola else "aluno_n"   # o número do aluno segue a ordem alfabética do id
     # escola sem estado (lista sem UF) não tem página: fica de fora do agrupamento por escola
     com_grupo = sql_where + (" AND escola_chave != ''" if por_escola else "")
     total = con.execute(f"SELECT COUNT(*) FROM medalhas WHERE {sql_where}", args).fetchone()[0]
@@ -69,22 +69,29 @@ def busca(con: Conexao, params: dict) -> dict:
     if not grupos:
         return {**vazio, "total": total}
     total_grupos = grupos[0].pop("_grupos")
-    ids = [g["id"] for g in grupos]
+    chaves = [g["id"] for g in grupos]
     for g in grupos[1:]:
         del g["_grupos"]
 
     # nome e lugar: os da ficha (o mesmo nome do perfil), uma vez por cartão
-    ficha = ("SELECT id, nome, municipio, uf FROM escolas" if por_escola else "SELECT id, nome, uf FROM alunos")
-    fichas = {r["id"]: r for r in con.linhas(f"{ficha} WHERE id IN ({marcadores(len(ids))})", ids)}
+    ficha = ("SELECT id AS _chave, id, nome, municipio, uf FROM escolas WHERE id" if por_escola
+             else "SELECT n AS _chave, id, nome, uf FROM alunos WHERE n")
+    fichas = {r.pop("_chave"): r for r in con.linhas(f"{ficha} IN ({marcadores(len(chaves))})", chaves)}
     # as premiações mais recentes de cada um, só com as colunas que a linha do cartão mostra
-    colunas = "nome, aluno_id" if por_escola else "escola, escola_chave, municipio, uf"
+    colunas = "nome, aluno_n" if por_escola else "escola, escola_chave, municipio, uf"
     desempate = "nome_busca" if por_escola else "competicao"
     linhas = con.linhas(
         f"""SELECT * FROM (
                 SELECT {chave} AS _grupo, id, ano, competicao, medalha, premio, nivel, fonte, {colunas},
                        ROW_NUMBER() OVER (PARTITION BY {chave} ORDER BY ano DESC, {desempate}) AS _ordem
-                FROM medalhas WHERE {com_grupo} AND {chave} IN ({marcadores(len(ids))}))
-            WHERE _ordem <= ? ORDER BY _ordem""", [*args, *ids, PREMIACOES_NO_CARTAO])
+                FROM medalhas WHERE {com_grupo} AND {chave} IN ({marcadores(len(chaves))}))
+            WHERE _ordem <= ? ORDER BY _ordem""", [*args, *chaves, PREMIACOES_NO_CARTAO])
+    if por_escola and linhas:   # o link de cada aluno da linha usa o id dele
+        numeros = sorted({r["aluno_n"] for r in linhas})
+        ids = dict(con.execute(f"SELECT n, id FROM alunos WHERE n IN ({marcadores(len(numeros))})",
+                               numeros).fetchall())
+        for r in linhas:
+            r["aluno_id"] = ids[r.pop("aluno_n")]
     por_grupo: dict[str, list[dict]] = {}
     for r in linhas:
         grupo = r.pop("_grupo")
@@ -95,8 +102,9 @@ def busca(con: Conexao, params: dict) -> dict:
             del r["municipio"], r["uf"]   # com a escola, a cidade não aparece na linha
         por_grupo.setdefault(grupo, []).append({k: v for k, v in r.items() if v is not None})
     for g in grupos:
-        g.update({k: v for k, v in dict(fichas.get(g["id"], {})).items() if k != "id"})
-        g["premiacoes"] = por_grupo.get(g["id"], [])
+        chave_do_grupo = g["id"]
+        g.update(fichas.get(chave_do_grupo, {}))   # o id do aluno troca o número pelo id em texto
+        g["premiacoes"] = por_grupo.get(chave_do_grupo, [])
     return {"total": total, "total_grupos": total_grupos, "offset": offset, "limite": GRUPOS_POR_PAGINA_BUSCA,
             "grupos": grupos}
 
@@ -191,7 +199,8 @@ def perfil_aluno(con: Conexao, aluno_id: str, params: dict) -> dict:
     linhas = con.linhas(
         f"""SELECT id, ano, competicao, medalha, premio, nivel, escola, escola_chave, municipio, pontos, fonte,
                    {coluna} AS xp, p_impa3 > 0 AS impa
-            FROM medalhas WHERE aluno_id = ? ORDER BY ano DESC, competicao""", (aluno_id,))
+            FROM medalhas WHERE aluno_n = (SELECT n FROM alunos WHERE id = ?) ORDER BY ano DESC, competicao""",
+        (aluno_id,))
     if not linhas:
         return {"erro": "Aluno não encontrado"}
     resumo = con.execute("SELECT * FROM alunos WHERE id = ?", (aluno_id,)).fetchone()
@@ -249,7 +258,7 @@ def perfil_escola(con: Conexao, escola_id: str, params: dict) -> dict:
     total, total_uf = _participantes(con, "escolas", coluna, uf)
 
     onde = "escola_chave = ?"
-    totais = con.execute(f"""SELECT COUNT(*) AS total, COUNT(DISTINCT aluno_id) AS alunos, SUM(medalha='Ouro') AS ouro,
+    totais = con.execute(f"""SELECT COUNT(*) AS total, COUNT(DISTINCT aluno_n) AS alunos, SUM(medalha='Ouro') AS ouro,
                                     SUM(medalha='Prata') AS prata, SUM(medalha='Bronze') AS bronze,
                                     SUM(medalha='Menção Honrosa') AS mencao
                              FROM medalhas WHERE {onde}""", (escola_id,)).fetchone()
@@ -265,11 +274,11 @@ def perfil_escola(con: Conexao, escola_id: str, params: dict) -> dict:
         f"SELECT competicao, COUNT(*) AS n FROM medalhas WHERE {onde} GROUP BY competicao ORDER BY n DESC, competicao",
         (escola_id,))]
     destaques = [{**r, "anos": sorted(int(a) for a in r["anos"].split(","))} for r in con.linhas(
-        f"""SELECT m.aluno_id AS id, a.nome, SUM(m.{coluna}) AS xp, SUM(m.medalha='Ouro') AS ouro,
+        f"""SELECT a.id, a.nome, SUM(m.{coluna}) AS xp, SUM(m.medalha='Ouro') AS ouro,
                    SUM(m.medalha='Prata') AS prata, SUM(m.medalha='Bronze') AS bronze,
                    SUM(m.medalha='Menção Honrosa') AS mencao, GROUP_CONCAT(DISTINCT m.ano) AS anos
-            FROM medalhas m JOIN alunos a ON a.id = m.aluno_id WHERE m.{onde}
-            GROUP BY m.aluno_id ORDER BY xp DESC, a.nome LIMIT ?""", (escola_id, MAX_DESTAQUES_ESCOLA))]
+            FROM medalhas m JOIN alunos a ON a.n = m.aluno_n WHERE m.{onde}
+            GROUP BY m.aluno_n ORDER BY xp DESC, a.nome LIMIT ?""", (escola_id, MAX_DESTAQUES_ESCOLA))]
     grand_slam = con.execute(
         f"""SELECT 1 FROM medalhas WHERE {onde} AND medalha = 'Ouro' AND nivel IN ('1', '2', '3')
             GROUP BY ano HAVING COUNT(DISTINCT nivel) = 3 LIMIT 1""", (escola_id,)).fetchone() is not None

@@ -17,8 +17,9 @@ def _por_aluno(con: Conexao, sql_where: str, args: list, ids: list[str]) -> dict
     """Premiações de cada aluno da página (mais recentes primeiro)."""
     agrupado: dict[str, list] = {i: [] for i in ids}
     if ids:
-        for r in con.execute(f"SELECT {COLUNAS_PREMIACAO} FROM medalhas WHERE {sql_where} "
-                             f"AND aluno_id IN ({marcadores(len(ids))}) ORDER BY ano DESC, competicao", [*args, *ids]):
+        dos_alunos = f"aluno_n IN (SELECT n FROM alunos WHERE id IN ({marcadores(len(ids))}))"
+        for r in con.execute(f"SELECT {COLUNAS_PREMIACAO} FROM medalhas WHERE {sql_where} AND {dos_alunos} "
+                             "ORDER BY ano DESC, competicao", [*args, *ids]):
             agrupado[r["aluno_id"]].append(r)
     return agrupado
 
@@ -31,8 +32,14 @@ def _resumos(con: Conexao, tabela: str, ids: list[str], colunas: str = "*") -> d
     return {r["id"]: r for r in con.execute(sql, ids)}
 
 
+def _ids_dos_alunos(con: Conexao, numeros: list[int]) -> list[str]:
+    """Os ids dos alunos com estes números (premiacoes.aluno_n), na mesma ordem."""
+    ids = dict(con.execute(f"SELECT n, id FROM alunos WHERE n IN ({marcadores(len(numeros))})", numeros).fetchall())
+    return [ids[n] for n in numeros]
+
+
 def _pagina_de_grupos(con: Conexao, sql: str, args: list, sql_total: str, args_total: list, offset: int,
-                      limite: int) -> tuple[int, list[str]]:
+                      limite: int) -> tuple[int, list]:
     """(total de grupos, ids da página) de uma consulta agrupada que traz o id na primeira coluna e o total na
     coluna `grupos` (COUNT(*) OVER ()). Só a página sai do SQLite; uma página além do fim não traz linha
     nenhuma, e aí o total vem de sql_total."""
@@ -77,11 +84,13 @@ def buscar_alunos(con: Conexao, criterios: Criterios, nome: str, coluna: str, of
     """Alunos com premiações no recorte. Quem tem exatamente o nome buscado vem primeiro, depois os
     que mais pontuam no método."""
     sql_where, args = where_de(criterios)
-    grupos = f"FROM medalhas WHERE {sql_where} GROUP BY aluno_id || ''"
-    total, ids = _pagina_de_grupos(
-        con, f"""SELECT aluno_id, MAX(nome_busca = ?) AS exato, SUM({coluna}) AS pts, COUNT(*) OVER () AS grupos
-                 {grupos} ORDER BY exato DESC, pts DESC, aluno_id""", [normalizar(nome), *args],
+    # o número do aluno segue a ordem alfabética do id: desempatar por ele é desempatar pelo id
+    grupos = f"FROM medalhas WHERE {sql_where} GROUP BY aluno_n || ''"
+    total, numeros = _pagina_de_grupos(
+        con, f"""SELECT aluno_n, MAX(nome_busca = ?) AS exato, SUM({coluna}) AS pts, COUNT(*) OVER () AS grupos
+                 {grupos} ORDER BY exato DESC, pts DESC, aluno_n""", [normalizar(nome), *args],
         f"SELECT COUNT(*) FROM (SELECT 1 {grupos})", args, offset, limite)
+    ids = _ids_dos_alunos(con, numeros)
     premiacoes = _por_aluno(con, sql_where, args, ids)
     resumos = _resumos(con, "alunos", ids)
     return total, [(resumos[i], premiacoes[i]) for i in ids if i in resumos]
@@ -94,8 +103,8 @@ def aluno(con: Conexao, aluno_id: str, criterios: Criterios) -> tuple[sqlite3.Ro
     if not resumo:
         return None
     sql_where, args = where_de(criterios)
-    premiacoes = con.execute(f"SELECT {COLUNAS_PREMIACAO} FROM medalhas WHERE aluno_id = ? AND {sql_where} "
-                             "ORDER BY ano DESC, competicao", [aluno_id, *args]).fetchall()
+    premiacoes = con.execute(f"SELECT {COLUNAS_PREMIACAO} FROM medalhas WHERE aluno_n = ? AND {sql_where} "
+                             "ORDER BY ano DESC, competicao", [resumo["n"], *args]).fetchall()
     return resumo, premiacoes
 
 
@@ -133,10 +142,11 @@ def medalhistas(con: Conexao, escola_id: str, criterios: Criterios, ordem: str, 
     sql_where, args = where_de(Criterios({**criterios.filtros, "escola_chave": escola_id}, criterios.textos,
                                          criterios.aluno_id))
     ordenacao = _ORDEM_MEDALHISTAS.get(ordem, f"SUM({coluna}) DESC, MIN(nome_busca)")
-    grupos = f"FROM medalhas WHERE {sql_where} GROUP BY aluno_id"
-    total, ids = _pagina_de_grupos(
-        con, f"SELECT aluno_id, COUNT(*) OVER () AS grupos {grupos} ORDER BY {ordenacao}, aluno_id", args,
+    grupos = f"FROM medalhas WHERE {sql_where} GROUP BY aluno_n"
+    total, numeros = _pagina_de_grupos(
+        con, f"SELECT aluno_n, COUNT(*) OVER () AS grupos {grupos} ORDER BY {ordenacao}, aluno_n", args,
         f"SELECT COUNT(*) FROM (SELECT 1 {grupos})", args, offset, limite)
+    ids = _ids_dos_alunos(con, numeros)
     premiacoes = _por_aluno(con, sql_where, args, ids)
     alunos = _resumos(con, "alunos", ids, "id, nome, uf")
     return resumo, total, [(i, alunos.get(i), premiacoes[i]) for i in ids]

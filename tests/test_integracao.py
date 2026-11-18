@@ -577,6 +577,28 @@ class TestRankingPeloBanco(unittest.TestCase):
                                             + consultas_ranking.pagina(s._con, params, 7, 500).itens)
                                 self.assertEqual([i["id"] for i in dividida], [i["id"] for i in pagina.itens])
 
+    def test_com_filtros_paginas_pequenas_e_posicao_do_perfil(self):
+        # com filtros, alunos e cidades numeram só a página: o empate na virada de página e a posição de um item
+        # sozinho têm de dar o mesmo que a lista inteira
+        from medalhas.adaptadores.sqlite import consultas_ranking
+        with self.leitura.sessao() as s:
+            for tipo in ("alunos", "cidades"):
+                for ordem in ("xp", "medalhas", "total"):
+                    for filtros in ({"uf": "AL"}, {"ano_de": "2012", "competicao": "OBMEP"}):
+                        with self.subTest(tipo=tipo, ordem=ordem, filtros=filtros):
+                            params = {"tipo": tipo, "ordem": ordem, "metodo": "site", **filtros}
+                            inteira = consultas_ranking.pagina(s._con, params, 0, 500)
+                            for tamanho in (1, 2, 3, 4):
+                                em_partes = [i for o in range(0, inteira.total + tamanho, tamanho)
+                                             for i in consultas_ranking.pagina(s._con, params, o, tamanho).itens]
+                                self.assertEqual([(i["id"], i["pos"]) for i in em_partes],
+                                                 [(i["id"], i["pos"]) for i in inteira.itens])
+                            for i in inteira.itens:
+                                self.assertEqual(consultas_ranking.posicao(s._con, params, i["id"]),
+                                                 (i["pos"], inteira.total))
+                            self.assertEqual(consultas_ranking.posicao(s._con, params, "NINGUEM|AL"),
+                                             (None, inteira.total))
+
     def test_tela_recebe_so_os_campos_que_mostra(self):
         from medalhas.adaptadores.sqlite import consultas_site
         with self.leitura.sessao() as s:

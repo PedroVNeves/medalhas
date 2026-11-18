@@ -87,7 +87,7 @@ def where_de(criterios: Criterios) -> tuple[str, list]:
     """WHERE completo de um recorte (filtros + aluno + textos). "1" quando não há restrição."""
     where, args = condicoes(criterios.filtros)
     if criterios.aluno_id:
-        where.append("aluno_id = ?")
+        where.append("aluno_n = (SELECT n FROM alunos WHERE id = ?)")
         args.append(criterios.aluno_id)
     for campo, palavras in criterios.textos:
         w, a = condicoes_de_texto(campo, palavras)

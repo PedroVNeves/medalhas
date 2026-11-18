@@ -58,6 +58,7 @@ class RepositorioSqlite:
         con = sqlite3.connect(temporario)
         try:
             con.executescript(PREMIACOES)
+            con.executescript(RESUMOS)
             gravar_premiacoes(con, registros)
             con.execute("INSERT INTO meta VALUES ('atualizado_em', ?)", (atualizado_em,))
             gravar_resumos(con)
@@ -73,7 +74,9 @@ def gravar_premiacoes(con: sqlite3.Connection, registros: list[dict]) -> None:
     """Premiações na tabela premiacoes, na ordem recebida (que dá o id). O que se repete em muitas linhas vai uma
     vez só para uma tabela pequena e a linha guarda o número: o endereço da lista oficial (fontes), a escola com
     os termos de busca e a chave (grafias) e a área da olimpíada (olimpiadas). O prêmio fica NULL quando é igual
-    à medalha; a visão medalhas desfaz tudo isso."""
+    à medalha; a visão medalhas desfaz tudo isso. O aluno vai pelo número (aluno_n), dado em ordem alfabética do
+    id; a tabela alunos recebe aqui só número e id, e gravar_resumos a completa."""
+    numero = {ident: n for n, ident in enumerate(sorted({r["aluno_id"] for r in registros}), 1)}
     fontes: dict[str, int] = {}
     grafias: dict[tuple, int] = {}
     areas: dict[str, str | None] = {}
@@ -85,12 +88,13 @@ def gravar_premiacoes(con: sqlite3.Connection, registros: list[dict]) -> None:
             grafia = grafias.setdefault((r.get("escola") or None, r["escola_termos"] or "", r["escola_chave"] or ""),
                                         len(grafias) + 1)
             areas.setdefault(r["competicao"], r.get("area"))
-            yield [premio if c == "premio" else fonte if c == "fonte_n" else grafia if c == "grafia_n" else r[c]
-                   for c in CAMPOS_FISICOS]
+            especiais = {"premio": premio, "fonte_n": fonte, "grafia_n": grafia, "aluno_n": numero[r["aluno_id"]]}
+            yield [especiais[c] if c in especiais else r[c] for c in CAMPOS_FISICOS]
     con.executemany(insert("premiacoes", CAMPOS_FISICOS), linhas())
     con.executemany("INSERT INTO fontes VALUES (?, ?)", ((n, url) for url, n in fontes.items()))
     con.executemany("INSERT INTO grafias VALUES (?, ?, ?, ?)", ((n, *g) for g, n in grafias.items()))
     con.executemany("INSERT INTO olimpiadas VALUES (?, ?)", areas.items())
+    con.executemany("INSERT INTO alunos (n, id) VALUES (?, ?)", ((n, i) for i, n in numero.items()))
 
 
 def _zerado(base: dict) -> dict:
@@ -107,25 +111,25 @@ def gravar_resumos(con: sqlite3.Connection) -> None:
     município, rede e esfera é sempre o mais recente. A UF do aluno é a do id (a UF principal escolhida pela
     regra de identidade), para o perfil e a posição estadual baterem com ele.
     """
-    con.executescript(RESUMOS)
     alunos: dict[str, dict] = {}
     escolas: dict[str, dict] = {}
     cidades: dict[str, dict] = {}
     # as menções da OBMEP (identidade.de_massa) vêm por último: nome, escola, cidade, rede e esfera de quem tem
     # outras premiações saem delas, e a menção só preenche o que ficou vazio (ou a ficha de quem só tem menção)
-    cursor = con.execute(f"""SELECT aluno_id, nome, uf, competicao, ano, medalha, escola, escola_chave, municipio,
-                                    rede, esfera, municipio_busca, {", ".join(PONTOS)}
+    cursor = con.execute(f"""SELECT aluno_id, aluno_n, nome, uf, competicao, ano, medalha, escola, escola_chave,
+                                    municipio, rede, esfera, municipio_busca, {", ".join(PONTOS)}
                              FROM medalhas
                              ORDER BY (competicao = 'OBMEP' AND medalha = '{MENCAO}'), ano DESC, competicao DESC, id""")
     for linha in cursor:
-        aluno_id, nome, uf, competicao, ano, medalha, escola, chave, municipio, rede, esfera, cidade = linha[:12]
-        pontos = dict(zip(PONTOS, linha[12:]))
+        aluno_id, aluno_n, nome, uf, competicao, ano, medalha, escola, chave, municipio, rede, esfera, cidade = (
+            linha[:13])
+        pontos = dict(zip(PONTOS, linha[13:]))
         massa = de_massa({"competicao": competicao, "medalha": medalha})
         a = alunos.get(aluno_id)
         if a is None:
             uf_do_id = aluno_id.split("|")[1] if "|" in aluno_id else ""
-            a = alunos[aluno_id] = _zerado({"id": aluno_id, "nome": nome, "uf": uf_do_id or uf, "comps": set(),
-                                            "escola": None, "escola_chave": None, "municipio": None,
+            a = alunos[aluno_id] = _zerado({"n": aluno_n, "id": aluno_id, "nome": nome, "uf": uf_do_id or uf,
+                                            "comps": set(), "escola": None, "escola_chave": None, "municipio": None,
                                             "de": ano, "ate": ano})
         if competicao == "OBM" and a["nome"] != nome and "OBM" not in a["comps"]:
             a["nome"] = nome   # a OBM publica nomes com acento e caixa mista: é a grafia mais fiel
@@ -198,7 +202,9 @@ def gravar_resumos(con: sqlite3.Connection) -> None:
         c["nome"] = nome_da_cidade(c["grafias"]) or c["id"].split("|")[0]
         c["alunos"], c["escolas"] = len(c["alunos_set"]), len(c["escolas_set"])
     gravar_enderecos(con, alunos, escolas, cidades)
-    con.executemany(insert("alunos", CAMPOS_ALUNO), ([a[c] for c in CAMPOS_ALUNO] for a in alunos.values()))
+    con.execute("DELETE FROM alunos")   # só número e id, de gravar_premiacoes: agora a ficha completa
+    campos_aluno = ["n", *CAMPOS_ALUNO]
+    con.executemany(insert("alunos", campos_aluno), ([a[c] for c in campos_aluno] for a in alunos.values()))
     con.executemany(insert("escolas", CAMPOS_ESCOLA), ([e[c] for c in CAMPOS_ESCOLA] for e in escolas.values()))
     con.executemany(insert("cidades", CAMPOS_CIDADE), ([c[k] for k in CAMPOS_CIDADE] for c in cidades.values()))
     gravar_indices_de_busca(con)
@@ -229,8 +235,9 @@ def _enderecos_antigos(con: sqlite3.Connection) -> list[tuple[str, str]]:
     pode tê-lo juntado a premiações de outro estado, então o id nem sempre é NOME CERTO|UF."""
     antigos = []
     for (errado, uf), certo in GRAFIAS_CORRIGIDAS.items():
-        achado = con.execute("SELECT aluno_id FROM medalhas WHERE nome_busca = ? AND uf = ? LIMIT 1",
-                             (normalizar(certo), uf)).fetchone()
+        # UF vazia: a lista não informava o estado (a premiação ficou com uf NULL)
+        achado = con.execute("SELECT aluno_id FROM medalhas WHERE nome_busca = ? AND uf IS ? LIMIT 1",
+                             (normalizar(certo), uf or None)).fetchone()
         if achado:
             antigos.append((slug(f"{errado}|{uf}"), achado[0]))
     return antigos
@@ -240,9 +247,7 @@ def gravar_indices_de_busca(con: sqlite3.Connection) -> None:
     """Índices de texto das sugestões: todas as grafias de cada aluno (nome_busca) e de cada escola (os termos de
     busca, que já trazem as siglas por extenso). A busca casa o início das palavras, como a busca completa."""
     con.execute("""INSERT INTO busca_alunos (rowid, texto)
-                   SELECT a.n, t.texto FROM alunos a JOIN (
-                       SELECT aluno_id, GROUP_CONCAT(DISTINCT nome_busca) AS texto FROM medalhas GROUP BY aluno_id
-                   ) t ON t.aluno_id = a.id""")
+                   SELECT aluno_n, GROUP_CONCAT(DISTINCT nome_busca) FROM premiacoes GROUP BY aluno_n""")
     con.execute("""INSERT INTO busca_escolas (rowid, texto)
                    SELECT e.n, t.texto FROM escolas e JOIN (
                        SELECT escola_chave, GROUP_CONCAT(DISTINCT escola_termos) AS texto FROM medalhas
