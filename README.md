@@ -47,8 +47,9 @@ quase todas da OBMEP) de **608 mil alunos**, **58 mil escolas** e **5.600 cidade
 
 ## Rodar no seu computador
 
-> Pela [licença](#licença), rodar o projeto é permitido para desenvolver e testar contribuições. Publicar o
-> site ou a API exige autorização do autor.
+> O código é software livre ([AGPL-3.0](#licença)). Se você publicar uma versão modificada, inclusive como
+> site, precisa abrir o código dela e usar outro nome: o nome "Medalhas" e a identidade visual não estão
+> licenciados.
 
 Requer só **Python 3.10+**. As dependências são opcionais:
 
@@ -455,8 +456,8 @@ funciona por IP:
 
 ## Publicar na internet (Firebase Hosting + Cloud Run)
 
-> Publicar o site exige autorização do autor (ver [licença](#licença)). Esta seção documenta como o
-> medalhas.online é publicado.
+> Esta seção documenta como o medalhas.online é publicado. Quem publicar outra instalação deve seguir a
+> [licença](#licença): código aberto sob a AGPL-3.0 e outro nome.
 
 ```
 visitante -> medalhas.online (Firebase Hosting: HTTPS, CDN, arquivos de web/)
@@ -587,11 +588,21 @@ de até 120 caracteres, SQL sempre com parâmetros e nenhuma dependência nova n
 
 ## Licença
 
-**Código:** todos os direitos reservados. O código está aberto para leitura e contribuições: você pode
-fazer *fork* para mandar *pull requests* e rodar localmente para desenvolver e testar uma contribuição.
-Publicar ou hospedar o site, a API ou outro serviço baseado neste código, redistribuí-lo ou usá-lo em outro
-projeto exige autorização prévia e por escrito do autor. Veja o arquivo [`LICENSE`](LICENSE).
+**Código:** software livre, sob a [GNU Affero General Public License 3.0](LICENSE). Você pode usar, estudar,
+modificar e redistribuir; quem oferecer uma versão modificada a outras pessoas, inclusive como site ou serviço,
+precisa disponibilizar o código-fonte dela sob a mesma licença.
 
-**Dados:** as premiações vêm de listas oficiais públicas, e cada registro traz o link da sua fonte. Você pode
-baixá-las e usá-las pelo site e pela API, citando o Medalhas e a fonte oficial. Para correção ou remoção de
-dados, escreva para pedro.vasconcelosneves@gmail.com.
+**Dados:** a base montada pelo Medalhas (premiações reunidas, identidades, escolas, cidades, posições e
+pontuações) está sob a [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.pt-br): use para qualquer
+fim citando "Medalhas (medalhas.online), a partir das listas oficiais de cada olimpíada". Cada registro traz o
+link da sua lista oficial.
+
+**Nome e identidade visual:** o nome "Medalhas", o domínio medalhas.online, o logotipo e a identidade visual não
+estão licenciados; outra instalação deve usar outro nome.
+
+**Dados pessoais:** a maior parte das pessoas na base é menor de idade. Quem reutiliza os dados responde pelo uso
+que faz deles, de acordo com a LGPD, e deve atender a pedidos de correção e remoção. Pedidos de remoção no
+Medalhas: pedro.vasconcelosneves@gmail.com.
+
+Os detalhes, as licenças dos componentes de terceiros e as regras para contribuições estão em
+[`NOTICE.md`](NOTICE.md).

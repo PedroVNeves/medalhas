@@ -4,9 +4,9 @@ Obrigado pelo interesse! O Medalhas reúne as premiações das olimpíadas de co
 listas oficiais, e quase toda melhoria vem de alguém que achou um erro, conhece uma olimpíada que falta ou teve
 uma ideia melhor para uma regra. Este guia diz como ajudar em cada caso.
 
-Antes de começar, leia a [licença](LICENSE): o código está aberto para leitura e contribuições (fork para
-mandar pull requests e rodar localmente para desenvolver), mas publicar outra cópia do site ou da API exige
-autorização do autor. Ao contribuir, você concorda com os termos da seção 3 dela.
+O código é software livre, sob a [AGPL-3.0](LICENSE), e os dados estão sob a CC BY 4.0. Ao mandar um pull
+request, você licencia a sua contribuição sob essas mesmas licenças (código sob a AGPL-3.0, dados sob a
+CC BY 4.0). O nome "Medalhas" e a identidade visual não estão licenciados. Detalhes em [`NOTICE.md`](NOTICE.md).
 
 ## Sumário
 
