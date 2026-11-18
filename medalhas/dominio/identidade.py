@@ -37,6 +37,11 @@ GRAFIAS_CORRIGIDAS: dict[tuple, str] = {
     ("JOAO FERREIRA", "", "IMC", 2026): "João Vitor Tomaz Alves Ferreira",
     # IMC 2026 escreveu "Aquinos"; a IMC 2024 e a 2025 trazem Aquines (FGV, sem UF)
     ("RAMYRO CORREA AQUINOS", ""): "Ramyro Corrêa Aquines",
+    # OBMEP 2023 a 2025 abreviaram o nome de formas diferentes; 2022 e a OMIF 2026 trazem o nome completo (EE Dr.
+    # Jorge de Lima, em União dos Palmares, e depois IFAL Murici)
+    ("ALMIR SERGIO R DO SANTOS FILHO", "AL"): "Almir Sérgio Ramos dos Santos Filho",
+    ("ALMIR SERGIO RAMOS DOS S FILHO", "AL"): "Almir Sérgio Ramos dos Santos Filho",
+    ("ALMIR SERGIO R DOS SANTOS FILHO", "AL"): "Almir Sérgio Ramos dos Santos Filho",
 }
 
 
