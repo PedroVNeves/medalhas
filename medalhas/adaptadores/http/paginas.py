@@ -85,7 +85,7 @@ def _montar(titulo: str, descricao: str, url: str, dados: dict | None, resumo: s
         # </ dentro do JSON fecharia o <script> antes da hora
         "dados": ('<script type="application/ld+json">' + json.dumps(dados, ensure_ascii=False).replace("</", "<\\/")
                   + "</script>") if dados else "",
-        "resumo": ('<noscript><main style="max-width:44rem;margin:2rem auto;padding:0 1rem;color:#e8ebf5;'
+        "resumo": ('<noscript><main style="max-width:44rem;margin:2rem auto;padding:0 1rem;color:var(--text);'
                    f'font:16px/1.6 system-ui,sans-serif">{resumo}</main></noscript>'),
     }
     texto = _index()

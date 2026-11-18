@@ -32,6 +32,8 @@ function app() {
     mapMetric: "xp",
     mapSel: "",   // estado tocado no mapa (telas de toque, que não têm "passar o mouse")
     toque: matchMedia("(hover: none)").matches,
+    // tema em uso ("claro" ou "escuro"): a escolha salva (aplicada no <head>) ou, sem escolha, o do sistema
+    temaAtual: document.documentElement.dataset.tema || (matchMedia("(prefers-color-scheme: dark)").matches ? "escuro" : "claro"),
     // busca
     _rotaAtual: null,
     q: "", campo: "nome", busca: { loading: false, total: 0, grupos: [] }, _t: null,
@@ -72,8 +74,21 @@ function app() {
         // a barra de busca do topo só aparece em telas largas: nas outras, "/" abre a página de busca
         if (campo?.offsetParent) campo.focus(); else this.go("/busca");
       });
+      // sem tema escolhido, acompanha a troca do sistema (os gráficos trocam de cor junto)
+      matchMedia("(prefers-color-scheme: dark)").addEventListener("change", e => {
+        if (document.documentElement.dataset.tema) return;
+        this.temaAtual = e.matches ? "escuro" : "claro";
+        temaMudou();
+      });
       this.onRoute(true);  // a rota não espera a visão geral: perfis e rankings carregam sozinhos
       await this.loadOverview();
+    },
+    // botão do cabeçalho: alterna claro/escuro e guarda a escolha (o script do <head> a aplica na próxima visita)
+    alternarTema() {
+      this.temaAtual = this.temaAtual === "escuro" ? "claro" : "escuro";
+      document.documentElement.dataset.tema = this.temaAtual;
+      try { localStorage.setItem("tema", this.temaAtual); } catch (e) { /* navegação privada: vale só nesta visita */ }
+      temaMudou();
     },
     // visão geral (/api/overview): totais, catálogo, filtros e destaques; define o método padrão se o usuário
     // ainda não escolheu e redesenha a tela inicial ou o mapa

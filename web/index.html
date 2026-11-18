@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" class="dark">
+<html lang="pt-BR">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,7 +7,12 @@
 <meta name="description" content="Busque qualquer aluno ou escola e veja as medalhas na OBMEP, OBM, OBI, IMO e mais 19 olimpíadas científicas desde 1979. Rankings de alunos, escolas e estados, API e dados abertos.">
 <link rel="canonical" href="https://medalhas.online/">
 <meta name="robots" content="index, follow, max-image-preview:large">
-<meta name="theme-color" content="#070a14">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#F6F1E6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16130F" media="(prefers-color-scheme: dark)">
+<!-- tema escolhido no botão do cabeçalho (claro/escuro), aplicado antes do primeiro desenho para a tela não
+     piscar. Sem escolha salva, vale o tema do sistema (prefers-color-scheme), sem precisar de script. -->
+<script>try{var t=localStorage.getItem("tema");if(t==="claro"||t==="escuro")document.documentElement.dataset.tema=t}catch(e){}</script>
 <!-- verificação da propriedade https://medalhas.online/ no Google Search Console: não remover -->
 <meta name="google-site-verification" content="T7x0wyI7KKI8NQizhS0l6kWngdKuOQ9ChXjv1S6djds">
 <!-- prévia ao compartilhar o link (WhatsApp, redes sociais) -->
@@ -54,7 +59,8 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<!-- Newsreader (títulos e números grandes, tamanho óptico 72) e Public Sans (texto e tabelas), só com os pesos usados -->
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@72,500..700&family=Public+Sans:wght@400..800&display=swap" rel="stylesheet">
 
 <link rel="stylesheet" href="/styles.css">
 <!-- classes do Tailwind, geradas no build (npm run css). Depois de styles.css, na mesma ordem de quando
@@ -79,24 +85,24 @@
 <body x-data="app()" class="min-h-screen overflow-x-clip antialiased">
 <div class="aurora"></div><div class="grid-bg"></div>
 <!-- para quem não roda JavaScript (robôs de IA, leitores simples): o que é o site e como ler os dados -->
-<noscript><main style="max-width:44rem;margin:2rem auto;padding:0 1rem;color:#e8ebf5;font:16px/1.6 system-ui,sans-serif">
+<noscript><main style="max-width:44rem;margin:2rem auto;padding:0 1rem;color:var(--text);font:16px/1.6 system-ui,sans-serif">
   <h1>Medalhas: Hall da Fama das Olimpíadas de Conhecimento do Brasil</h1>
   <p>Base aberta com mais de 850 mil premiações de estudantes brasileiros na OBMEP, OBM, OBI, IMO, Olimpíada
     Ibero-Americana, Cone Sul, EGMO, APMO, Olimpíada de Maio e outras olimpíadas científicas, de 1979 até hoje.
     Busque alunos e escolas e veja os rankings de alunos, escolas e estados.</p>
   <p>O site precisa de JavaScript. Os mesmos dados estão na API pública em JSON, sem cadastro:</p>
   <ul>
-    <li><a href="/llms.txt" style="color:#f5c542">Resumo do site e da API</a></li>
-    <li><a href="/api/v1" style="color:#f5c542">Índice da API</a> e <a href="/api/v1/openapi.json" style="color:#f5c542">especificação OpenAPI</a></li>
+    <li><a href="/llms.txt" style="color:var(--ouro-texto)">Resumo do site e da API</a></li>
+    <li><a href="/api/v1" style="color:var(--ouro-texto)">Índice da API</a> e <a href="/api/v1/openapi.json" style="color:var(--ouro-texto)">especificação OpenAPI</a></li>
     <li>Medalhas de um aluno: <code>/api/v1/alunos?nome=NOME</code></li>
     <li>Medalhistas de uma escola: <code>/api/v1/escolas?nome=NOME</code></li>
   </ul>
-  <p>Páginas do site: <a href="/ranking/alunos" style="color:#f5c542">ranking de alunos</a>,
-    <a href="/ranking/escolas" style="color:#f5c542">ranking de escolas</a>,
-    <a href="/ranking/estados" style="color:#f5c542">ranking de estados</a>,
-    <a href="/estados" style="color:#f5c542">mapa por estado</a>,
-    <a href="/dados" style="color:#f5c542">API e dados abertos</a> e
-    <a href="/sobre" style="color:#f5c542">sobre o projeto</a>.</p>
+  <p>Páginas do site: <a href="/ranking/alunos" style="color:var(--ouro-texto)">ranking de alunos</a>,
+    <a href="/ranking/escolas" style="color:var(--ouro-texto)">ranking de escolas</a>,
+    <a href="/ranking/estados" style="color:var(--ouro-texto)">ranking de estados</a>,
+    <a href="/estados" style="color:var(--ouro-texto)">mapa por estado</a>,
+    <a href="/dados" style="color:var(--ouro-texto)">API e dados abertos</a> e
+    <a href="/sobre" style="color:var(--ouro-texto)">sobre o projeto</a>.</p>
 </main></noscript>
 
 <!-- ================================================================ NAV -->
@@ -157,6 +163,11 @@
   </button>
 </div>
     </div>
+    <!-- tema claro/escuro: alterna e salva a escolha (o padrão segue o sistema) -->
+    <button type="button" @click="alternarTema()" class="btn ml-auto flex-none !px-2.5 xl:ml-0"
+      :aria-label="temaAtual==='escuro' ? 'Usar o tema claro' : 'Usar o tema escuro'" :title="temaAtual==='escuro' ? 'Tema claro' : 'Tema escuro'">
+      <i x-icon="temaAtual==='escuro' ? 'sun' : 'moon'" class="h-4 w-4"></i>
+    </button>
   </div>
   <!-- no celular: rótulos curtos para os 6 links caberem sem rolar; se ainda faltar espaço, quebram linha -->
   <nav class="flex flex-wrap gap-0.5 px-4 pb-2 min-[360px]:gap-1 sm:px-6 md:hidden">
@@ -539,10 +550,10 @@
       <h1 class="font-display text-4xl font-bold">Rankings</h1>
     </div>
     <div class="seg">
-      <a :href="rankLink('alunos')" class="rounded-[.6rem] px-4 py-1.5 text-sm" :class="rk.tipo==='alunos' ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.14)]' : 'text-slate-400 hover:text-white'"><i x-icon="'user'" class="mr-1 inline h-4 w-4"></i>Alunos</a>
-      <a :href="rankLink('escolas')" class="rounded-[.6rem] px-4 py-1.5 text-sm" :class="rk.tipo==='escolas' ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.14)]' : 'text-slate-400 hover:text-white'"><i x-icon="'school'" class="mr-1 inline h-4 w-4"></i>Escolas</a>
-      <a :href="rankLink('cidades')" class="rounded-[.6rem] px-4 py-1.5 text-sm" :class="rk.tipo==='cidades' ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.14)]' : 'text-slate-400 hover:text-white'"><i x-icon="'building-2'" class="mr-1 inline h-4 w-4"></i>Cidades</a>
-      <a :href="rankLink('estados')" class="rounded-[.6rem] px-4 py-1.5 text-sm" :class="rk.tipo==='estados' ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.14)]' : 'text-slate-400 hover:text-white'"><i x-icon="'map'" class="mr-1 inline h-4 w-4"></i>Estados</a>
+      <a :href="rankLink('alunos')" class="rounded-[.6rem] px-4 py-1.5 text-sm" :class="rk.tipo==='alunos' ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_var(--line-2)]' : 'text-slate-400 hover:text-white'"><i x-icon="'user'" class="mr-1 inline h-4 w-4"></i>Alunos</a>
+      <a :href="rankLink('escolas')" class="rounded-[.6rem] px-4 py-1.5 text-sm" :class="rk.tipo==='escolas' ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_var(--line-2)]' : 'text-slate-400 hover:text-white'"><i x-icon="'school'" class="mr-1 inline h-4 w-4"></i>Escolas</a>
+      <a :href="rankLink('cidades')" class="rounded-[.6rem] px-4 py-1.5 text-sm" :class="rk.tipo==='cidades' ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_var(--line-2)]' : 'text-slate-400 hover:text-white'"><i x-icon="'building-2'" class="mr-1 inline h-4 w-4"></i>Cidades</a>
+      <a :href="rankLink('estados')" class="rounded-[.6rem] px-4 py-1.5 text-sm" :class="rk.tipo==='estados' ? 'bg-white/10 text-white shadow-[inset_0_0_0_1px_var(--line-2)]' : 'text-slate-400 hover:text-white'"><i x-icon="'map'" class="mr-1 inline h-4 w-4"></i>Estados</a>
     </div>
   <div class="relative " x-data="{ aberto: false }" @click.outside="aberto = false" @keydown.escape.window="aberto = false">
     <button type="button" class="btn" @click="aberto = !aberto" :disabled="exportando" :aria-expanded="aberto" aria-haspopup="menu">
@@ -902,7 +913,7 @@
                   <div class="min-w-0 flex-1">
                     <div class="flex items-center gap-2"><span class="font-semibold" x-text="c.nome"></span><i x-show="!c.desbloqueada" x-icon="'lock'" class="h-3.5 w-3.5 text-slate-500"></i></div>
                     <div class="text-xs text-slate-400" x-text="c.descricao"></div>
-                    <div class="mt-1 text-[10px] font-bold uppercase tracking-widest" style="color:var(--rc)" x-text="c.raridade"></div>
+                    <div class="raridade mt-1 text-[10px] font-bold uppercase tracking-widest" x-text="c.raridade"></div>
                     <div x-show="!c.desbloqueada && c.meta > 1" class="mt-2 flex items-center gap-2">
                       <div class="bar indigo flex-1"><span :style="`width:${c.atual / c.meta * 100}%`"></span></div>
                       <span class="tabular text-[11px] text-slate-500" x-text="`${c.atual}/${c.meta}`"></span>
@@ -1339,7 +1350,7 @@
             <div class="flex items-start gap-3">
               <div class="ico flex-none"><i x-icon="c.icone" class="h-5 w-5"></i></div>
               <div><div class="font-semibold" x-text="c.nome"></div><div class="text-xs text-slate-400" x-text="c.descricao"></div>
-                <div class="mt-1 text-[10px] font-bold uppercase tracking-widest" style="color:var(--rc)" x-text="`${c.alvo} · ${c.raridade}`"></div></div>
+                <div class="raridade mt-1 text-[10px] font-bold uppercase tracking-widest" x-text="`${c.alvo} · ${c.raridade}`"></div></div>
             </div>
           </div>
         </template>
