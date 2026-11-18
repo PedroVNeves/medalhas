@@ -30,6 +30,8 @@ GRAFIAS_CORRIGIDAS: dict[tuple[str, str], str] = {
     ("SOFIA AZEVEDO DE MOURA MONTEIRO", "RJ"): "Sofia Azeredo de Moura Monteiro",
     # OBMEP 2014 escreveu "Pimaki"; 2011 a 2017 trazem Primaki (mesma escola, em Roncador), confirmado por ele
     ("JOAO VINICIUS PIMAKI PRADO", "PR"): "João Vinícius Primaki Prado",
+    # IMC 2024 escreveu "Tomás" (lista sem UF, pela FGV Rio); a IMC 2025 e as demais listas trazem Tomaz
+    ("JOAO VITOR TOMAS ALVES FERREIRA", ""): "João Vitor Tomaz Alves Ferreira",
 }
 
 
