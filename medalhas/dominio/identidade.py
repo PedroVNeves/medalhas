@@ -19,8 +19,9 @@ LIMITE_HOMONIMOS_ALTO_NIVEL = 3.0   # mais tolerante quando há OBM/internaciona
 
 
 # Grafias erradas nas listas oficiais que partem uma pessoa em dois perfis, corrigidas à mão a pedido
-# (correções chegam pelo contato do site). Chave: (nome sem acento, UF) como veio na fonte.
-GRAFIAS_CORRIGIDAS: dict[tuple[str, str], str] = {
+# (correções chegam pelo contato do site). Chave: (nome sem acento, UF) como veio na fonte; para um nome comum,
+# (nome, UF, olimpíada, ano): só aquela premiação muda.
+GRAFIAS_CORRIGIDAS: dict[tuple, str] = {
     # OBMEP 2018 e OBM 2019 escreveram "Gouveia"; nas outras listas, e no nome dele, é Gouvêa
     ("ISAIAS GOUVEIA GONCALVES", "DF"): "Isaías Gouvêa Gonçalves",
     # OBMEP 2018 escreveu "Edigard"; 2019, 2021 e 2022 trazem Edgard (mesma escola, em Cocal dos Alves)
@@ -32,6 +33,10 @@ GRAFIAS_CORRIGIDAS: dict[tuple[str, str], str] = {
     ("JOAO VINICIUS PIMAKI PRADO", "PR"): "João Vinícius Primaki Prado",
     # IMC 2024 escreveu "Tomás" (lista sem UF, pela FGV Rio); a IMC 2025 e as demais listas trazem Tomaz
     ("JOAO VITOR TOMAS ALVES FERREIRA", ""): "João Vitor Tomaz Alves Ferreira",
+    # IMC 2026 abreviou para "João Ferreira" (pela FGV, sem UF): é ele, menção honrosa como em 2024
+    ("JOAO FERREIRA", "", "IMC", 2026): "João Vitor Tomaz Alves Ferreira",
+    # IMC 2026 escreveu "Aquinos"; a IMC 2024 e a 2025 trazem Aquines (FGV, sem UF)
+    ("RAMYRO CORREA AQUINOS", ""): "Ramyro Corrêa Aquines",
 }
 
 
@@ -39,7 +44,8 @@ def corrigir_grafias(premiacoes: list[Premiacao]) -> int:
     """Troca o nome das premiações listadas em GRAFIAS_CORRIGIDAS. Altera a lista; devolve quantas mudaram."""
     corrigidas = 0
     for p in premiacoes:
-        certo = GRAFIAS_CORRIGIDAS.get((normalizar(p["nome"]), p.get("uf") or ""))
+        chave = (normalizar(p["nome"]), p.get("uf") or "")
+        certo = GRAFIAS_CORRIGIDAS.get(chave) or GRAFIAS_CORRIGIDAS.get((*chave, p["competicao"], p["ano"]))
         if certo:
             p["nome"] = certo
             corrigidas += 1

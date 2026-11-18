@@ -234,7 +234,7 @@ def _enderecos_antigos(con: sqlite3.Connection) -> list[tuple[str, str]]:
     O perfil certo é o das premiações que receberam o nome corrigido, nesse estado: a identidade dos alunos
     pode tê-lo juntado a premiações de outro estado, então o id nem sempre é NOME CERTO|UF."""
     antigos = []
-    for (errado, uf), certo in GRAFIAS_CORRIGIDAS.items():
+    for (errado, uf, *_), certo in GRAFIAS_CORRIGIDAS.items():
         # UF vazia: a lista não informava o estado (a premiação ficou com uf NULL)
         achado = con.execute("SELECT aluno_id FROM medalhas WHERE nome_busca = ? AND uf IS ? LIMIT 1",
                              (normalizar(certo), uf or None)).fetchone()

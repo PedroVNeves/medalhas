@@ -205,6 +205,14 @@ class TestIdentidade(unittest.TestCase):
         identidade.atribuir_alunos(ps)
         self.assertEqual({p["aluno_id"] for p in ps[:3]}, {"ISAIAS GOUVEA GONCALVES|PR"})
 
+    def test_grafia_corrigida_numa_edicao_so_muda_aquela_premiacao(self):
+        # nome comum: a correção vale só para a olimpíada e o ano dela
+        ps = [premiacao("João Ferreira", None, "IMC", 2026), premiacao("João Ferreira", None, "IMC", 2025),
+              premiacao("João Ferreira", None, "IMO", 2026)]
+        self.assertEqual(identidade.corrigir_grafias(ps), 1)
+        self.assertEqual([p["nome"] for p in ps],
+                         ["João Vitor Tomaz Alves Ferreira", "João Ferreira", "João Ferreira"])
+
 
 class TestSexo(unittest.TestCase):
     def test_so_quem_foi_premiada_em_olimpiada_para_meninas(self):
