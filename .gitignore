@@ -6,3 +6,6 @@ data/*.tmp
 data/exportar/
 .firebase/
 node_modules/
+
+# bases de referência para testar as regras de identidade (ex.: antes de uma junção à mão)
+data/referencia/
