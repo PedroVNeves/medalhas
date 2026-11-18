@@ -63,8 +63,9 @@ python build_db.py   # baixa as listas oficiais e gera data/medalhas.db (alguns 
 python server.py     # abre o site em http://localhost:8000
 ```
 
-- `python build_db.py --mencoes-obmep` inclui as menções honrosas da OBMEP (cerca de 720 mil; em avaliação,
-  ver `docs/mencoes-obmep.md`).
+- As menções honrosas da OBMEP (cerca de 720 mil) entram na base: a geração leva uns 5 minutos e até 3,5 GB
+  de memória. `python build_db.py --sem-mencoes-obmep` gera uma base bem menor para testes locais (não publique
+  assim: a base publicada tem as menções). Ver `docs/mencoes-obmep.md`.
 - `python build_db.py --refresh` apaga o cache e baixa tudo de novo (use quando sair um ano novo). Sem
   `--refresh`, as páginas já baixadas ficam em `cache/` e a base é regerada em segundos.
 - Se alguma fonte falhar (ou vier vazia), a base **não** é gravada e a anterior continua valendo: uma base

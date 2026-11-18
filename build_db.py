@@ -24,13 +24,14 @@ def main(argv: list[str] | None = None, caminho: Path = config.CAMINHO_BASE) -> 
     parser.add_argument("--refresh", action="store_true", help="apaga o cache e baixa tudo de novo")
     parser.add_argument("--permitir-parcial", action="store_true",
                         help="grava a base mesmo se alguma fonte falhar (ela fica sem as premiações dessa fonte)")
-    parser.add_argument("--mencoes-obmep", action="store_true",
-                        help="inclui as menções honrosas da OBMEP (cerca de 50 mil por edição; em avaliação)")
+    parser.add_argument("--sem-mencoes-obmep", action="store_true",
+                        help="deixa de fora as menções honrosas da OBMEP (cerca de 50 mil por edição): base bem menor, "
+                             "para testes locais; não publique assim, a base publicada as tem")
     args = parser.parse_args(argv)
     if args.refresh and config.PASTA_CACHE.exists():
         shutil.rmtree(config.PASTA_CACHE)
 
-    relatorio = gerar_base(coletores.todos(args.mencoes_obmep), RepositorioSqlite(caminho),
+    relatorio = gerar_base(coletores.todos(mencoes_obmep=not args.sem_mencoes_obmep), RepositorioSqlite(caminho),
                            permitir_parcial=args.permitir_parcial)
 
     if relatorio.gravada:
