@@ -2,9 +2,23 @@
 
 As listas oficiais não têm documento nem data de nascimento, só nome, escola e cidade/UF. As regras
 abaixo equilibram dois erros: separar a mesma pessoa (perde medalhas do perfil) e juntar homônimos
-(atribui medalhas a quem não ganhou).
+(atribui medalhas a quem não ganhou). Juntar homônimos é o erro grave: põe no perfil de alguém uma medalha
+que não é dele, sem que quem lê perceba. Na dúvida, as regras separam.
+
+Ordem em que gerar_base as aplica:
+1. corrigir_grafias: as correções à mão (GRAFIAS_CORRIGIDAS) vêm antes de tudo;
+2. completar_identidades: a UF de quem veio sem ela e os nomes abreviados das listas internacionais;
+3. atribuir_alunos: mesmo nome (sem acento) + mesma UF = mesma pessoa, com as travas que separam homônimos
+   (_cabe_numa_pessoa) e a união entre estados para nomes raros;
+4. juntar_grafias (depois da cidade das escolas): perfis da mesma pessoa com o nome escrito de jeitos
+   diferentes ("Almir Sergio R dos Santos Filho" e "Almir Sergio Ramos dos Santos Filho"), só com prova de
+   contexto (mesma escola, ou mesma cidade a até 3 anos) e um agrupamento que recusa juntar grupos que não
+   cabem numa pessoa.
+
+As regras, em linguagem simples, estão em docs/identidade-regras.md.
 """
 from collections.abc import Iterable
+from dataclasses import dataclass
 from functools import lru_cache
 
 from .escolas import PARTICULAS, palavras_da_chave
@@ -14,6 +28,10 @@ from .texto import normalizar
 
 MAX_ANOS_CARREIRA = 12              # do 6º ano do fundamental ao fim da faculdade
 MAX_ANOS_SEM_PREMIO = 8             # intervalo sem premiação que, numa carreira longa demais, separa duas pessoas
+# O mesmo nível da OBMEP mais anos depois que isto é outra pessoa. Os níveis 1 e 2 cobrem 2 séries cada. O nível 3
+# cobre o ensino médio, que dura 4 anos nas escolas técnicas (IFs, Liberato, ETEs), e há quem recomece o médio ao
+# entrar numa delas: com 3 anos, 20 medalhistas reais de escola técnica seriam divididos (ver identidade-regras.md)
+MAX_ANOS_MESMO_NIVEL = {"1": 3, "2": 3, "3": 5}
 LIMITE_HOMONIMOS = 0.3              # nº esperado de pessoas com o nome, abaixo do qual o nome é "raro"
 LIMITE_HOMONIMOS_ALTO_NIVEL = 3.0   # mais tolerante quando há OBM/internacional em 2+ UFs
 
@@ -187,7 +205,13 @@ def de_massa(p: Premiacao) -> bool:
 
 def _chave_da_escola(p: Premiacao) -> str:
     """Palavras que identificam a escola da premiação, em ordem ("" sem escola)."""
-    return " ".join(sorted(palavras_da_chave(p.get("escola")))) if p.get("escola") else ""
+    return _palavras_da_escola(p["escola"]) if p.get("escola") else ""
+
+
+@lru_cache(maxsize=None)
+def _palavras_da_escola(escola: str) -> str:
+    """As palavras de palavras_da_chave, em ordem. Em cache: a mesma escola aparece em muitas premiações."""
+    return " ".join(sorted(palavras_da_chave(escola)))
 
 
 def _mesma_edicao_em_lugares_diferentes(a: Premiacao, b: Premiacao) -> bool:
@@ -210,11 +234,21 @@ def _nivel_regride(registros: list[Premiacao]) -> bool:
     return any(depois[0] > antes[0] and depois[1] < antes[1] for antes, depois in zip(niveis, niveis[1:]))
 
 
+def _nivel_parado(registros: list[Premiacao]) -> bool:
+    """O mesmo nível da OBMEP com mais de MAX_ANOS_MESMO_NIVEL anos de distância: é outra pessoa (a "Isabela de
+    Lima da Silva" do nível 1 em 2012 não é a do nível 1 em 2022)."""
+    anos: dict[str, list[int]] = {}
+    for p in registros:
+        if p["competicao"] == "OBMEP" and p.get("nivel") in MAX_ANOS_MESMO_NIVEL:
+            anos.setdefault(p["nivel"], []).append(p["ano"])
+    return any(max(a) - min(a) > MAX_ANOS_MESMO_NIVEL[nivel] for nivel, a in anos.items())
+
+
 def _cabe_numa_pessoa(registros: list[Premiacao]) -> bool:
-    """As premiações podem ser de uma pessoa só: cabem numa carreira escolar, sem a mesma edição em dois lugares
-    e sem o nível da OBMEP regredir."""
+    """As premiações podem ser de uma pessoa só: cabem numa carreira escolar, sem a mesma edição em dois lugares,
+    sem o nível da OBMEP regredir e sem o mesmo nível da OBMEP anos demais depois (_nivel_parado)."""
     anos = [p["ano"] for p in registros]
-    if max(anos) - min(anos) > MAX_ANOS_CARREIRA or _nivel_regride(registros):
+    if max(anos) - min(anos) > MAX_ANOS_CARREIRA or _nivel_regride(registros) or _nivel_parado(registros):
         return False
     return not any(_mesma_edicao_em_lugares_diferentes(a, b) for i, a in enumerate(registros) for b in registros[:i])
 
@@ -398,3 +432,373 @@ def _atribuir(premiacoes: list[Premiacao]) -> int:
             cabe_na_carreira = unico and max(anos) - min(anos) <= MAX_ANOS_CARREIRA
             p["aluno_id"] = ids[0] if cabe_na_carreira else f"{nome}|"
     return unidos
+
+
+# ------------------------------------------------------------------------------------------------------------
+# Grafias diferentes da mesma pessoa
+#
+# Depois que as regras acima definem os perfis pelo nome exato, juntar_grafias junta os perfis da mesma pessoa
+# escritos de jeitos diferentes nas listas ("Almir Sergio R dos Santos Filho", "Almir Sergio Ramos dos S Filho").
+# A regra, em linguagem simples, está em docs/identidade-regras.md; a pesquisa que a escolheu, com os números,
+# em docs/identidade-pesquisa.md (é a "r_recomendada" de experimentos/identidade/).
+
+MAX_ANOS_MESMA_CIDADE = 3           # só a mesma cidade (sem a mesma escola) prova algo com premiações a até 3 anos
+LIMITE_PRENOME = 0.6                # palavra que é 1º (ou 2º) nome em 60%+ das vezes é prenome (Lívia, Natan)
+HOMONIMOS_MESMA_ESCOLA = 1.0        # diferença só de partículas ou de letra: homônimos esperados abaixo disto,
+HOMONIMOS_MESMA_CIDADE = 0.1        # com a mesma escola; e abaixo disto, com só a mesma cidade
+
+# Sufixos de parentesco: precisam ser iguais dos dois lados (o pai e o filho têm o mesmo nome sem eles)
+_SUFIXOS = {"FILHO": "FILHO", "FILHA": "FILHA", "JUNIOR": "JUNIOR", "JR": "JUNIOR", "NETO": "NETO", "NETA": "NETA",
+            "SOBRINHO": "SOBRINHO", "SEGUNDO": "SEGUNDO", "TERCEIRO": "TERCEIRO"}
+
+
+@dataclass(eq=False, slots=True)
+class _Perfil:
+    """Um perfil como as regras de nome exato o deixaram: o id, o nome do id e as premiações."""
+    ident: str
+    palavras: tuple[str, ...]           # o nome sem partículas, com JR -> JUNIOR (ver _palavras)
+    registros: list[Premiacao]
+    cidades: dict | None = None         # (UF, cidade) -> anos; calculado na primeira consulta (ver _cidades)
+
+    @property
+    def nome(self) -> str:
+        return self.ident.split("|")[0]
+
+
+def _palavras(nome: str) -> tuple[str, ...]:
+    """Palavras do nome normalizado sem partículas, com JR -> JUNIOR: "R DO SANTOS" e "R DOS SANTOS" dão o mesmo."""
+    return tuple(_SUFIXOS.get(w, w) for w in nome.split() if w not in PARTICULAS)
+
+
+def _sufixo(palavras: tuple[str, ...]) -> str:
+    """O sufixo de parentesco no fim do nome (Filho, Júnior, Neto…), ou ""."""
+    return palavras[-1] if palavras and palavras[-1] in _SUFIXOS.values() else ""
+
+
+def _no_maximo(a: str, b: str, limite: int) -> bool:
+    """a e b estão a no máximo `limite` edições: troca, falta ou sobra de uma letra, ou inversão de duas vizinhas
+    (distância de Damerau-Levenshtein restrita, que para cedo quando passa do limite)."""
+    if abs(len(a) - len(b)) > limite:
+        return False
+    antes_de_anterior, anterior = [], list(range(len(b) + 1))
+    for i in range(1, len(a) + 1):
+        atual = [i] + [0] * len(b)
+        for j in range(1, len(b) + 1):
+            atual[j] = min(anterior[j] + 1, atual[j - 1] + 1, anterior[j - 1] + (a[i - 1] != b[j - 1]))
+            if i > 1 and j > 1 and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]:
+                atual[j] = min(atual[j], antes_de_anterior[j - 2] + 1)
+        if min(atual) > limite:
+            return False
+        antes_de_anterior, anterior = anterior, atual
+    return anterior[-1] <= limite
+
+
+@lru_cache(maxsize=200_000)
+def _encaixe(a: str, b: str) -> str | None:
+    """Como duas palavras se encaixam: "igual"; "inicial" (uma é a inicial, ou abreviação de 2 ou 3 letras, da
+    outra: R/RAMOS, MA/MARIA); "grafia" (erro de digitação: 1 letra em palavras de 4+ letras, 2 nas de 8+); None."""
+    if a == b:
+        return "igual"
+    curta, longa = sorted((a, b), key=len)
+    if longa.startswith(curta) and (len(curta) == 1 or (len(curta) <= 3 and len(longa) > len(curta) + 1)):
+        return "inicial"
+    if len(curta) >= 4 and _no_maximo(a, b, 2 if len(curta) >= 8 else 1):
+        return "grafia"
+    return None
+
+
+def _cabe_em(curto: tuple[str, ...], longo: tuple[str, ...]) -> bool:
+    """Cada palavra de `curto` encaixa (_encaixe) numa palavra de `longo`, na mesma ordem; as de `longo` que
+    sobram são palavras omitidas."""
+    restante = iter(longo)
+    return all(any(_encaixe(p, q) for q in restante) for p in curto)
+
+
+def _encaixam(a: tuple[str, ...], b: tuple[str, ...]) -> bool:
+    """Os dois nomes podem ser a mesma pessoa pela escrita, admitindo palavras omitidas de um lado: a 1ª palavra
+    igual (ou com erro de digitação), o mesmo sufixo e as outras encaixando na ordem. Serve para achar as outras
+    leituras de uma abreviação (ver _OutrasLeituras); a junção em si não aceita omissões (ver _diferencas)."""
+    if not a or not b or _sufixo(a) != _sufixo(b) or _encaixe(a[0], b[0]) not in ("igual", "grafia"):
+        return False
+    return _cabe_em(a[1:], b[1:]) or _cabe_em(b[1:], a[1:])
+
+
+def _diferencas(a: tuple[str, ...], b: tuple[str, ...], prenomes: frozenset[str]) -> int | None:
+    """Quantas palavras diferem entre dois nomes que encaixam palavra a palavra, sem omissão, com a 1ª palavra e
+    o sufixo iguais; None se não encaixam assim. Cada diferença é uma inicial ou abreviação (vale 1) ou um erro de
+    digitação em sobrenome (vale 2). Erro em prenome não junta: Natan/Natani, Lígia/Lívia e Gabriel/Gabriela na
+    mesma escola são, quase sempre, irmãos."""
+    if len(a) != len(b) or a[0] != b[0] or _sufixo(a) != _sufixo(b):
+        return None
+    custo = 0
+    for x, y in zip(a[1:], b[1:]):
+        tipo = _encaixe(x, y)
+        if tipo is None or (tipo == "grafia" and (x in prenomes or y in prenomes)):
+            return None
+        custo += {"igual": 0, "inicial": 1, "grafia": 2}[tipo]
+    return custo
+
+
+def _prenomes(perfis: list[_Perfil]) -> frozenset[str]:
+    """Palavras que são quase sempre prenome: aparecem como 1ª palavra (ou 2ª, em nomes de 3+ palavras) em
+    LIMITE_PRENOME das vezes ou mais. Sobrenomes (Gouveia, Camargo, Azevedo) raramente são a 2ª palavra."""
+    total: dict[str, int] = {}
+    prenome: dict[str, int] = {}
+    for perfil in perfis:
+        palavras = perfil.palavras
+        for w in set(palavras):
+            total[w] = total.get(w, 0) + 1
+        for w in palavras[:2] if len(palavras) > 2 else palavras[:1]:
+            prenome[w] = prenome.get(w, 0) + 1
+    return frozenset(w for w, n in total.items() if prenome.get(w, 0) / n >= LIMITE_PRENOME)
+
+
+def _frequencias(perfis: list[_Perfil]) -> dict[str, int]:
+    """Palavra -> em quantos perfis ela aparece."""
+    frequencia: dict[str, int] = {}
+    for perfil in perfis:
+        for w in set(perfil.palavras):
+            frequencia[w] = frequencia.get(w, 0) + 1
+    return frequencia
+
+
+def _estimador_de_raridade(perfis: list[_Perfil], frequencia: dict[str, int]):
+    """Função palavras -> número esperado de perfis com aquele nome, pela frequência de cada palavra entre os
+    perfis (como _estimador_de_homonimos); uma inicial vale a fração das palavras que começam com a letra."""
+    total = len(perfis) or 1
+    por_letra: dict[str, int] = {}
+    for w, n in frequencia.items():
+        por_letra[w[0]] = por_letra.get(w[0], 0) + n
+    soma = sum(por_letra.values()) or 1
+    letra = {k: n / soma for k, n in por_letra.items()}
+
+    def esperado(palavras: tuple[str, ...]) -> float:
+        valor = float(total)
+        for w in set(palavras):
+            valor *= letra.get(w, 0.05) if len(w) == 1 else frequencia.get(w, 1) / total
+        return valor
+    return esperado
+
+
+def _cidades(perfil: _Perfil) -> dict[tuple[str, str], list[int]]:
+    """(UF, cidade) -> anos das premiações do perfil naquela cidade."""
+    if perfil.cidades is None:
+        perfil.cidades = {}
+        for p in perfil.registros:
+            cidade = normalizar(p.get("municipio"))
+            if cidade:
+                perfil.cidades.setdefault((p.get("uf") or "", cidade), []).append(p["ano"])
+    return perfil.cidades
+
+
+def _na_mesma_escola(a: Premiacao, b: Premiacao) -> bool:
+    """As duas premiações são da mesma escola: mesmo estado, mesma cidade (ou nenhuma) e o mesmo nome de escola
+    pela chave ou por mesma_escola (que aceita abreviações)."""
+    if not a.get("escola") or not b.get("escola") or (a.get("uf") or "") != (b.get("uf") or ""):
+        return False
+    if normalizar(a.get("municipio")) != normalizar(b.get("municipio")):
+        return False
+    return _chave_da_escola(a) == _chave_da_escola(b) or mesma_escola(a["escola"], b["escola"])
+
+
+def _mesma_escola_par(x: _Perfil, y: _Perfil) -> bool:
+    """Alguma premiação de um e alguma do outro na mesma escola."""
+    return any(_na_mesma_escola(a, b) for a in x.registros for b in y.registros)
+
+
+def _mesma_cidade_perto(x: _Perfil, y: _Perfil) -> bool:
+    """Alguma premiação de um e alguma do outro na mesma cidade, a até MAX_ANOS_MESMA_CIDADE anos uma da outra."""
+    cidades_y = _cidades(y)
+    return any(abs(ano - outro) <= MAX_ANOS_MESMA_CIDADE for lugar, anos in _cidades(x).items()
+               for ano in anos for outro in cidades_y.get(lugar, ()))
+
+
+def _edicao_em_comum(x: _Perfil, y: _Perfil) -> bool:
+    """Os dois aparecem na mesma edição (olimpíada e ano): são duas pessoas. A exceção é a OBI na mesma escola,
+    que premia modalidades diferentes no mesmo ano."""
+    edicoes: dict[tuple, list[Premiacao]] = {}
+    for a in x.registros:
+        edicoes.setdefault((a["competicao"], a["ano"]), []).append(a)
+    return any(b["competicao"] != "OBI" or not _na_mesma_escola(a, b)
+               for b in y.registros for a in edicoes.get((b["competicao"], b["ano"]), ()))
+
+
+def _pares_pelo_nome(perfis: list[_Perfil], prenomes: frozenset[str]):
+    """(custo, x, y) para cada par de perfis da mesma UF cujos nomes encaixam sem omissão (_diferencas).
+
+    Só se comparam nomes com o mesmo número de palavras, a mesma 1ª palavra e as mesmas iniciais de cada palavra
+    (uma inicial, uma abreviação e quase todo erro de digitação mantêm a primeira letra), e que dividem, além da
+    1ª, a 2ª ou a última palavra, como os blocos da pesquisa. Premiações sem UF formam um bloco à parte."""
+    por_uf: dict[str, list[_Perfil]] = {}
+    for perfil in perfis:
+        if len(perfil.palavras) >= 2:
+            for uf in {p.get("uf") or "" for p in perfil.registros}:
+                por_uf.setdefault(uf, []).append(perfil)
+    vistos: set[tuple[str, str]] = set()
+    for da_uf in por_uf.values():
+        blocos: dict[tuple, list[_Perfil]] = {}
+        for perfil in da_uf:
+            palavras = perfil.palavras
+            blocos.setdefault((palavras[0], "".join(w[0] for w in palavras)), []).append(perfil)
+        for membros in blocos.values():
+            for i, x in enumerate(membros):
+                for y in membros[:i]:
+                    if x.nome == y.nome:
+                        continue   # o mesmo nome em dois perfis: homônimos que as regras acima separaram
+                    if x.palavras[1] != y.palavras[1] and x.palavras[-1] != y.palavras[-1]:
+                        continue
+                    custo = _diferencas(x.palavras, y.palavras, prenomes)
+                    par = (x.ident, y.ident) if x.ident < y.ident else (y.ident, x.ident)
+                    if custo is not None and par not in vistos:
+                        vistos.add(par)
+                        yield custo, x, y
+
+
+def _par_aceito(x: _Perfil, y: _Perfil, custo: int, raridade) -> tuple | None:
+    """Ordem do par no agrupamento (a mais forte primeiro) se ele passa nas provas e travas; senão None.
+
+    - prova de contexto: a mesma escola, ou a mesma cidade com premiações a até MAX_ANOS_MESMA_CIDADE anos;
+    - travas: nenhuma edição em comum e as premiações cabendo numa pessoa (_cabe_numa_pessoa);
+    - sem inicial (só partículas ou erro de letra): o nome precisa ser pouco comum, porque "Gabriel de Oliveira
+      Santos" e "Gabriel Oliveira dos Santos" na mesma cidade são, muitas vezes, duas pessoas.
+    A outra trava, a abreviação sem outra leitura na cidade, fica para _OutrasLeituras (é a mais cara)."""
+    escola = _mesma_escola_par(x, y)
+    if not escola and not _mesma_cidade_perto(x, y):
+        return None
+    if _edicao_em_comum(x, y) or not _cabe_numa_pessoa(x.registros + y.registros):
+        return None
+    tem_inicial = any(_encaixe(a, b) == "inicial" for a, b in zip(x.palavras, y.palavras))
+    limite = HOMONIMOS_MESMA_ESCOLA if escola else HOMONIMOS_MESMA_CIDADE
+    if not tem_inicial and max(raridade(x.palavras), raridade(y.palavras)) >= limite:
+        return None
+    return (not escola, custo, *sorted((x.ident, y.ident)))
+
+
+def _chaves_de_leitura(palavras: tuple[str, ...]) -> list[tuple]:
+    """Por onde procurar as outras leituras de um nome: a 1ª palavra; e a 2ª com a última (para pegar quem tem
+    um erro de digitação na 1ª palavra)."""
+    chaves = [("1", palavras[0])]
+    if len(palavras) >= 3:
+        chaves.append(("2U", palavras[1], palavras[-1]))
+    return chaves
+
+
+class _OutrasLeituras:
+    """Uma abreviação ou grafia é ambígua quando, na mesma cidade, outro nome encaixa num dos lados do par e não
+    no outro: "Ana Carolina B da Silva" encaixa em Batista e em Barbosa. Se há uma Ana Carolina Barbosa da Silva
+    na cidade, o par com a Batista não se junta.
+
+    O índice só guarda as cidades e chaves (_chaves_de_leitura) dos pares a conferir, para não ocupar memória
+    com a base inteira."""
+
+    def __init__(self, perfis: list[_Perfil], pares: list[tuple[_Perfil, _Perfil]]):
+        procurados = {(lugar, chave) for x, y in pares for lugar in {*_cidades(x), *_cidades(y)}
+                      for chave in {*_chaves_de_leitura(x.palavras), *_chaves_de_leitura(y.palavras)}}
+        self.indice: dict[tuple, list[_Perfil]] = {}
+        for r in perfis:
+            if len(r.palavras) < 2:
+                continue
+            lugares = {(p.get("uf") or "", normalizar(p.get("municipio"))) for p in r.registros}
+            for lugar in lugares:
+                for chave in _chaves_de_leitura(r.palavras):
+                    if (lugar, chave) in procurados:
+                        self.indice.setdefault((lugar, chave), []).append(r)
+
+    def tem(self, x: _Perfil, y: _Perfil) -> bool:
+        """Algum outro nome da cidade de x ou de y encaixa num dos dois e não no outro?"""
+        for lugar in {*_cidades(x), *_cidades(y)}:
+            for chave in {*_chaves_de_leitura(x.palavras), *_chaves_de_leitura(y.palavras)}:
+                for r in self.indice.get((lugar, chave), ()):
+                    if r.nome not in (x.nome, y.nome) and (
+                            _encaixam(r.palavras, x.palavras) != _encaixam(r.palavras, y.palavras)):
+                        return True
+        return False
+
+
+def _podem_juntar(a: list[_Perfil], b: list[_Perfil]) -> bool:
+    """Dois grupos podem virar uma pessoa: nenhum homônimo que as regras de nome exato separaram (o mesmo nome
+    em perfis diferentes), nenhuma edição em comum e todas as premiações cabendo numa pessoa."""
+    nomes = {p.nome for p in a}
+    if any(p.nome in nomes for p in b) or any(_edicao_em_comum(x, y) for x in a for y in b):
+        return False
+    return _cabe_numa_pessoa([r for p in a + b for r in p.registros])
+
+
+def _agrupar(arestas: list[tuple[_Perfil, _Perfil]]) -> list[list[_Perfil]]:
+    """Agrupamento com restrições (correlation clustering guloso com "cannot-link"): as arestas entram na ordem
+    recebida (a mais forte primeiro) e uma aresta é recusada se juntaria dois grupos que não podem ser uma
+    pessoa (_podem_juntar). Nunca o fechamento transitivo simples: com ele, uma abreviação que encaixa em dois
+    homônimos viraria uma ponte entre eles. Devolve os grupos de 2+ perfis."""
+    grupo_de: dict[str, list[_Perfil]] = {}
+    for x, y in arestas:
+        gx, gy = grupo_de.get(x.ident, [x]), grupo_de.get(y.ident, [y])
+        if gx is gy or not _podem_juntar(gx, gy):
+            continue
+        gx.extend(gy)
+        for perfil in gx:
+            grupo_de[perfil.ident] = gx
+    unicos = {id(g): g for g in grupo_de.values()}
+    return list(unicos.values())
+
+
+def _quem_fica(grupo: list[_Perfil], frequencia: dict[str, int]) -> _Perfil:
+    """O perfil que dá o id ao grupo: o de nome mais completo (menos palavras de até 3 letras: iniciais e
+    abreviações); no empate, o de grafia mais usual (a palavra mais rara do nome é mais frequente na base:
+    Cavalcanti, não Cacalcanti), o de mais premiações além das menções da OBMEP, o de mais premiações, o mais
+    recente e, por fim, o id em ordem alfabética (o resultado não depende da ordem das listas)."""
+    return min(grupo, key=lambda p: (sum(len(w) <= 3 for w in p.palavras),
+                                     -min(frequencia.get(w, 0) for w in p.palavras),
+                                     -sum(not de_massa(r) for r in p.registros), -len(p.registros),
+                                     -max(r["ano"] for r in p.registros), p.ident))
+
+
+def juntar_grafias(premiacoes: list[Premiacao]) -> dict[str, str]:
+    """Junta perfis da mesma pessoa com o nome escrito de jeitos diferentes. Roda depois de atribuir_alunos (e da
+    cidade das escolas: a cidade é prova de contexto) e altera o aluno_id das premiações dos perfis absorvidos,
+    guardando o id antigo em aluno_id_absorvido. Devolve {id absorvido: id do perfil que ficou}.
+
+    Dois perfis da mesma UF viram um quando:
+      - o nome encaixa palavra a palavra, na ordem, sem palavra omitida, com a 1ª palavra e o sufixo (Filho,
+        Júnior, Neto) iguais; as diferenças aceitas são partículas, iniciais e abreviações de até 3 letras (dos
+        dois lados) e erro de 1 letra (2 em palavras de 8+) só em sobrenome (_diferencas);
+      - há prova de contexto: a mesma escola, ou a mesma cidade com premiações a até 3 anos;
+      - nenhuma edição em comum e as premiações cabem numa pessoa (as travas de sempre);
+      - diferença só de partículas ou de uma letra exige nome pouco comum (_par_aceito);
+      - a abreviação não tem outra leitura entre os nomes da mesma cidade (_OutrasLeituras).
+    Os pares aceitos são agrupados com restrições (_agrupar): mais de dois perfis só se juntam se todos cabem
+    numa pessoa. O perfil de nome mais completo fica com o id (_quem_fica); os endereços dos outros continuam
+    valendo e levam a ele.
+
+    As menções da OBMEP contam aqui como as outras premiações: duas das quatro grafias do Almir só têm menções.
+    """
+    perfis_por_id: dict[str, _Perfil] = {}
+    for p in premiacoes:
+        perfil = perfis_por_id.get(p["aluno_id"])
+        if perfil is None:
+            perfil = perfis_por_id[p["aluno_id"]] = _Perfil(p["aluno_id"], _palavras(p["aluno_id"].split("|")[0]), [])
+        perfil.registros.append(p)
+    perfis = list(perfis_por_id.values())
+    del perfis_por_id
+    try:
+        frequencia = _frequencias(perfis)
+        prenomes, raridade = _prenomes(perfis), _estimador_de_raridade(perfis, frequencia)
+        candidatos = []
+        for custo, x, y in _pares_pelo_nome(perfis, prenomes):
+            ordem = _par_aceito(x, y, custo, raridade)
+            if ordem is not None:
+                candidatos.append((ordem, x, y))
+        candidatos.sort(key=lambda c: c[0])
+        leituras = _OutrasLeituras(perfis, [(x, y) for _, x, y in candidatos])
+        arestas = [(x, y) for _, x, y in candidatos if not leituras.tem(x, y)]
+        absorvidos: dict[str, str] = {}
+        for grupo in _agrupar(arestas):
+            fica = _quem_fica(grupo, frequencia)
+            for perfil in grupo:
+                if perfil is not fica:
+                    absorvidos[perfil.ident] = fica.ident
+                    for p in perfil.registros:
+                        p["aluno_id_absorvido"], p["aluno_id"] = p["aluno_id"], fica.ident
+        return absorvidos
+    finally:
+        _encaixe.cache_clear()   # os caches não ficam ocupando memória durante a gravação da base
+        _palavras_da_escola.cache_clear()

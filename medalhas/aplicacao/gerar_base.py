@@ -51,7 +51,8 @@ def gerar_base(coletores: Iterable[Coletor], repositorio: RepositorioPremiacoes,
     """Coleta todas as fontes, aplica as regras do domínio e grava a base nova de uma vez.
 
     Ordem: limpeza -> correções à mão -> identidade dos alunos (UF dos que vieram sem, mesma pessoa entre
-    estados) -> cidade das escolas -> filtro de meninas -> indexação (campos de busca, chave da escola, pontos).
+    estados) -> cidade das escolas -> grafias diferentes da mesma pessoa -> filtro de meninas -> indexação
+    (campos de busca, chave da escola, pontos).
 
     Uma fonte que falha (ou que não devolve nenhuma premiação, ou devolve bem menos que as da base atual: a
     página oficial mudou) entra no relatório e não
@@ -92,6 +93,10 @@ def gerar_base(coletores: Iterable[Coletor], repositorio: RepositorioPremiacoes,
     provas = [p for p in premiacoes if not identidade.de_massa(p)]   # menções não mudam a escola de ninguém
     com_cidade = escolas.completar_municipios(premiacoes, provas)
     log(f"Escolas: {com_cidade} premiações sem cidade ganharam a da escola de mesmo nome no estado")
+    # depois da cidade das escolas: a mesma cidade é uma das provas de que duas grafias são a mesma pessoa
+    absorvidos = identidade.juntar_grafias(premiacoes)
+    log(f"Identidades: {len(absorvidos)} perfis com outra grafia do nome juntados ao da mesma pessoa "
+        f"({len(set(absorvidos.values()))} perfis os receberam)")
     meninas = sexo.marcar_meninas(premiacoes)
     log(f"Meninas: {meninas} alunas premiadas em olimpíadas ou etapas só para meninas")
 
