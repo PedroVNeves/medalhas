@@ -540,6 +540,11 @@ def _diferencas(a: tuple[str, ...], b: tuple[str, ...], prenomes: frozenset[str]
     return custo
 
 
+def _so_grafia(a: tuple[str, ...], b: tuple[str, ...]) -> bool:
+    """Os dois nomes diferem só por erros de digitação: mesmas palavras, na ordem, nenhuma inicial ou abreviação."""
+    return len(a) == len(b) and a[0] == b[0] and all(_encaixe(x, y) in ("igual", "grafia") for x, y in zip(a, b))
+
+
 def _prenomes(perfis: list[_Perfil]) -> frozenset[str]:
     """Palavras que são quase sempre prenome: aparecem como 1ª palavra (ou 2ª, em nomes de 3+ palavras) em
     LIMITE_PRENOME das vezes ou mais. Sobrenomes (Gouveia, Camargo, Azevedo) raramente são a 2ª palavra."""
@@ -706,13 +711,21 @@ class _OutrasLeituras:
                         self.indice.setdefault((lugar, chave), []).append(r)
 
     def tem(self, x: _Perfil, y: _Perfil) -> bool:
-        """Algum outro nome da cidade de x ou de y encaixa num dos dois e não no outro?"""
+        """Algum outro nome da cidade de x ou de y encaixa num dos dois e não no outro?
+
+        Não conta o nome que é só mais um erro de digitação de x ou de y e cabe na mesma pessoa: Alice Barros
+        Lourencini Palaoro, Lourexini Palaoro e Lourencin Palaoroi, na mesma escola, são três grafias de uma
+        aluna, e não leituras concorrentes que se bloqueiam. Uma inicial ou abreviação continua contando."""
         for lugar in {*_cidades(x), *_cidades(y)}:
             for chave in {*_chaves_de_leitura(x.palavras), *_chaves_de_leitura(y.palavras)}:
                 for r in self.indice.get((lugar, chave), ()):
-                    if r.nome not in (x.nome, y.nome) and (
-                            _encaixam(r.palavras, x.palavras) != _encaixam(r.palavras, y.palavras)):
-                        return True
+                    if r.nome in (x.nome, y.nome) or (
+                            _encaixam(r.palavras, x.palavras) == _encaixam(r.palavras, y.palavras)):
+                        continue
+                    variante = _so_grafia(r.palavras, x.palavras) or _so_grafia(r.palavras, y.palavras)
+                    if variante and _podem_juntar([x, y], [r]):
+                        continue
+                    return True
         return False
 
 

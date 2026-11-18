@@ -266,6 +266,17 @@ class TestGrafiasDiferentes(unittest.TestCase):
               *[em(f"Outro{i} Trevisan", 2010, f"Escola {i}", f"Cidade {i}", "RS") for i in range(5)]]
         self.assertEqual(juntar(ps), {"BERNARDO PERUZZO TREVISAN|RS": "BERNARDO PERUZZO TREVIZAN|RS"})
 
+    def test_tres_grafias_com_erros_nao_se_bloqueiam(self):
+        # caso real: três grafias de uma aluna no IFES Guarapari; cada uma não pode virar "outra leitura" da outra
+        ifes = "IFES - CAMPUS GUARAPARI"
+        ps = [em("ALICE BARROS LOURENCINI PALAORO", 2021, "ESCOLA RUI BARBOSA", "GUARAPARI", "ES", nivel="2"),
+              em("ALICE BARROS LOURENCINI PALAORO", 2022, "ESCOLA RUI BARBOSA", "GUARAPARI", "ES", nivel="2"),
+              em("ALICE BARROS LOUREXINI PALAORO", 2023, ifes, "GUARAPARI", "ES", medalha=MENCAO),
+              em("ALICE BARROS LOURENCINI PALAORO", 2024, ifes, "GUARAPARI", "ES", medalha="Prata"),
+              em("ALICE BARROS LOURENCIN PALAOROI", 2025, ifes, "GUARAPARI", "ES", medalha="Ouro")]
+        juntar(ps)
+        self.assertEqual({p["aluno_id"] for p in ps}, {"ALICE BARROS LOURENCINI PALAORO|ES"})
+
     def test_sem_maioria_clara_fica_a_grafia_usual(self):
         # 2 listas com um erro (Pereria) contra 1 certa: pouco para decidir; fica a grafia usual na base
         ps = [em("ADRIANO BORGES PERERIA FERREIRA", 2016, "EE Um", "Maceió", nivel="2"),
