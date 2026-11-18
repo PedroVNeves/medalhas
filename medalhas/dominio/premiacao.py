@@ -37,3 +37,4 @@ class Premiacao(TypedDict):
     pontos: str | None
     fonte: str               # página oficial onde o resultado foi publicado
     aluno_id: NotRequired[str]   # preenchido pela regra de identidade (dominio.identidade)
+    aluno_id_absorvido: NotRequired[str]   # id do perfil de outra grafia que juntar_grafias juntou a aluno_id

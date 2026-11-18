@@ -119,8 +119,8 @@ Se você organiza uma olimpíada ou tem a lista de premiados de uma delas, [entr
 As listas oficiais não têm CPF, data de nascimento nem código de escola: só nomes escritos de jeitos
 diferentes. Esta seção explica como o Medalhas decide o que é a mesma pessoa, a mesma escola e a mesma cidade.
 As regras ficam em `medalhas/dominio/` e são aplicadas ao gerar a base (`aplicacao/gerar_base.py`), nesta
-ordem: limpeza dos nomes → correções à mão → identidade dos alunos → cidade das escolas → filtro de meninas →
-indexação. A limpeza tira o que as listas deixam grudado no nome e que separaria a mesma pessoa em dois perfis:
+ordem: limpeza dos nomes → correções à mão → identidade dos alunos → cidade das escolas → grafias diferentes da
+mesma pessoa → filtro de meninas → indexação. A limpeza tira o que as listas deixam grudado no nome e que separaria a mesma pessoa em dois perfis:
 restos de HTML ("Júnior/td>"), e-mail, turma ("7ºB") e número de nota de rodapé; premiação sem nome ou sem
 ano é descartada.
 
@@ -135,7 +135,8 @@ O aluno é identificado por **nome (sem acento) + estado**: o id `MARIA SOUZA LI
   homônimos). Alunos de ponta mudam de estado (vão estudar em Fortaleza, por exemplo), e essa regra os junta.
 - **Mesmo nome no mesmo estado** é uma pessoa só, a menos que as premiações não caibam numa pessoa: a mesma
   olimpíada no mesmo ano em duas cidades (ou em duas escolas da mesma cidade), o nível da OBMEP regredindo
-  com os anos, ou uma carreira de mais de 12 anos. Aí o nome é dividido por cidade (e por escola, ou pelos
+  com os anos, o mesmo nível da OBMEP anos demais depois (mais de 3 anos nos níveis 1 e 2, mais de 5 no nível 3,
+  que no ensino técnico dura 4 anos), ou uma carreira de mais de 12 anos. Aí o nome é dividido por cidade (e por escola, ou pelos
   intervalos de 8 anos ou mais sem premiação): a maior parte fica com `NOME|UF` e as outras ganham a cidade
   no id (`LUCAS ANTONIO SILVA|MG|DIVINOPOLIS`, endereço `/aluno/lucas-antonio-silva-mg-divinopolis`).
 - **Premiações sem estado** (IMO, EGOI, IOAI, Itabirana de 2020 em diante) vão para a pessoa de mesmo nome,
@@ -148,9 +149,20 @@ O aluno é identificado por **nome (sem acento) + estado**: o id `MARIA SOUZA LI
 - **Nomes abreviados** em listas internacionais ("Enzo Holanda") são completados quando há um único
   medalhista compatível ("Enzo Holanda Sampaio"). Nas internacionais de informática (EGOI, IOAI), os
   medalhistas da OBI também contam, porque é de lá que essas alunas e alunos vêm.
+- **Grafias diferentes do mesmo nome** ("Almir Sergio R dos Santos Filho", "Almir Sergio Ramos dos S Filho")
+  viram uma pessoa só quando: o nome encaixa palavra a palavra, sem omitir nenhuma, com a primeira palavra e o
+  sufixo (Filho, Júnior, Neto) iguais, e as diferenças são partículas, iniciais/abreviações de até 3 letras ou
+  um erro de 1 letra em sobrenome; há prova de contexto (a mesma escola, ou a mesma cidade com até 3 anos de
+  distância); não há a mesma olimpíada no mesmo ano nos dois perfis e as travas acima passam; a abreviação não
+  tem outra leitura entre os nomes da mesma cidade ("B" pode ser Batista ou Barbosa); e, se a diferença é só de
+  partícula ou de uma letra, o nome é pouco comum. Erro no prenome (Natan/Natani: quase sempre irmãos) e
+  palavras omitidas ficam de fora de propósito. Os perfis se juntam com restrições: dois grupos que não cabem
+  numa pessoa nunca viram um por tabela. Fica o id do nome mais completo, e o endereço dos outros redireciona
+  para ele. Detalhes e números em [`docs/identidade-regras.md`](docs/identidade-regras.md).
 - O estado do perfil é o da premiação **mais recente**; se a pessoa ganha uma medalha nova em outro estado,
   o endereço do perfil muda.
-- O nome exibido prefere a grafia da OBM, que publica com acentos e maiúsculas certas.
+- O nome exibido é a grafia do id (num perfil que juntou grafias, a mais completa) e, entre as premiações com
+  essa grafia, prefere a da OBM, que publica com acentos e maiúsculas certas.
 
 ### Escolas
 
@@ -213,7 +225,9 @@ dizendo a origem do erro:
 | `MENINAS_CONFIRMADAS` | `dominio/sexo.py` | alunas que pediram para entrar no filtro de meninas |
 
 Depois de uma correção em `GRAFIAS_CORRIGIDAS`, o endereço do perfil com o nome errado continua valendo:
-redireciona (301) para o perfil certo, então links já compartilhados não quebram.
+redireciona (301) para o perfil certo, então links já compartilhados não quebram. O mesmo vale para os perfis
+juntados pela regra das grafias diferentes. As correções à mão vêm antes dessa regra e resolvem o que ela deixa
+de fora de propósito (erro no prenome, palavras omitidas).
 
 Achou um erro? Veja [como contribuir](#como-contribuir).
 

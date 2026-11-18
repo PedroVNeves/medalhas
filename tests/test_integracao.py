@@ -486,6 +486,48 @@ class TestRevisao(TestPontaAPonta):
 
 
 
+class TestGrafiasJuntadas(unittest.TestCase):
+    """Perfis de grafias diferentes juntados (identidade.juntar_grafias): o endereço antigo leva ao perfil que
+    ficou, e o nome exibido é a grafia do id, mesmo quando a premiação mais recente é a abreviada."""
+
+    def test_endereco_antigo_e_nome_exibido(self):
+        premiacoes = [p(nome, "AL", "OBMEP", ano, medalha, nivel, escola="EE Um", municipio="Maceió")
+                      for nome, ano, medalha, nivel in (("ZULEICA MARTA PRADO LINS", 2020, "Ouro", "1"),
+                                                        ("ZULEICA MARTA P LINS", 2021, "Prata", "2"))]
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / "medalhas.db"
+            gerar_base([ColetorFalso("OBMEP", premiacoes)], RepositorioSqlite(caminho), log=lambda _: None)
+            with LeituraSqlite(caminho).sessao() as s:
+                self.assertEqual(s.enderecos().resolver("aluno", "zuleica-marta-p-lins-al"),
+                                 ("ZULEICA MARTA PRADO LINS|AL", "zuleica-marta-prado-lins-al"))
+                resumo, lista = s.aluno("ZULEICA MARTA PRADO LINS|AL", Criterios())
+                self.assertIsNone(s.aluno("ZULEICA MARTA P LINS|AL", Criterios()))
+        self.assertEqual((resumo["nome"], resumo["total"], len(lista)), ("Zuleica Marta Prado Lins", 2, 2))
+
+
+class TestPerfisQueSumiram(unittest.TestCase):
+    """Um perfil da base anterior que deixa de existir (as regras de identidade mudaram) continua acessível pelo
+    endereço antigo, que leva ao perfil que ficou com as premiações dele."""
+
+    def test_endereco_antigo_leva_ao_perfil_que_ficou(self):
+        def base(ano_do_ouro):
+            return [p("TEODORA VILAR", "AL", "OBMEP", ano_do_ouro, "Ouro", "1", escola="EE Um", municipio="Maceió"),
+                    p("TEODORA VILAR", "AL", "OBMEP", 2021, "Prata", "2", escola="EE Um", municipio="Maceió"),
+                    p("TEODORA VILAR", "AL", "OBMEP", 2020, "Bronze", "1", escola="EE Dois", municipio="Arapiraca")]
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / "medalhas.db"
+            # a mesma edição (2020) em duas cidades: homônimas, e a menor ganha a cidade no id
+            gerar_base([ColetorFalso("OBMEP", base(2020))], RepositorioSqlite(caminho), log=lambda _: None)
+            with LeituraSqlite(caminho).sessao() as s:
+                self.assertIsNotNone(s.enderecos().resolver("aluno", "teodora-vilar-al-arapiraca"))
+            # na geração seguinte o ouro é de 2019: tudo cabe numa pessoa só e o perfil com a cidade some,
+            # com o bronze dele intacto
+            gerar_base([ColetorFalso("OBMEP", base(2019))], RepositorioSqlite(caminho), log=lambda _: None)
+            with LeituraSqlite(caminho).sessao() as s:
+                self.assertEqual(s.enderecos().resolver("aluno", "teodora-vilar-al-arapiraca"),
+                                 ("TEODORA VILAR|AL", "teodora-vilar-al"))
+
+
 class TestPerfisSoComMencao(unittest.TestCase):
     """Perfis só com menções da OBMEP existem e aparecem na busca, mas ficam fora do sitemap e com noindex."""
 

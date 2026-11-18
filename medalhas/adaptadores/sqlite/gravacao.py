@@ -61,7 +61,9 @@ class RepositorioSqlite:
             con.executescript(RESUMOS)
             gravar_premiacoes(con, registros)
             con.execute("INSERT INTO meta VALUES ('atualizado_em', ?)", (atualizado_em,))
-            gravar_resumos(con)
+            # perfis de outra grafia juntados pela identidade (identidade.juntar_grafias): id antigo -> id atual
+            absorvidos = {r["aluno_id_absorvido"]: r["aluno_id"] for r in registros if r.get("aluno_id_absorvido")}
+            gravar_resumos(con, absorvidos, anterior=self.caminho)
             con.execute("ANALYZE")   # estatísticas para o SQLite escolher o índice certo em cada consulta
             con.commit()
             con.execute("VACUUM")    # sem as páginas soltas que a montagem dos índices deixa: arquivo menor
@@ -103,13 +105,18 @@ def _zerado(base: dict) -> dict:
             **{c: 0 for c in _MEDALHAS_EDITAL}}
 
 
-def gravar_resumos(con: sqlite3.Connection) -> None:
+def gravar_resumos(con: sqlite3.Connection, absorvidos: dict[str, str] | None = None,
+                   anterior: Path | None = None) -> None:
     """Tabelas alunos, escolas e cidades: totais, pontos e posição nacional/estadual em cada método; depois os
     endereços das páginas e os índices das sugestões (gravar_enderecos, gravar_indices_de_busca).
 
     Lê as premiações da mais recente para a mais antiga, então o "primeiro valor não vazio" de nome, escola,
     município, rede e esfera é sempre o mais recente. A UF do aluno é a do id (a UF principal escolhida pela
-    regra de identidade), para o perfil e a posição estadual baterem com ele.
+    regra de identidade), para o perfil e a posição estadual baterem com ele. O nome exibido é a grafia do id:
+    num perfil que juntou grafias diferentes (identidade.juntar_grafias), as outras ficam nas premiações e na
+    busca, e o título bate com o endereço.
+
+    absorvidos: {id de perfil que deixou de existir: id do perfil que o recebeu}, para os endereços antigos.
     """
     alunos: dict[str, dict] = {}
     escolas: dict[str, dict] = {}
@@ -117,21 +124,25 @@ def gravar_resumos(con: sqlite3.Connection) -> None:
     # as menções da OBMEP (identidade.de_massa) vêm por último: nome, escola, cidade, rede e esfera de quem tem
     # outras premiações saem delas, e a menção só preenche o que ficou vazio (ou a ficha de quem só tem menção)
     cursor = con.execute(f"""SELECT aluno_id, aluno_n, nome, uf, competicao, ano, medalha, escola, escola_chave,
-                                    municipio, rede, esfera, municipio_busca, {", ".join(PONTOS)}
+                                    municipio, rede, esfera, municipio_busca, nome_busca, {", ".join(PONTOS)}
                              FROM medalhas
                              ORDER BY (competicao = 'OBMEP' AND medalha = '{MENCAO}'), ano DESC, competicao DESC, id""")
     for linha in cursor:
-        aluno_id, aluno_n, nome, uf, competicao, ano, medalha, escola, chave, municipio, rede, esfera, cidade = (
-            linha[:13])
-        pontos = dict(zip(PONTOS, linha[13:]))
+        (aluno_id, aluno_n, nome, uf, competicao, ano, medalha, escola, chave, municipio, rede, esfera, cidade,
+         nome_busca) = linha[:14]
+        pontos = dict(zip(PONTOS, linha[14:]))
         massa = de_massa({"competicao": competicao, "medalha": medalha})
+        grafia_do_id = nome_busca == aluno_id.split("|")[0]
         a = alunos.get(aluno_id)
         if a is None:
             uf_do_id = aluno_id.split("|")[1] if "|" in aluno_id else ""
             a = alunos[aluno_id] = _zerado({"n": aluno_n, "id": aluno_id, "nome": nome, "uf": uf_do_id or uf,
                                             "comps": set(), "escola": None, "escola_chave": None, "municipio": None,
-                                            "de": ano, "ate": ano})
-        if competicao == "OBM" and a["nome"] != nome and "OBM" not in a["comps"]:
+                                            "de": ano, "ate": ano, "grafia_do_id": grafia_do_id})
+        elif grafia_do_id and not a["grafia_do_id"]:
+            a["nome"], a["grafia_do_id"] = nome, True   # a premiação mais recente era de outra grafia
+        if competicao == "OBM" and a["nome"] != nome and "OBM" not in a["comps"] and (
+                grafia_do_id or not a["grafia_do_id"]):
             a["nome"] = nome   # a OBM publica nomes com acento e caixa mista: é a grafia mais fiel
         a["comps"].add(competicao)
         a["uf"] = a["uf"] or uf
@@ -201,7 +212,7 @@ def gravar_resumos(con: sqlite3.Connection) -> None:
     for c in cidades.values():
         c["nome"] = nome_da_cidade(c["grafias"]) or c["id"].split("|")[0]
         c["alunos"], c["escolas"] = len(c["alunos_set"]), len(c["escolas_set"])
-    gravar_enderecos(con, alunos, escolas, cidades)
+    gravar_enderecos(con, alunos, escolas, cidades, absorvidos, anterior)
     con.execute("DELETE FROM alunos")   # só número e id, de gravar_premiacoes: agora a ficha completa
     campos_aluno = ["n", *CAMPOS_ALUNO]
     con.executemany(insert("alunos", campos_aluno), ([a[c] for c in campos_aluno] for a in alunos.values()))
@@ -210,15 +221,21 @@ def gravar_resumos(con: sqlite3.Connection) -> None:
     gravar_indices_de_busca(con)
 
 
-def gravar_enderecos(con: sqlite3.Connection, alunos: dict, escolas: dict, cidades: dict) -> None:
+def gravar_enderecos(con: sqlite3.Connection, alunos: dict, escolas: dict, cidades: dict,
+                     absorvidos: dict[str, str] | None = None, anterior: Path | None = None) -> None:
     """Endereço oficial de cada aluno, escola e cidade (no campo endereco de cada item) e a tabela enderecos com
-    todo endereço aceito: o oficial, o montado pelo id (o que o site usa nos links) e os perfis de grafias
-    corrigidas à mão, que levam ao perfil certo. Escolas vão da mais premiada para a menos: quando o endereço
-    montado pelo id de duas coincide ("A B|C|UF" e "A B C||UF"), ele leva à maior."""
+    todo endereço aceito: o oficial, o montado pelo id (o que o site usa nos links) e os perfis que deixaram de
+    existir, que levam ao perfil certo: as grafias corrigidas à mão e os perfis absorvidos (id antigo -> id que
+    ficou, de identidade.juntar_grafias) e qualquer outro perfil da base anterior que sumiu, que leva ao perfil
+    que ficou com as premiações dele (_perfis_que_sumiram). Escolas vão da mais premiada para a menos: quando o
+    endereço montado pelo id de duas coincide ("A B|C|UF" e "A B C||UF"), ele leva à maior."""
     por_tamanho = sorted(escolas.values(), key=lambda e: (-e["total"], e["id"]))
+    antigos = _enderecos_antigos(con) + [(slug(antigo), ident) for antigo, ident in sorted((absorvidos or {}).items())]
+    ja_aceitos = {endereco for endereco, _ in antigos}
+    antigos += [(e, i) for e, i in _perfis_que_sumiram(con, anterior, alunos) if e not in ja_aceitos]
     enderecos = Enderecos([(i, i) for i in alunos],
                           [(e["id"], texto_escola(e["nome"], e["municipio"], e["uf"])) for e in por_tamanho],
-                          [(i, i) for i in cidades], _enderecos_antigos(con))
+                          [(i, i) for i in cidades], antigos)
     for tipo, grupo in ((ALUNO, alunos), (ESCOLA, escolas), (CIDADE, cidades)):
         for item in grupo.values():
             item["endereco"] = enderecos.de(tipo, item["id"])
@@ -226,6 +243,41 @@ def gravar_enderecos(con: sqlite3.Connection, alunos: dict, escolas: dict, cidad
     con.executemany("INSERT INTO enderecos VALUES (?, ?, ?)",
                     ((tipo, endereco, ident) for tipo in (ALUNO, ESCOLA, CIDADE)
                      for endereco, ident in enderecos.aceitos(tipo) if endereco != enderecos.de(tipo, ident)))
+
+
+# O que identifica uma premiação entre duas gerações da base (o id e o aluno mudam; isto não)
+_CHAVE_DA_PREMIACAO = "competicao, ano, nivel, medalha, uf, municipio_busca, nome_busca"
+
+
+def _perfis_que_sumiram(con: sqlite3.Connection, anterior: Path | None, alunos: dict) -> list[tuple[str, str]]:
+    """(endereço de um perfil da base anterior que não existe mais, id do perfil que ficou com a maior parte das
+    premiações dele). Uma mudança nas regras de identidade (juntar grafias, separar homônimos) pode apagar um
+    perfil ou trocar o id dele; quem guardou o link continua chegando às premiações. Sem base anterior legível
+    (primeira geração, arquivo corrompido), não há o que redirecionar."""
+    if not anterior or not anterior.exists():
+        return []
+    try:
+        velha = sqlite3.connect(f"file:{anterior}?mode=ro", uri=True)
+        try:
+            enderecos = {i: e for i, e in velha.execute("SELECT id, endereco FROM alunos") if i not in alunos}
+            if not enderecos:
+                return []
+            # premiações dos perfis que sumiram, pela chave que não muda (só elas ficam na memória)
+            do_sumido: dict[tuple, list[str]] = {}
+            for linha in velha.execute(f"SELECT aluno_id, {_CHAVE_DA_PREMIACAO} FROM medalhas"):
+                if linha[0] in enderecos:
+                    do_sumido.setdefault(linha[1:], []).append(linha[0])
+        finally:
+            velha.close()
+    except sqlite3.Error:
+        return []
+    votos: dict[str, dict[str, int]] = {}
+    for linha in con.execute(f"""SELECT a.id, {', '.join('p.' + c for c in _CHAVE_DA_PREMIACAO.split(', '))}
+                                 FROM premiacoes p JOIN alunos a ON a.n = p.aluno_n"""):
+        for sumido in do_sumido.get(linha[1:], ()):
+            votos.setdefault(sumido, {}).setdefault(linha[0], 0)
+            votos[sumido][linha[0]] += 1
+    return [(enderecos[sumido] or slug(sumido), max(sorted(v), key=v.get)) for sumido, v in sorted(votos.items())]
 
 
 def _enderecos_antigos(con: sqlite3.Connection) -> list[tuple[str, str]]:

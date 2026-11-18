@@ -10,6 +10,7 @@ from medalhas.dominio import (
     ranking,
     sexo,
 )
+from medalhas.dominio.premiacao import MENCAO
 from medalhas.dominio.texto import (
     capitalizar_nome,
     limpar_escola,
@@ -212,6 +213,136 @@ class TestIdentidade(unittest.TestCase):
         self.assertEqual(identidade.corrigir_grafias(ps), 1)
         self.assertEqual([p["nome"] for p in ps],
                          ["João Vitor Tomaz Alves Ferreira", "João Ferreira", "João Ferreira"])
+
+
+def em(nome, ano, escola, municipio, uf="AL", competicao="OBMEP", medalha="Bronze", nivel="3") -> dict:
+    """Premiação com escola e cidade (a prova de contexto das grafias diferentes)."""
+    return {**premiacao(nome, uf, competicao, ano, medalha, nivel), "escola": escola, "municipio": municipio}
+
+
+# Nomes sem relação com os testes: dão à estimativa de raridade uma base de comparação, como a base real
+POVO = [em(f"Fulano{i} Beltrano{i} Sicrano{i}", 2010, f"Escola {i}", f"Cidade {i}", "RR") for i in range(50)]
+
+
+def juntar(ps: list[dict]) -> dict[str, str]:
+    """Regras de nome exato e depois a junção de grafias diferentes, com a base de comparação."""
+    todas = ps + [dict(p) for p in POVO]
+    identidade.atribuir_alunos(todas)
+    return identidade.juntar_grafias(todas)
+
+
+class TestGrafiasDiferentes(unittest.TestCase):
+    """identidade.juntar_grafias: perfis da mesma pessoa com o nome escrito de jeitos diferentes."""
+
+    def test_almir_quatro_grafias_viram_um_perfil(self):
+        jorge, ifal = "ESCOLA ESTADUAL DR. JORGE DE LIMA", "INSTITUTO FEDERAL DE ALAGOAS CAMPUS MURICI"
+        ps = [em("ALMIR SERGIO RAMOS DOS SANTOS FILHO", 2022, jorge, "UNIAO DOS PALMARES", medalha=MENCAO, nivel="2"),
+              em("ALMIR SERGIO R DO SANTOS FILHO", 2023, jorge, "UNIAO DOS PALMARES", medalha=MENCAO, nivel="2"),
+              em("ALMIR SERGIO RAMOS DOS S FILHO", 2024, ifal, "MURICI", medalha=MENCAO),
+              em("ALMIR SERGIO R DOS SANTOS FILHO", 2025, ifal, "MURICI"),
+              em("Almir Sérgio Ramos Dos Santos Filho", 2026, "IFAL - CAMPUS MURICI", "MURICI", competicao="OMIF",
+                 nivel=None)]
+        absorvidos = juntar(ps)
+        self.assertEqual({p["aluno_id"] for p in ps}, {"ALMIR SERGIO RAMOS DOS SANTOS FILHO|AL"})
+        self.assertEqual(absorvidos, {"ALMIR SERGIO R DO SANTOS FILHO|AL": "ALMIR SERGIO RAMOS DOS SANTOS FILHO|AL",
+                                      "ALMIR SERGIO RAMOS DOS S FILHO|AL": "ALMIR SERGIO RAMOS DOS SANTOS FILHO|AL",
+                                      "ALMIR SERGIO R DOS SANTOS FILHO|AL": "ALMIR SERGIO RAMOS DOS SANTOS FILHO|AL"})
+        self.assertEqual(ps[1]["aluno_id_absorvido"], "ALMIR SERGIO R DO SANTOS FILHO|AL")   # para o endereço antigo
+        self.assertNotIn("aluno_id_absorvido", ps[0])
+
+    def test_erro_de_letra_em_sobrenome_junta(self):
+        ps = [em("JOAO VINICIUS PRIMAKI PRADO", 2013, "CE ANTONIO", "RONCADOR", "PR", nivel="2"),
+              em("JOAO VINICIUS PIMAKI PRADO", 2014, "COLEGIO ESTADUAL ANTONIO", "RONCADOR", "PR"),
+              em("JOAO VINICIUS PRIMAKI PRADO", 2015, "CE ANTONIO", "RONCADOR", "PR")]
+        self.assertEqual(juntar(ps), {"JOAO VINICIUS PIMAKI PRADO|PR": "JOAO VINICIUS PRIMAKI PRADO|PR"})
+
+    def test_mesma_edicao_sao_duas_pessoas(self):
+        for escola in ("EE Beta", "EE Alfa"):   # em escolas diferentes da cidade, ou gêmeos na mesma escola
+            with self.subTest(escola=escola):
+                ps = [em("Joana Maria Prado Lins", 2018, "EE Alfa", "Maceió"),
+                      em("Joana M Prado Lins", 2018, escola, "Maceió")]
+                self.assertEqual(juntar(ps), {})
+        ps = [em("Joana Maria Prado Lins", 2018, "EE Alfa", "Maceió"),
+              em("Joana M Prado Lins", 2019, "EE Beta", "Maceió")]
+        self.assertEqual(len(juntar(ps)), 1)   # um ano depois, na mesma cidade: a mesma pessoa
+
+    def test_sem_prova_de_contexto_nao_junta(self):
+        longe = [em("Joana Maria Prado Lins", 2018, "EE Alfa", "Maceió"),
+                 em("Joana M Prado Lins", 2019, "EE Beta", "Penedo")]
+        tarde = [em("Joana Maria Prado Lins", 2015, "EE Alfa", "Maceió", nivel="1"),
+                 em("Joana M Prado Lins", 2019, "EE Beta", "Maceió")]   # mesma cidade, mas 4 anos depois
+        self.assertEqual(juntar(longe), {})
+        self.assertEqual(juntar(tarde), {})
+
+    def test_inicial_com_outra_leitura_na_cidade_nao_junta(self):
+        def ps(*extra):
+            return [em("Ana Carolina B da Silva", 2015, "EE Mario Junqueira", "São Lourenço", "MG", nivel="1"),
+                    em("Ana Carolina Batista da Silva", 2016, "EE Mario Junqueira", "São Lourenço", "MG", nivel="1"),
+                    *extra]
+        self.assertEqual(len(juntar(ps())), 1)
+        barbosa = em("Ana Carolina Barbosa da Silva", 2013, "EE Outra", "São Lourenço", "MG", nivel="1")
+        sozinhos = ps(barbosa)
+        self.assertEqual(juntar(sozinhos), {})   # o "B" pode ser Batista ou Barbosa
+        self.assertEqual(len({p["aluno_id"] for p in sozinhos}), 3)
+        longe = em("Ana Carolina Barbosa da Silva", 2013, "EE Outra", "Varginha", "MG", nivel="1")
+        self.assertEqual(len(juntar(ps(longe))), 1)   # a outra leitura só conta na mesma cidade
+
+    def test_erro_de_letra_no_prenome_nao_junta(self):
+        # irmãos na mesma escola: o erro de letra no prenome quase sempre é outra pessoa
+        natan = [em("Natan Novassat Ribeiro", 2016, "EE Alfa", "Maceió", nivel="1"),
+                 em("Natani Novassat Ribeiro", 2018, "EE Alfa", "Maceió", nivel="1")]
+        ligia = [em("Maria Ligia Sousa Prado", 2016, "EE Alfa", "Maceió", nivel="1"),
+                 em("Maria Livia Sousa Prado", 2018, "EE Alfa", "Maceió", nivel="2")]
+        self.assertEqual(juntar(natan), {})
+        self.assertEqual(juntar(ligia), {})
+
+    def test_particula_so_junta_nome_pouco_comum(self):
+        comuns = [em(f"Gabriel Oliveira Santos X{i}", 2010, f"Escola {i}", f"Outra {i}", "SP") for i in range(20)]
+        gabriel = [em("Gabriel de Oliveira Santos", 2015, "EE Alfa", "Campinas", "SP", nivel="1"),
+                   em("Gabriel Oliveira dos Santos", 2016, "EE Beta", "Campinas", "SP", nivel="1")]
+        self.assertEqual(juntar(gabriel + comuns), {})
+        zebedeu = [em("Zebedeu de Quintanilha Prado", 2015, "EE Alfa", "Campinas", "SP", nivel="1"),
+                   em("Zebedeu Quintanilha Prado", 2016, "EE Beta", "Campinas", "SP", nivel="1")]
+        self.assertEqual(len(juntar(zebedeu + comuns)), 1)
+
+    def test_mesmo_nivel_da_obmep_quatro_anos_depois_nao_junta(self):
+        ps = [em("Isabela de L da Silva Moura", 2012, "EE Alfa", "Maceió", nivel="1"),
+              em("Isabela de Lima da Silva Moura", 2016, "EE Alfa", "Maceió", nivel="1")]
+        self.assertEqual(juntar(ps), {})
+        ps = [em("Isabela de L da Silva Moura", 2012, "EE Alfa", "Maceió", nivel="1"),
+              em("Isabela de Lima da Silva Moura", 2014, "EE Alfa", "Maceió", nivel="2")]
+        self.assertEqual(len(juntar(ps)), 1)
+
+    def test_mesmo_nivel_da_obmep_anos_demais_depois_e_outra_pessoa(self):
+        def obmep(ano, nivel, municipio="Maceió"):
+            return em("Isabela Lima Moura", ano, f"EE {municipio}", municipio, nivel=nivel)
+        self.assertFalse(identidade._cabe_numa_pessoa([obmep(2012, "1"), obmep(2016, "1")]))
+        self.assertTrue(identidade._cabe_numa_pessoa([obmep(2012, "1"), obmep(2015, "1")]))
+        # o ensino médio técnico dura 4 anos, e há quem recomece o médio: o nível 3 tolera até 5
+        self.assertTrue(identidade._cabe_numa_pessoa([obmep(2019, "3"), obmep(2024, "3")]))
+        self.assertFalse(identidade._cabe_numa_pessoa([obmep(2012, "3"), obmep(2019, "3")]))
+        ps = [obmep(2012, "1"), obmep(2022, "1", "Penedo")]
+        identidade.atribuir_alunos(ps)
+        self.assertNotEqual(ps[0]["aluno_id"], ps[1]["aluno_id"])
+
+    def test_agrupamento_recusa_cadeia_com_mesma_edicao(self):
+        # Linz ~ Lins e Lins ~ Lina passam na regra, mas Linz e Lina são da mesma edição: não viram uma pessoa
+        a = em("Joana Maria Prado Linz", 2018, "EE Alfa", "Maceió", nivel="1")
+        b = em("Joana Maria Prado Lins", 2019, "EE Alfa", "Maceió", nivel="2")
+        c = em("Joana Maria Prado Lina", 2018, "EE Beta", "Maceió", nivel="1")
+        juntar([a, b, c])
+        self.assertEqual(a["aluno_id"], b["aluno_id"])   # a mesma escola entra primeiro
+        self.assertNotEqual(c["aluno_id"], b["aluno_id"])
+
+    def test_agrupamento_nao_reune_homonimos_ja_separados(self):
+        # dois homônimos (mesma edição em cidades diferentes) e uma abreviação que encaixa nos dois
+        h1 = em("Joana Maria Prado Lins", 2018, "EE Alfa", "Maceió", nivel="1")
+        h2 = em("Joana Maria Prado Lins", 2018, "EE Gama", "Penedo", nivel="1")
+        ponte = [em("Joana M Prado Lins", 2019, "EE Alfa", "Maceió", nivel="2"),
+                 em("Joana M Prado Lins", 2020, "EE Gama", "Penedo", nivel="2")]
+        absorvidos = juntar([h1, h2, *ponte])
+        self.assertNotEqual(h1["aluno_id"], h2["aluno_id"])
+        self.assertEqual(len(absorvidos), 1)   # a abreviação foi para um deles, e o outro ficou de fora
 
 
 class TestSexo(unittest.TestCase):
