@@ -11,7 +11,7 @@ quando duas premiações são da mesma pessoa ou da mesma escola, e deixa tudo p
 mantém o link da página oficial de onde veio, para conferência.
 
 Hoje são **23 olimpíadas**, de **1979 a 2026**: cerca de **854 mil premiações** (728 mil menções honrosas,
-quase todas da OBMEP) de **622 mil alunos**, **58 mil escolas** e **5.600 cidades**.
+quase todas da OBMEP) de **608 mil alunos**, **58 mil escolas** e **5.600 cidades**.
 
 > Projeto pessoal e independente, feito por **Pedro Neves**. Não tem vínculo com as olimpíadas, a SBM, o
 > IMPA nem qualquer órgão público. Correções, remoção de dados e contato:
@@ -65,7 +65,8 @@ python server.py     # abre o site em http://localhost:8000
 
 - As menções honrosas da OBMEP (cerca de 720 mil) entram na base: a geração leva uns 5 minutos e até 3,5 GB
   de memória. `python build_db.py --sem-mencoes-obmep` gera uma base bem menor para testes locais (não publique
-  assim: a base publicada tem as menções). Ver `docs/mencoes-obmep.md`.
+  assim: a base publicada tem as menções). A OBMEP publica as menções por estado, fora da lista nacional de
+  premiados; a rede pública de 2018 não tem lista (só a privada) e a edição de 2025 ainda não foi publicada.
 - `python build_db.py --refresh` apaga o cache e baixa tudo de novo (use quando sair um ano novo). Sem
   `--refresh`, as páginas já baixadas ficam em `cache/` e a base é regerada em segundos.
 - Se alguma fonte falhar (ou vier vazia), a base **não** é gravada e a anterior continua valendo: uma base
@@ -158,7 +159,11 @@ O aluno é identificado por **nome (sem acento) + estado**: o id `MARIA SOUZA LI
   partícula ou de uma letra, o nome é pouco comum. Erro no prenome (Natan/Natani: quase sempre irmãos) e
   palavras omitidas ficam de fora de propósito. Os perfis se juntam com restrições: dois grupos que não cabem
   numa pessoa nunca viram um por tabela. Fica o id do nome mais completo, e o endereço dos outros redireciona
-  para ele. Detalhes e números em [`docs/identidade-regras.md`](docs/identidade-regras.md).
+  para ele. A regra foi escolhida comparando, na base inteira, iniciais com e sem prova de contexto, distâncias
+  de texto (Levenshtein, Jaro-Winkler, cosseno de n-gramas), embeddings de modelos de linguagem e um modelo
+  probabilístico (Fellegi-Sunter): só o contexto (escola, cidade, anos) dá precisão, e a regra adotada erra em
+  cerca de 0,06% das junções, contra 6% a 84% dos métodos só de texto. Detalhes e números em
+  [`docs/identidade-regras.md`](docs/identidade-regras.md).
 - O estado do perfil é o da premiação **mais recente**; se a pessoa ganha uma medalha nova em outro estado,
   o endereço do perfil muda.
 - O nome exibido é a grafia do id (num perfil que juntou grafias, a mais completa) e, entre as premiações com

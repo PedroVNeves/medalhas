@@ -1,9 +1,8 @@
 # Identidade de alunos: as regras de produção
 
 Como o Medalhas decide que duas premiações são da mesma pessoa. O código está em
-`medalhas/dominio/identidade.py` e roda ao gerar a base (`medalhas/aplicacao/gerar_base.py`). A pesquisa que
-escolheu a regra das grafias diferentes, com todos os métodos testados e os números, está em
-`docs/identidade-pesquisa.md`.
+`medalhas/dominio/identidade.py` e roda ao gerar a base (`medalhas/aplicacao/gerar_base.py`). A regra das
+grafias diferentes foi escolhida comparando vários métodos na base inteira; os números estão na seção 6.
 
 ## O problema
 

@@ -440,8 +440,7 @@ def _atribuir(premiacoes: list[Premiacao]) -> int:
 #
 # Depois que as regras acima definem os perfis pelo nome exato, juntar_grafias junta os perfis da mesma pessoa
 # escritos de jeitos diferentes nas listas ("Almir Sergio R dos Santos Filho", "Almir Sergio Ramos dos S Filho").
-# A regra, em linguagem simples, está em docs/identidade-regras.md; a pesquisa que a escolheu, com os números,
-# em docs/identidade-pesquisa.md (é a "r_recomendada" de experimentos/identidade/).
+# A regra, em linguagem simples, e os números da comparação que a escolheu estão em docs/identidade-regras.md.
 
 MAX_ANOS_MESMA_CIDADE = 3           # só a mesma cidade (sem a mesma escola) prova algo com premiações a até 3 anos
 LIMITE_PRENOME = 0.6                # palavra que é 1º (ou 2º) nome em 60%+ das vezes é prenome (Lívia, Natan)

@@ -1,8 +1,8 @@
 """Coletor da OBMEP: relatórios de premiados em premiacao.obmep.org.br, por edição, medalha e rede.
 
 As menções honrosas ficam em listas por estado (verRelatorioPremiadosMencao-UF), fora da página nacional de
-premiados; são cerca de 50 mil por edição. Entram com mencoes=True, o padrão do build_db.py
-(ver docs/mencoes-obmep.md)."""
+premiados; são cerca de 50 mil por edição. Entram com mencoes=True, o padrão do build_db.py. A rede pública de
+2018 não tem lista (só a privada), e a de 2025 ainda não foi publicada."""
 import re
 
 from ...dominio.premiacao import BRONZE, MENCAO, OURO, PRATA, UFS, Premiacao

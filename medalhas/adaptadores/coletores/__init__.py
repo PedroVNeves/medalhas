@@ -31,7 +31,7 @@ class ColetorDeFuncao:
 
 def todos(mencoes_obmep: bool = False) -> list[ColetorDeFuncao]:
     """Um coletor por olimpíada, na ordem do catálogo. mencoes_obmep: inclui as menções honrosas da OBMEP
-    (cerca de 50 mil por edição; ver docs/mencoes-obmep.md)."""
+    (cerca de 50 mil por edição)."""
     coletores = []
     for sigla in CATALOGO:
         if sigla == "OBMEP" and mencoes_obmep:
