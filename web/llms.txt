@@ -1,6 +1,6 @@
 # Medalhas: Hall da Fama das Olimpíadas de Conhecimento do Brasil
 
-> Base aberta e gratuita com as premiações (ouro, prata, bronze e menção honrosa) de estudantes brasileiros em 23 olimpíadas científicas, de 1979 até hoje: mais de 130 mil premiações de mais de 80 mil alunos e 22 mil escolas. Os dados vêm das listas oficiais de cada olimpíada e podem ser consultados pelo site ou por uma API JSON pública, sem cadastro e sem chave.
+> Base aberta e gratuita com as premiações (ouro, prata, bronze e menção honrosa) de estudantes brasileiros em 23 olimpíadas científicas, de 1979 até hoje: mais de 850 mil premiações (720 mil delas menções honrosas da OBMEP) de mais de 600 mil alunos e 58 mil escolas. Os dados vêm das listas oficiais de cada olimpíada e podem ser consultados pelo site ou por uma API JSON pública, sem cadastro e sem chave.
 
 Por que existe: os resultados das olimpíadas são públicos, mas espalhados em listas de formatos diferentes em cada site oficial, muitas sem busca. O Medalhas junta tudo em um só lugar e cada premiação aponta para a lista oficial de onde veio. É um projeto independente, sem vínculo com as organizações das olimpíadas. Feito por Pedro Neves; correções, remoção de dados e contato: pedro.vasconcelosneves@gmail.com.
 

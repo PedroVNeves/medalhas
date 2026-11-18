@@ -10,8 +10,8 @@ tabelas, cada um num formato, muitos difíceis de achar. O Medalhas coleta essas
 quando duas premiações são da mesma pessoa ou da mesma escola, e deixa tudo pesquisável. Cada premiação
 mantém o link da página oficial de onde veio, para conferência.
 
-Hoje são **23 olimpíadas**, de **1979 a 2026**: cerca de **135 mil premiações** de **84 mil alunos**,
-**23 mil escolas** e **4.300 cidades**.
+Hoje são **23 olimpíadas**, de **1979 a 2026**: cerca de **854 mil premiações** (728 mil menções honrosas,
+quase todas da OBMEP) de **622 mil alunos**, **58 mil escolas** e **5.600 cidades**.
 
 > Projeto pessoal e independente, feito por **Pedro Neves**. Não tem vínculo com as olimpíadas, a SBM, o
 > IMPA nem qualquer órgão público. Correções, remoção de dados e contato:
