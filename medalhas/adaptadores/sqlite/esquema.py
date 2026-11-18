@@ -74,7 +74,7 @@ SELECT p.id, p.competicao, p.ano, p.nivel, p.nome, g.escola, p.rede, p.esfera, p
        CASE WHEN p.premio IS NULL THEN p.medalha WHEN p.premio = '' THEN NULL ELSE p.premio END AS premio,
        p.medalha, p.pontos, f.url AS fonte, p.nome_busca, g.escola_termos, g.escola_chave, p.municipio_busca,
        (SELECT a.id FROM alunos a WHERE a.n = p.aluno_n) AS aluno_id, p.aluno_n, p.p_impa, p.p_impa3, p.p_site,
-       o.area, p.sexo
+       o.area, p.sexo, p.grafia_n
 FROM premiacoes p LEFT JOIN grafias g ON g.n = p.grafia_n LEFT JOIN fontes f ON f.n = p.fonte_n
      LEFT JOIN olimpiadas o ON o.competicao = p.competicao;
 CREATE TABLE meta (chave TEXT PRIMARY KEY, valor TEXT);

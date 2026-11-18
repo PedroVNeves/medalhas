@@ -83,6 +83,22 @@ def condicoes_de_texto(campo: str, palavras: Expansao) -> tuple[list[str], list]
     return where, args
 
 
+def prefiltro_de_texto(campo: str, palavras: Expansao, consulta_fts: str | None = None) -> tuple[list[str], list]:
+    """Condições indexadas que reduzem as premiações às candidatas antes das de condicoes_de_texto, que continuam
+    valendo: o resultado é o mesmo, sem o LIKE percorrer a base inteira.
+
+    Nome (consulta_fts: a consulta do índice de texto): os alunos que o índice das sugestões acha (busca_alunos,
+    com todas as grafias de cada um). Os nomes da base só têm A-Z, 0-9 e espaços, então toda premiação que o
+    LIKE aceita é de um aluno achado aqui. Escola: as grafias (tabela pequena) que casam, pela mesma condição.
+    No campo tudo não há prefiltro: juntar três caminhos saiu mais lento que percorrer a base."""
+    if campo == "nome" and palavras and consulta_fts:
+        return ["aluno_n IN (SELECT rowid FROM busca_alunos WHERE busca_alunos MATCH ?)"], [consulta_fts]
+    if campo == "escola" and palavras:
+        where, args = condicoes_de_texto("escola", palavras)
+        return [f"grafia_n IN (SELECT n FROM grafias WHERE {' AND '.join(where)})"], args
+    return [], []
+
+
 def where_de(criterios: Criterios) -> tuple[str, list]:
     """WHERE completo de um recorte (filtros + aluno + textos). "1" quando não há restrição."""
     where, args = condicoes(criterios.filtros)

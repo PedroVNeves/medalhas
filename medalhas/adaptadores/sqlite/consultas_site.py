@@ -9,7 +9,7 @@ from ...dominio.ranking import com_pontos
 from . import consultas_ranking
 from .conexao import Conexao, marcadores
 from .consultas_enderecos import EnderecosDaBase
-from .filtros import AGREGADOS, CHAVES_FILTRO, condicoes, condicoes_de_texto, inteiro
+from .filtros import AGREGADOS, CHAVES_FILTRO, condicoes, condicoes_de_texto, inteiro, prefiltro_de_texto
 
 GRUPOS_POR_PAGINA_BUSCA = 30   # cartões (alunos ou escolas) por página da busca; "Mostrar mais" pede os próximos
 PREMIACOES_NO_CARTAO = 5       # as mais recentes de cada um; o perfil tem todas
@@ -36,6 +36,8 @@ def _filtros(params: dict) -> dict:
 
 # ---------------------------------------------------------------- busca
 
+MAX_ALUNOS_NO_PREFILTRO = 20_000   # acima disso (um sobrenome comum), percorrer a base é mais rápido
+
 def busca(con: Conexao, params: dict) -> dict:
     """Alunos (ou escolas, no campo escola) com premiações que casam com o texto (q) e os filtros, uma página de
     cartões por vez (offset), dos que mais pontuam no método para os que menos.
@@ -48,23 +50,33 @@ def busca(con: Conexao, params: dict) -> dict:
     offset = inteiro(params.get("offset", 0), "offset", 0, 10**9)
     palavras = palavras_da_busca(params.get("q", ""))
     where, args = condicoes(params)
-    w, a = condicoes_de_texto(campo, palavras)
-    where, args = where + w, args + a
     vazio = {"total": 0, "total_grupos": 0, "offset": offset, "limite": GRUPOS_POR_PAGINA_BUSCA, "grupos": []}
     if not palavras and not any(params.get(k) for k in ("ano", "uf", "municipio", "escola_chave")):
         return vazio
+    w, a = condicoes_de_texto(campo, palavras)
+    # índices primeiro, para o LIKE só conferir as candidatas. No nome, só quando os alunos achados são poucos:
+    # saltar pelas premiações de muitos alunos sai mais caro que percorrer a base em sequência
+    fts = _consulta_de_texto(palavras, False) if campo == "nome" and palavras else None
+    if fts and con.execute("SELECT COUNT(*) FROM busca_alunos WHERE busca_alunos MATCH ?",
+                           (fts,)).fetchone()[0] > MAX_ALUNOS_NO_PREFILTRO:
+        fts = None
+    p, pa = prefiltro_de_texto(campo, palavras, fts)
+    where, args = where + w + p, args + a + pa
+    # no nome, a soma lê as premiações sem a visão (que juntaria escola, fonte e área a cada linha), quando
+    # nenhum filtro precisa delas
+    origem = "premiacoes" if campo == "nome" and not (params.get("area") or params.get("escola_chave")) else "medalhas"
 
     sql_where = " AND ".join(where) or "1"
     por_escola = campo == "escola"
     chave = "escola_chave" if por_escola else "aluno_n"   # o número do aluno segue a ordem alfabética do id
     # escola sem estado (lista sem UF) não tem página: fica de fora do agrupamento por escola
     com_grupo = sql_where + (" AND escola_chave != ''" if por_escola else "")
-    total = con.execute(f"SELECT COUNT(*) FROM medalhas WHERE {sql_where}", args).fetchone()[0]
+    total = con.execute(f"SELECT COUNT(*) FROM {origem} WHERE {sql_where}", args).fetchone()[0]
     grupos = con.linhas(
         f"""SELECT {chave} AS id, SUM(medalha='Ouro') AS ouro, SUM(medalha='Prata') AS prata,
                    SUM(medalha='Bronze') AS bronze, SUM(medalha='Menção Honrosa') AS mencao,
                    COUNT(*) AS total, COUNT(*) OVER () AS _grupos
-            FROM medalhas WHERE {com_grupo} GROUP BY {chave} || ''
+            FROM {origem} WHERE {com_grupo} GROUP BY {chave} || ''
             ORDER BY SUM({coluna}) DESC, total DESC, id LIMIT ? OFFSET ?""", [*args, GRUPOS_POR_PAGINA_BUSCA, offset])
     if not grupos:
         return {**vazio, "total": total}
