@@ -30,7 +30,7 @@ MAX_ANOS_CARREIRA = 12              # do 6º ano do fundamental ao fim da faculd
 MAX_ANOS_SEM_PREMIO = 8             # intervalo sem premiação que, numa carreira longa demais, separa duas pessoas
 # O mesmo nível da OBMEP mais anos depois que isto é outra pessoa. Os níveis 1 e 2 cobrem 2 séries cada. O nível 3
 # cobre o ensino médio, que dura 4 anos nas escolas técnicas (IFs, Liberato, ETEs), e há quem recomece o médio ao
-# entrar numa delas: com 3 anos, 20 medalhistas reais de escola técnica seriam divididos (ver identidade-regras.md)
+# entrar numa delas: com 3 anos, 14 medalhistas de escola técnica seriam divididos (ver docs/identidade-regras.md)
 MAX_ANOS_MESMO_NIVEL = {"1": 3, "2": 3, "3": 5}
 LIMITE_HOMONIMOS = 0.3              # nº esperado de pessoas com o nome, abaixo do qual o nome é "raro"
 LIMITE_HOMONIMOS_ALTO_NIVEL = 3.0   # mais tolerante quando há OBM/internacional em 2+ UFs
