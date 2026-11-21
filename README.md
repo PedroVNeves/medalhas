@@ -274,9 +274,9 @@ conferidas ao importar o módulo):
 | Regional | Itabirana ("Elas em Destaque" vale bronze) | 80 | 48 | 24 | 8 |
 | OBMEP | OBMEP, OBI, OBQ, OMIF, Maio, OMOP | 100 | 60 | 30 | 10 |
 | OBM | OBM, OMCPLP, IGO, IMSC, OIMU, CIIM | 200 | 150 | 110 | 40 |
-| Cone Sul | Cone Sul, PAGMO | 260 | 190 | 140 | 50 |
-| Ibero | Ibero, EGMO, APMO, IMC, EGOI, IOAI | 320 | 240 | 170 | 60 |
-| IMO | IMO | 600 | 400 | 280 | 100 |
+| Cone Sul | Cone Sul, PAGMO | 260 | 190 | 140 | 100 |
+| Ibero | Ibero, EGMO, APMO, IMC, EGOI, IOAI | 320 | 240 | 170 | 120 |
+| IMO | IMO | 600 | 400 | 280 | 170 |
 
 Regras da escala: ouro OBM = 2× ouro OBMEP; bronze OBM > ouro OBMEP; bronze Ibero > prata OBM; bronze IMO >
 prata Ibero; Cone Sul entre OBM e Ibero; regionais entre a entrada e a OBMEP; em todo degrau a menção honrosa

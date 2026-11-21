@@ -32,9 +32,9 @@ ESCALA_SITE = {
     "REGIONAL": {"Ouro": 80, "Prata": 48, "Bronze": 24, "Menção Honrosa": 8},
     "OBMEP": {"Ouro": 100, "Prata": 60, "Bronze": 30, "Menção Honrosa": 10},
     "OBM": {"Ouro": 200, "Prata": 150, "Bronze": 110, "Menção Honrosa": 40},
-    "CONESUL": {"Ouro": 260, "Prata": 190, "Bronze": 140, "Menção Honrosa": 50},
-    "IBERO": {"Ouro": 320, "Prata": 240, "Bronze": 170, "Menção Honrosa": 60},
-    "IMO": {"Ouro": 600, "Prata": 400, "Bronze": 280, "Menção Honrosa": 100},
+    "CONESUL": {"Ouro": 260, "Prata": 190, "Bronze": 140, "Menção Honrosa": 100},
+    "IBERO": {"Ouro": 320, "Prata": 240, "Bronze": 170, "Menção Honrosa": 120},
+    "IMO": {"Ouro": 600, "Prata": 400, "Bronze": 280, "Menção Honrosa": 170},
 }
 
 # Métodos que o usuário escolhe no topo do site. "coluna" é onde os pontos ficam em cada registro.
