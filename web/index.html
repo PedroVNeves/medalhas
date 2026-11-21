@@ -123,16 +123,17 @@
       <a href="/sobre" class="nav-link" :class="is('sobre') && 'active'">Sobre</a>
       <a href="/dados" class="nav-link" :class="is('dados') && 'active'">API &amp; Dados</a>
     </nav>
-    <!-- pontuação na mesma linha só a partir de xl: até 1280px, logo + links + estes botões não cabem juntos -->
+    <!-- pontuação na mesma linha só a partir de xl: até 1280px, logo + links + estes botões não cabem juntos; o rótulo
+         "Pontuação" só a partir de 2xl, para sobrar espaço para a busca (ver .busca-topo em styles.css) -->
     <div class="ml-auto hidden flex-none xl:block"><div class="seg flex-nowrap" title="Como os pontos são calculados em todo o site">
-      <span class="hidden self-center px-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 xl:inline">Pontuação</span>
+      <span class="hidden self-center px-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 2xl:inline">Pontuação</span>
       <template x-for="m in ov?.metodos || []" :key="m.id">
         <button @click="setMetodo(m.id)" :class="metodo===m.id && 'on'" :aria-pressed="String(!!(metodo===m.id))" :title="`${m.nome}: ${m.descricao}`">
           <span x-text="m.curto"></span><i x-show="m.id==='impa3'" x-icon="'badge-check'" class="ml-1 h-3.5 w-3.5 text-emerald-300"></i>
         </button>
       </template>
     </div></div>
-    <div class="relative hidden w-full min-w-0 max-w-xs xl:block" x-show="!is('home') && !is('busca')" x-cloak @click.outside="sug.onde==='nav' && fecharSugestoes()">
+    <div class="busca-topo relative hidden w-full min-w-0 max-w-xs xl:block" x-show="!is('home') && !is('busca')" x-cloak @click.outside="sug.onde==='nav' && fecharSugestoes()">
       <label class="relative block">
         <i x-icon="'search'" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"></i>
         <input x-ref="qNav" x-model="q" @input="typed('nav')" @focus="pedirSugestoes('nav')" @keydown="teclaSugestoes($event, 'nav')" type="search" enterkeyhint="search" placeholder="Buscar aluno ou escola…" aria-label="Buscar aluno ou escola"
