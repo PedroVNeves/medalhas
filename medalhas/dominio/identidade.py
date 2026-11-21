@@ -13,7 +13,8 @@ Ordem em que gerar_base as aplica:
 4. juntar_grafias (depois da cidade das escolas): perfis da mesma pessoa com o nome escrito de jeitos
    diferentes ("Almir Sergio R dos Santos Filho" e "Almir Sergio Ramos dos Santos Filho"), só com prova de
    contexto (mesma escola, ou mesma cidade a até 3 anos) e um agrupamento que recusa juntar grupos que não
-   cabem numa pessoa.
+   cabem numa pessoa; sem contexto, só o erro de uma letra com a grafia errada rara na base ("Sarah Feli
+   Stocler" e "Sarah Felix Stocler", em cidades diferentes de MG).
 
 As regras, em linguagem simples, estão em docs/identidade-regras.md.
 """
@@ -446,6 +447,13 @@ MAX_ANOS_MESMA_CIDADE = 3           # só a mesma cidade (sem a mesma escola) pr
 LIMITE_PRENOME = 0.6                # palavra que é 1º (ou 2º) nome em 60%+ das vezes é prenome (Lívia, Natan)
 HOMONIMOS_MESMA_ESCOLA = 1.0        # diferença só de partículas ou de letra: homônimos esperados abaixo disto,
 HOMONIMOS_MESMA_CIDADE = 0.1        # com a mesma escola; e abaixo disto, com só a mesma cidade
+# Erro de uma letra sem prova de contexto (_pares_de_uma_letra): a grafia com erro aparece em no máximo tantos
+# perfis da base. Com 10, entram nomes que existem (Sabina/Sabrina, Ismail/Ismael); com 5, só erros de digitação
+MAX_PERFIS_GRAFIA_RARA = 5
+# Séries que cada nível da OBMEP cobre (6º ao 9º ano do fundamental; o médio, que no técnico tem 4 anos) e quantos
+# anos de repetência se toleram entre duas premiações (_series_coerentes)
+SERIES_DO_NIVEL = {"1": (6, 7), "2": (8, 9), "3": (10, 13)}
+FOLGA_DE_REPETENCIA = 1
 
 # Sufixos de parentesco: precisam ser iguais dos dois lados (o pai e o filho têm o mesmo nome sem eles)
 _SUFIXOS = {"FILHO": "FILHO", "FILHA": "FILHA", "JUNIOR": "JUNIOR", "JR": "JUNIOR", "NETO": "NETO", "NETA": "NETA",
@@ -679,6 +687,86 @@ def _par_aceito(x: _Perfil, y: _Perfil, custo: int, raridade) -> tuple | None:
     return (not escola, custo, *sorted((x.ident, y.ident)))
 
 
+def _series_coerentes(registros: list[Premiacao]) -> bool:
+    """Os níveis da OBMEP acompanham os anos: entre duas premiações, os anos passados cabem entre o menor e o maior
+    avanço de série possível (SERIES_DO_NIVEL), com FOLGA_DE_REPETENCIA. Nível 1 em 2014 e nível 2 em 2024 não
+    são a mesma pessoa, embora caibam numa carreira de 12 anos e o nível não regrida."""
+    obmep = sorted({(p["ano"], p["nivel"]) for p in registros
+                    if p["competicao"] == "OBMEP" and p.get("nivel") in SERIES_DO_NIVEL})
+    for i, (antes, nivel_antes) in enumerate(obmep):
+        de, ate = SERIES_DO_NIVEL[nivel_antes]
+        for depois, nivel_depois in obmep[i + 1:]:
+            de2, ate2 = SERIES_DO_NIVEL[nivel_depois]
+            if not max(0, de2 - ate) <= depois - antes <= ate2 - de + FOLGA_DE_REPETENCIA:
+                return False
+    return True
+
+
+def _uma_letra(a: str, b: str) -> bool:
+    """As duas palavras (de 4+ letras) diferem por uma letra só: trocada, a mais, a menos ou invertida."""
+    return a != b and min(len(a), len(b)) >= 4 and _no_maximo(a, b, 1)
+
+
+def _pares_de_uma_letra(perfis: list[_Perfil], frequencia: dict[str, int], raridade):
+    """(x, y) para os perfis da mesma UF cujo nome é o mesmo, palavra por palavra, menos uma letra numa palavra
+    que não é a primeira, quando a grafia com erro é rara na base e o par não precisa de prova de contexto:
+    "Sarah Feli Stocler" (Ribeirão das Neves, 2022) e "Sarah Felix Stocler" (Belo Horizonte, 2024).
+
+    - a grafia mais rara das duas aparece em até MAX_PERFIS_GRAFIA_RARA perfis: é erro de digitação, e não outro
+      nome que existe (Bruno/Breno, Sousa/Souza, Lígia/Lívia podem ser duas pessoas);
+    - o nome todo é pouco comum (menos de HOMONIMOS_MESMA_CIDADE homônimos esperados) e tem 3+ palavras;
+    - a 1ª palavra é igual: erro no prenome, na mesma família, costuma ser irmão (Natan/Natani);
+    - nenhuma edição em comum, as premiações cabem numa pessoa e os níveis da OBMEP acompanham os anos;
+    - o perfil com a grafia rara tem um parceiro só: se ela encaixa em dois nomes, não se sabe qual é.
+    Compara também a 1ª letra da palavra ("Lein" e "Klein"), que os blocos de _pares_pelo_nome deixam de fora.
+
+    Para não indexar a base inteira, só se procuram as chaves (UF, posição, nome sem a palavra) dos perfis que têm
+    uma palavra rara, como em _OutrasLeituras."""
+    def chaves(perfil: _Perfil, so_raras: bool):
+        palavras = perfil.palavras
+        if len(palavras) < 3:
+            return
+        for i in range(1, len(palavras)):
+            if not so_raras or frequencia.get(palavras[i], 0) <= MAX_PERFIS_GRAFIA_RARA:
+                for uf in {p.get("uf") or "" for p in perfil.registros} - {""}:
+                    yield uf, i, palavras[:i], palavras[i + 1:]
+
+    procuradas = {chave for perfil in perfis for chave in chaves(perfil, True)}
+    blocos: dict[tuple, list[_Perfil]] = {}
+    for perfil in perfis:
+        for chave in chaves(perfil, False):
+            if chave in procuradas:
+                blocos.setdefault(chave, []).append(perfil)
+
+    aceitos: dict[tuple[str, str], tuple[_Perfil, _Perfil, list[_Perfil]]] = {}
+    for (_, i, _, _), membros in blocos.items():
+        for a, x in enumerate(membros):
+            for y in membros[:a]:
+                wx, wy = x.palavras[i], y.palavras[i]
+                if x.nome == y.nome or not _uma_letra(wx, wy):
+                    continue
+                fx, fy = frequencia.get(wx, 0), frequencia.get(wy, 0)
+                if min(fx, fy) > MAX_PERFIS_GRAFIA_RARA:
+                    continue
+                par = (x.ident, y.ident) if x.ident < y.ident else (y.ident, x.ident)
+                if par in aceitos or max(raridade(x.palavras), raridade(y.palavras)) >= HOMONIMOS_MESMA_CIDADE:
+                    continue
+                juntas = x.registros + y.registros
+                if _edicao_em_comum(x, y) or not _cabe_numa_pessoa(juntas) or not _series_coerentes(juntas):
+                    continue
+                raros = [p for p, f in ((x, fx), (y, fy)) if f == min(fx, fy)]   # os dois, se empatam
+                aceitos[par] = (x, y, raros)
+
+    parceiros: dict[str, int] = {}
+    for x, y, _ in aceitos.values():
+        parceiros[x.ident] = parceiros.get(x.ident, 0) + 1
+        parceiros[y.ident] = parceiros.get(y.ident, 0) + 1
+    for par in sorted(aceitos):
+        x, y, raros = aceitos[par]
+        if all(parceiros[p.ident] == 1 for p in raros):
+            yield x, y
+
+
 def _chaves_de_leitura(palavras: tuple[str, ...]) -> list[tuple]:
     """Por onde procurar as outras leituras de um nome: a 1ª palavra; e a 2ª com a última (para pegar quem tem
     um erro de digitação na 1ª palavra)."""
@@ -737,16 +825,26 @@ def _podem_juntar(a: list[_Perfil], b: list[_Perfil]) -> bool:
     return _cabe_numa_pessoa([r for p in a + b for r in p.registros])
 
 
-def _agrupar(arestas: list[tuple[_Perfil, _Perfil]]) -> list[list[_Perfil]]:
+def _agrupar(arestas: list[tuple[_Perfil, _Perfil, bool]]) -> list[list[_Perfil]]:
     """Agrupamento com restrições (correlation clustering guloso com "cannot-link"): as arestas entram na ordem
     recebida (a mais forte primeiro) e uma aresta é recusada se juntaria dois grupos que não podem ser uma
     pessoa (_podem_juntar). Nunca o fechamento transitivo simples: com ele, uma abreviação que encaixa em dois
-    homônimos viraria uma ponte entre eles. Devolve os grupos de 2+ perfis."""
+    homônimos viraria uma ponte entre eles. Devolve os grupos de 2+ perfis.
+
+    O terceiro item da aresta diz se ela veio sem prova de contexto (_pares_de_uma_letra): o grupo que recebe uma
+    aresta assim passa a exigir, dali em diante, que os níveis da OBMEP acompanhem os anos (_series_coerentes)."""
     grupo_de: dict[str, list[_Perfil]] = {}
-    for x, y in arestas:
+    exige_series: set[int] = set()   # id() dos grupos que receberam uma aresta sem prova de contexto
+    for x, y, sem_contexto in arestas:
         gx, gy = grupo_de.get(x.ident, [x]), grupo_de.get(y.ident, [y])
         if gx is gy or not _podem_juntar(gx, gy):
             continue
+        exigir = sem_contexto or id(gx) in exige_series or id(gy) in exige_series
+        if exigir and not _series_coerentes([r for p in gx + gy for r in p.registros]):
+            continue
+        exige_series.discard(id(gy))
+        if exigir:
+            exige_series.add(id(gx))
         gx.extend(gy)
         for perfil in gx:
             grupo_de[perfil.ident] = gx
@@ -788,6 +886,8 @@ def juntar_grafias(premiacoes: list[Premiacao]) -> dict[str, str]:
       - nenhuma edição em comum e as premiações cabem numa pessoa (as travas de sempre);
       - diferença só de partículas ou de uma letra exige nome pouco comum (_par_aceito);
       - a abreviação não tem outra leitura entre os nomes da mesma cidade (_OutrasLeituras).
+    Sem prova de contexto, só o erro de uma letra numa palavra (que não a 1ª) com a grafia errada rara na base, o
+    nome pouco comum e os níveis da OBMEP acompanhando os anos (_pares_de_uma_letra); esses pares entram depois.
     Os pares aceitos são agrupados com restrições (_agrupar): mais de dois perfis só se juntam se todos cabem
     numa pessoa. O perfil de nome mais completo fica com o id (_quem_fica); os endereços dos outros continuam
     valendo e levam a ele.
@@ -812,7 +912,10 @@ def juntar_grafias(premiacoes: list[Premiacao]) -> dict[str, str]:
                 candidatos.append((ordem, x, y))
         candidatos.sort(key=lambda c: c[0])
         leituras = _OutrasLeituras(perfis, [(x, y) for _, x, y in candidatos])
-        arestas = [(x, y) for _, x, y in candidatos if not leituras.tem(x, y)]
+        arestas = [(x, y, False) for _, x, y in candidatos if not leituras.tem(x, y)]
+        del leituras
+        # depois das que têm prova de contexto: o erro de uma letra com a grafia rara, sem contexto
+        arestas += [(x, y, True) for x, y in _pares_de_uma_letra(perfis, frequencia, raridade)]
         absorvidos: dict[str, str] = {}
         for grupo in _agrupar(arestas):
             fica = _quem_fica(grupo, frequencia)

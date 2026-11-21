@@ -322,8 +322,54 @@ class TestGrafiasDiferentes(unittest.TestCase):
                  em("Natani Novassat Ribeiro", 2018, "EE Alfa", "Maceió", nivel="1")]
         ligia = [em("Maria Ligia Sousa Prado", 2016, "EE Alfa", "Maceió", nivel="1"),
                  em("Maria Livia Sousa Prado", 2018, "EE Alfa", "Maceió", nivel="2")]
+        # Lígia e Lívia são nomes comuns na base: nenhuma das duas grafias é um erro de digitação raro
+        comuns = [em(f"Ana {nome} Outra{i}", 2010, f"Escola {i}", f"Cidade {i}", "SP")
+                  for nome in ("Ligia", "Livia") for i in range(identidade.MAX_PERFIS_GRAFIA_RARA + 1)]
         self.assertEqual(juntar(natan), {})
-        self.assertEqual(juntar(ligia), {})
+        self.assertEqual(juntar(ligia + comuns), {})
+
+    def test_erro_de_uma_letra_com_grafia_rara_junta_sem_contexto(self):
+        # caso real: OBMEP 2022 em Ribeirão das Neves (escrito "Feli") e CEFET-MG, em Belo Horizonte, de 2024 a 2025
+        felix = [em(f"Joao Felix Outro{i}", 2010, f"Escola {i}", f"Cidade {i}", "SP") for i in range(10)]
+        ps = [em("Sarah Feli Stocler", 2022, "EE Antonio Rigueira da Fonseca", "Ribeirão das Neves", "MG", nivel="2"),
+              em("Sarah Felix Stocler", 2024, "CEFET de Belo Horizonte", "Belo Horizonte", "MG"),
+              em("Sarah Felix Stocler", 2025, "CEFET de Belo Horizonte", "Belo Horizonte", "MG"),
+              em("Sarah Felix Stocler", 2025, "CEFET-MG unidade BH", "Belo Horizonte", "MG", "OITM", "Prata")]
+        self.assertEqual(juntar(ps + felix), {"SARAH FELI STOCLER|MG": "SARAH FELIX STOCLER|MG"})
+
+    def test_erro_na_primeira_letra_do_sobrenome_junta(self):
+        ps = [em("Luan Carlos Lein", 2014, "EB Mun Concordia", "Concórdia", "SC", nivel="2"),
+              em("Luan Carlos Klein", 2016, "IF Catarinense", "Concórdia", "SC")]
+        self.assertEqual(len(juntar(ps)), 1)
+
+    def test_erro_de_uma_letra_sem_contexto_tem_travas(self):
+        def par(nome_b, ano_b=2024, nivel_b="3", uf_b="MG"):
+            return [em("Sarah Feli Stocler", 2022, "EE Alfa", "Ribeirão das Neves", "MG", nivel="2"),
+                    em(nome_b, ano_b, "CEFET", "Belo Horizonte", uf_b, nivel=nivel_b)]
+        felix = [em(f"Joao Felix Outro{i}", 2010, f"Escola {i}", f"Cidade {i}", "SP") for i in range(10)]
+        feli = [em(f"Joao Feli Outro{i}", 2010, f"Escola {i}", f"Cidade {i}", "SP")
+                for i in range(identidade.MAX_PERFIS_GRAFIA_RARA)]
+        with self.subTest("outro estado"):
+            self.assertEqual(juntar(par("Sarah Felix Stocler", uf_b="SP") + felix), {})
+        with self.subTest("a mesma edição"):
+            self.assertEqual(juntar(par("Sarah Felix Stocler", 2022, "2") + felix), {})
+        with self.subTest("os níveis não acompanham os anos: nível 2 em 2022 e de novo em 2025"):
+            self.assertEqual(juntar(par("Sarah Felix Stocler", 2025, "2") + felix), {})
+        with self.subTest("as duas grafias são comuns na base"):
+            self.assertEqual(juntar(par("Sarah Felix Stocler") + felix + feli), {})
+        with self.subTest("a diferença está no prenome"):
+            self.assertEqual(juntar(par("Sara Feli Stocler") + felix), {})
+        with self.subTest("a grafia rara encaixa em dois nomes"):
+            outra = em("Sarah Felis Stocler", 2023, "EE Beta", "Contagem", "MG", nivel="2")
+            self.assertEqual(juntar(par("Sarah Felix Stocler") + [outra] + felix), {})
+
+    def test_series_coerentes(self):
+        def obmep(ano, nivel):
+            return em("Isabela Lima Moura", ano, "EE Alfa", "Maceió", nivel=nivel)
+        self.assertTrue(identidade._series_coerentes([obmep(2022, "2"), obmep(2024, "3")]))
+        self.assertTrue(identidade._series_coerentes([obmep(2014, "1"), obmep(2019, "3")]))
+        self.assertFalse(identidade._series_coerentes([obmep(2014, "1"), obmep(2024, "2")]))   # 10 anos do 1 ao 2
+        self.assertFalse(identidade._series_coerentes([obmep(2014, "1"), obmep(2015, "3")]))   # 1 ano do 1 ao 3
 
     def test_particula_so_junta_nome_pouco_comum(self):
         comuns = [em(f"Gabriel Oliveira Santos X{i}", 2010, f"Escola {i}", f"Outra {i}", "SP") for i in range(20)]

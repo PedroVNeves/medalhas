@@ -22,7 +22,8 @@ O segundo erro é o grave. Por isso as regras só juntam quando há prova e, na 
 2. **Estado de quem veio sem ele** (IMO, IMC, EGOI…) e nomes abreviados das listas internacionais.
 3. **Mesmo nome, mesmo estado**, com as travas que separam homônimos e a união entre estados para nomes raros.
 4. Cidade das escolas que vieram sem cidade (não é identidade, mas a regra seguinte usa a cidade).
-5. **Grafias diferentes da mesma pessoa** (a regra nova, de novembro de 2026).
+5. **Grafias diferentes da mesma pessoa** (a regra nova, de novembro de 2026), incluindo o erro de uma letra
+   sem prova de contexto.
 
 ## 1. Correções à mão
 
@@ -104,6 +105,36 @@ perfil. A etapa `juntar_grafias` junta esses perfis quando **todas** as condiç�
    com só a mesma cidade. "Gabriel de Oliveira Santos" e "Gabriel Oliveira dos Santos" na mesma cidade são,
    muitas vezes, duas pessoas.
 
+### Erro de uma letra sem prova de contexto
+
+Uma aluna que muda de cidade para o ensino médio fica sem prova de contexto: "Sarah Feli Stocler" (OBMEP 2022,
+Ribeirão das Neves) e "Sarah Felix Stocler" (CEFET-MG, em Belo Horizonte, 2024 e 2025). Esses perfis se juntam
+quando **todas** as condições abaixo valem:
+
+1. **Mesmo estado.**
+2. **O nome é o mesmo, palavra por palavra, menos uma letra numa palavra** (trocada, a mais, a menos ou
+   invertida), em palavras de 4 letras ou mais. A **primeira palavra é igual**. A letra pode ser a primeira da
+   palavra ("Lein" e "Klein").
+3. **A grafia diferente é rara na base:** aparece em até 5 perfis. Assim ela é erro de digitação, e não outro nome
+   que existe: Bruno/Breno, Sousa/Souza, Lígia/Lívia ou Patrick/Patrik podem ser duas pessoas. Com o limite de
+   10 perfis, já entravam nomes reais, como Sabina/Sabrina e Ismail/Ismael.
+4. **O nome todo é pouco comum** (menos de 0,1 homônimo esperado) e tem 3 palavras ou mais.
+5. **Travas:** nenhuma edição em comum, as premiações cabem numa pessoa (seção 3) e **os níveis da OBMEP
+   acompanham os anos**: entre duas premiações, os anos passados cabem no avanço de série possível (nível 1 = 6º
+   e 7º ano, nível 2 = 8º e 9º, nível 3 = o médio, até 4 anos no técnico), com 1 ano de folga para repetência.
+   Nível 1 em 2014 e nível 2 em 2024 são duas pessoas, mesmo cabendo nos 12 anos de carreira.
+6. **A grafia rara tem um parceiro só:** se "Felis" encaixa em "Felix" e em "Feliz", não se sabe qual é.
+
+Esses pares entram no agrupamento depois dos que têm prova de contexto, e um grupo que recebe um deles passa a
+exigir a trava dos níveis.
+
+**Números** (base de 21/11/2026, com as menções): 2.218 perfis absorvidos em 2.200 perfis (de 608,5 mil). A
+maioria está na mesma cidade e ficava de fora da regra anterior porque o erro era na 1ª letra da palavra ("Lein"
+e "Klein") ou numa palavra rara na 2ª posição, tratada como prenome. Entre os pares com nome assim, 3 em 2.281
+aparecem na mesma edição (são duas pessoas, e as travas os barram), o que estima o erro em torno de 0,1%. Numa
+amostra de 40 junções sorteadas e conferidas à mão, nenhuma estava errada. Um homônimo já separado (com a cidade
+no id) recebeu uma grafia, a da mesma cidade.
+
 ### O que fica de fora de propósito
 
 - **Erro de letra no prenome** (primeira palavra, ou palavra que na base é quase sempre prenome): Natan/Natani,
@@ -113,6 +144,8 @@ perfil. A etapa `juntar_grafias` junta esses perfis quando **todas** as condiç�
   Gabriel Witt"): são a maior fonte de erro (142 mil pares candidatos na pesquisa, quase todos de pessoas
   diferentes).
 - **Nomes comuns que só diferem em partícula ou numa letra** (Sousa/Souza num nome comum).
+- **Erro de uma letra em cidades diferentes quando as duas grafias existem** (Victor/Vitor, Cota/Costa): sem a
+  mesma escola ou cidade, nada mostra que é a mesma pessoa.
 - **Três grafias em que uma atrapalha a outra:** "Agnaldo Camargo de Sousa Junior", "Camargos" e "Carmargos". Como
   "Carmargos" encaixa em "Camargos" e não em "Camargo", ela conta como outra leitura e impede a junção de Camargo
   com Camargos.
@@ -169,7 +202,7 @@ A pesquisa testou modelos de linguagem e os números não justificam o custo:
 ## 7. Onde está e como testar
 
 - Código: `medalhas/dominio/identidade.py` (`juntar_grafias` e as funções logo acima dela; as travas em
-  `_cabe_numa_pessoa`). A gravação dos endereços antigos: `adaptadores/sqlite/gravacao.py`
+  `_cabe_numa_pessoa`; o erro de uma letra sem contexto em `_pares_de_uma_letra` e `_series_coerentes`). A gravação dos endereços antigos: `adaptadores/sqlite/gravacao.py`
   (`gravar_enderecos`).
 - Testes: `tests/test_dominio.py` (`TestGrafiasDiferentes`: o Almir e um negativo para cada trava) e
   `tests/test_integracao.py` (`TestGrafiasJuntadas`: endereço antigo e nome exibido).
