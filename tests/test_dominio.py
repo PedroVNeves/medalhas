@@ -468,6 +468,17 @@ class TestGamificacao(unittest.TestCase):
         self.assertTrue({"primeiro_podio", "midas", "hat_trick", "imparavel", "invicto"} <= desbloqueadas)
         self.assertNotIn("veterano", desbloqueadas)
 
+    def escalada(self, ps):
+        return next(c for c in gamificacao.conquistas_aluno(ps) if c["id"] == "escalada")["desbloqueada"]
+
+    def test_escalada_vale_em_qualquer_olimpiada(self):
+        ps = [premiacao("A", "SP", "OBM", 2016, "Prata"), premiacao("A", "SP", "OBM", 2017, "Ouro")]
+        self.assertTrue(self.escalada(ps))
+
+    def test_escalada_nao_compara_olimpiadas_diferentes(self):
+        ps = [premiacao("A", "SP", "OBM", 2016, "Bronze"), premiacao("A", "SP", "OBMEP", 2017, "Ouro")]
+        self.assertFalse(self.escalada(ps))
+
 
 class TestEnderecos(unittest.TestCase):
     def test_slug(self):
