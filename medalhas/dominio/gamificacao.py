@@ -76,12 +76,16 @@ def conquistas_aluno(premiacoes: list[dict]) -> list[dict]:
         ouros_por_ano.setdefault(r["ano"], set()).add(r["competicao"])
     dupla_coroa = any(len(c) >= 2 for c in ouros_por_ano.values())
 
-    melhor_por_ano: dict[int, int] = {}
-    for r in obmep:
-        if r["medalha"] in _PESO_MEDALHA:
-            melhor_por_ano[r["ano"]] = max(melhor_por_ano.get(r["ano"], 0), _PESO_MEDALHA[r["medalha"]])
-    sequencia = [melhor_por_ano[a] for a in sorted(melhor_por_ano)]
-    escalada = any(b > a for a, b in zip(sequencia, sequencia[1:]))
+    # Escalada: a melhor medalha de um ano supera a do ano premiado anterior na mesma olimpíada.
+    melhor_por_ano: dict[str, dict[int, int]] = {}
+    for r in medalhas:
+        if r["ano"]:
+            anos_comp = melhor_por_ano.setdefault(r["competicao"], {})
+            anos_comp[r["ano"]] = max(anos_comp.get(r["ano"], 0), _PESO_MEDALHA[r["medalha"]])
+    escalada = False
+    for anos_comp in melhor_por_ano.values():
+        sequencia = [anos_comp[a] for a in sorted(anos_comp)]
+        escalada = escalada or any(b > a for a, b in zip(sequencia, sequencia[1:]))
     invicto = len(obmep) if obmep and all(r["medalha"] == OURO for r in obmep) else 0
 
     return [
